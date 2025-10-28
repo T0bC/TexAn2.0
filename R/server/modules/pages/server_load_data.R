@@ -87,8 +87,9 @@ server_load_data <- function(id) {
             data,
             options = list(
               pageLength = 10,
+              lengthMenu = list(c(10, 25, 50, 100, -1), c("10", "25", "50", "100", "All")),
               scrollX = TRUE,
-              dom = 'Bfrtip'
+              dom = 'Blfrtip'  # Added 'l' for length menu
             ),
             rownames = FALSE
           )

@@ -58,12 +58,27 @@ UI_load_data <- function(id) {
       shiny::mainPanel(
         shinyBS::bsCollapse(
           id = ns("data_preview_collapse"),
+          open = ns("data_preview_panel"),  # Keep Data preview expanded by default
           shinyBS::bsCollapsePanel(
             title = "Data preview",
             value = ns("data_preview_panel"),
             shiny::div(
               class = "table-responsive",
               DT::dataTableOutput(ns("data_preview"))
+            )
+          ),
+          shinyBS::bsCollapsePanel(
+            title = "Data summary",
+            value = ns("data_summary_panel"),
+            shiny::div(
+              shiny::p("TODO: Add data summary statistics here"),
+              shiny::p("This will include:"),
+              shiny::tags$ul(
+                shiny::tags$li("Number of rows and columns"),
+                shiny::tags$li("Column types"),
+                shiny::tags$li("Missing values count"),
+                shiny::tags$li("Basic statistics")
+              )
             )
           )
         )
