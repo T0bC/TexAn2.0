@@ -11,9 +11,13 @@
 #   We pass the entire input object (rather than individual values) because
 #   observeEvent() needs a reactive reference to detect file uploads.
 # @param loaded_data ReactiveVal to store the loaded data
+# @param session Shiny session object (optional, for showing modals)
 # @return NULL (side effects: updates loaded_data and shows notifications)
 
-handle_file_upload <- function(input, loaded_data) {
+# Source column utilities
+source("R/utils/column_utils.R", local = TRUE)
+
+handle_file_upload <- function(input, loaded_data, session = NULL) {
   shiny::observeEvent(input$data_file, {
     shiny::req(input$data_file)
 
@@ -80,6 +84,14 @@ handle_file_upload <- function(input, loaded_data) {
         type = "error"
       )
       return()
+    }
+
+    # Validate column naming conventions
+    validation <- validate_column_naming(data)
+    
+    if (!validation$valid && !is.null(session)) {
+      # Show modal dialog with column naming warnings
+      shiny::showModal(create_column_validation_modal(validation, session))
     }
 
     # Update reactive value with result

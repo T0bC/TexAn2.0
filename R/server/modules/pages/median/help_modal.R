@@ -12,19 +12,25 @@ handle_help_button <- function(input, session) {
                 title = "Calculating the Median of Multiple Measurements",
                 easyClose = TRUE,
                 size = "l",
-                shinyBS::bsCollapse(
+                bslib::accordion(
                     multiple = TRUE,
-                    shinyBS::bsCollapsePanel(
-                        "Filtering Values",
+                    open = "filtering",
+                    bslib::accordion_panel(
+                        title = "Filtering Values",
+                        value = "filtering",
+                        icon = bsicons::bs_icon("funnel"),
                         shiny::includeMarkdown("docs/median_calculation/MEDIAN_help_filter.md")
                     ),
-                    shinyBS::bsCollapsePanel(
-                        "Median Calculation",
+                    bslib::accordion_panel(
+                        title = "Median Calculation",
+                        value = "median",
+                        icon = bsicons::bs_icon("calculator"),
                         shiny::includeMarkdown("docs/median_calculation/MEDIAN_help.md")
                     ),
-                    shinyBS::bsCollapsePanel(
-                        "Example Data",
-                        style = "success",
+                    bslib::accordion_panel(
+                        title = "Example Data",
+                        value = "example",
+                        icon = bsicons::bs_icon("table"),
                         shiny::tags$img(
                             src = base64enc::dataURI(
                                 file = "www/images/MEDIAN_help_DF_new.PNG",
@@ -32,8 +38,7 @@ handle_help_button <- function(input, session) {
                             ),
                             alt = "Example for a data frame, with multiple groups and subgrouping columns."
                         )
-                    ),
-                    open = "Filtering Values"
+                    )
                 )
             )
         )

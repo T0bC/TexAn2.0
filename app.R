@@ -12,6 +12,7 @@ source("R/server/modules/pages/server_median.R")
 # Load required packages
 library(shiny)
 library(bslib)
+library(bsicons)
 
 library(openxlsx)
 library(DT)
@@ -32,16 +33,15 @@ app_ui <- bslib::page_navbar(
   header = shiny::tags$head(
     shiny::tags$link(rel = "stylesheet", type = "text/css", href = "www/css/styles.css")
   ),
-  bslib::nav_panel(title = "Load Data", UI_load_data("load_data_id")),
-  bslib::nav_panel(title = "Median Analysis", UI_median("median_id")),
-  bslib::nav_panel(title = "Plotting", shiny::p("TODO: Add plotting UI.")),
-  bslib::nav_panel(title = "Reporting", shiny::p("TODO: Add reporting UI.")),
+  bslib::nav_panel(title = "Load Data", value = "load_data", UI_load_data("load_data_id")),
+  bslib::nav_panel(title = "Median Analysis", value = "median", UI_median("median_id")),
+  bslib::nav_panel(title = "Plotting", value = "plotting", shiny::p("TODO: Add plotting UI.")),
+  bslib::nav_panel(title = "Reporting", value = "reporting", shiny::p("TODO: Add reporting UI.")),
   bslib::nav_spacer(),
   bslib::nav_item(
     shiny::actionLink(
       inputId = "settings_btn",
-      label = NULL,
-      icon = shiny::icon("gear"),
+      label = bsicons::bs_icon("gear"),
       title = "Settings"
     )
   )
@@ -54,6 +54,22 @@ app_server <- function(input, output, session) {
 
   # Initialize settings modal
   settings_modal_server(input, session)
+  
+  # Hide/show nav panels based on data availability
+  shiny::observe({
+    has_data <- !is.null(loaded_data())
+    
+    # Tabs that require data to be loaded
+    data_dependent_tabs <- c("median", "plotting", "reporting")
+    
+    for (tab in data_dependent_tabs) {
+      if (has_data) {
+        bslib::nav_show("active_page", target = tab)
+      } else {
+        bslib::nav_hide("active_page", target = tab)
+      }
+    }
+  })
 
   # Uncomment the line below during development to enable live theme editor
   # bslib::bs_themer()
