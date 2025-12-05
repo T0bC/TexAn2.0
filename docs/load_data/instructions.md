@@ -1,5 +1,3 @@
-#### Instructions
-
 1. Upload your file using the `Browse` button.
 2. For `CSV` files, ensure to select the appropriate delimiter.
 3. For `Excel` files, the **first sheet is assumed to be the data** sheet.

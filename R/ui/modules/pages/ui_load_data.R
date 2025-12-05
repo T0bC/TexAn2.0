@@ -3,6 +3,7 @@ UI_load_data <- function(id) {
 
   bslib::layout_sidebar(
       sidebar = bslib::sidebar(
+        title = "Instructions",
         shiny::includeMarkdown("docs/load_data/instructions.md"),
         shiny::fileInput(
           inputId = ns("data_file"),
