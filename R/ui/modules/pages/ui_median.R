@@ -3,16 +3,25 @@ UI_median <- function(id) {
 
     bslib::layout_sidebar(
             sidebar = bslib::sidebar(
-                title = "Median Analysis",
-                shiny::actionButton(ns("helpButton"), "Help", class = "btn-primary"),
-                shiny::h4("Filter Data"),
-                shiny::includeMarkdown("docs/median_calculation/MEDIAN_filter.md"),
-                shiny::uiOutput(ns("filterData1")),
-                shiny::uiOutput(ns("filterData2")),
-                shiny::h4("Calculate Median"),
-                shiny::includeMarkdown("docs/median_calculation/MEDIAN_instructions.md")
+                title = "Data Filtering",
+                shiny::actionButton(ns("helpButton"), "Help", class = "btn-primary btn-sm"),
+                
+                # Grouping section
+                shiny::tags$hr(),
+                shiny::h5("1. Define Sample Structure"),
+                shiny::uiOutput(ns("grouping_ui")),
+                
+                # Quality filter section
+                shiny::tags$hr(),
+                shiny::h5("2. Quality Filtering"),
+                shiny::uiOutput(ns("quality_filter_ui"))
+                
+                # Median calculation section (placeholder for now)
+                # shiny::tags$hr(),
+                # shiny::h5("3. Calculate Median")
             ),
-        DT::dataTableOutput(ns("medianTable")),
-        shiny::uiOutput(ns("filteringMessage2"))
+        # Main content area
+        shiny::uiOutput(ns("filteringMessage")),
+        DT::dataTableOutput(ns("medianTable"))
     )
 }

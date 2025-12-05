@@ -62,7 +62,7 @@ server_load_data <- function(id) {
           bslib::accordion_panel(
             title = "Data Preview",
             value = "data_preview",
-            icon = shiny::icon("table"),
+            icon = bsicons::bs_icon("table"),
             shiny::includeMarkdown("docs/load_data/data_preview.md"),
             shiny::div(
               class = "table-responsive",
@@ -72,14 +72,14 @@ server_load_data <- function(id) {
           bslib::accordion_panel(
             title = "Missing Values",
             value = "missing_values",
-            icon = shiny::icon("chart-bar"),
+            icon = bsicons::bs_icon("bar-chart"),
             shiny::includeMarkdown("docs/load_data/missing_values.md"),
             shiny::plotOutput(ns("missing_values_plot"), height = "800px")
           ),
           bslib::accordion_panel(
             title = "Data Summary",
             value = "data_summary",
-            icon = shiny::icon("list"),
+            icon = bsicons::bs_icon("list-ul"),
             shiny::includeMarkdown("docs/load_data/data_summary.md"),
             shiny::htmlOutput(ns("data_summary"))
           )
@@ -99,7 +99,8 @@ server_load_data <- function(id) {
     # See function documentation in R/server/modules/pages/load_data/file_upload.R
     handle_file_upload(
       input = input,  # Module input object from moduleServer() above
-      loaded_data = loaded_data
+      loaded_data = loaded_data,
+      session = session  # For showing column validation modal
     )
     
     # Data preview renderer - requires output object and loaded data
