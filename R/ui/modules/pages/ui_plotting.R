@@ -10,101 +10,37 @@ UI_plotting <- function(id) {
             title = "Plot Configuration",
             width = 350,
 
-            # Column Selection Section
-            shiny::h5("1. Select Columns"),
-            shiny::fluidRow(
-                shiny::column(
-                    6,
-                    shiny::selectizeInput(
-                        inputId = ns("metaData"),
-                        label = shiny::tags$span(
-                            "Descriptive: ",
-                            bslib::tooltip(
-                                bsicons::bs_icon("info-circle", class = "text-muted"),
-                                paste0(
-                                    "Select columns that describe the data, such as the ",
-                                    "sample ID, treatment, etc., that are important for your analysis. ",
-                                    "You can then filter the data using the checkboxes. Columns ",
-                                    "with more than 20 unique levels are excluded."
-                                )
-                            )
-                        ),
-                        choices = NULL,
-                        multiple = TRUE,
-                        options = list(placeholder = "Select...")
-                    )
-                ),
-                shiny::column(
-                    6,
-                    shiny::selectizeInput(
-                        inputId = ns("measureVar"),
-                        label = shiny::tags$span(
-                            "Measurement: ",
-                            bslib::tooltip(
-                                bsicons::bs_icon("info-circle", class = "text-muted"),
-                                paste0(
-                                    "Select columns that contain the actual measurements, ",
-                                    "such as the texture or other parameters, that you want to plot."
-                                )
-                            )
-                        ),
-                        choices = NULL,
-                        multiple = TRUE,
-                        options = list(placeholder = "Select...")
-                    )
-                )
-            ),
+            # Step 1: Select Descriptive Columns (always visible)
+            shiny::h5("1. Select Descriptive Columns"),
             shiny::selectizeInput(
-                inputId = ns("hideCols"),
+                inputId = ns("metaData"),
                 label = shiny::tags$span(
-                    "Hide columns from filtering: ",
+                    "Descriptive: ",
                     bslib::tooltip(
                         bsicons::bs_icon("info-circle", class = "text-muted"),
                         paste0(
-                            "Select columns to hide from filtering, like SPEC_ID, ",
-                            "which might be useful for hover info but not for filtering."
+                            "Select columns that describe the data, such as the ",
+                            "sample ID, treatment, etc., that are important for your analysis. ",
+                            "You can then filter the data using the checkboxes."
                         )
                     )
                 ),
                 choices = NULL,
                 multiple = TRUE,
-                options = list(placeholder = "Select columns to hide...")
+                options = list(placeholder = "Select descriptive columns...")
             ),
+            
+            # Step 2: Additional column options (rendered dynamically after step 1)
+            shiny::uiOutput(ns("column_options_ui")),
+            
+            # Step 3: Filter Data (rendered dynamically after step 1)
+            shiny::uiOutput(ns("filter_section_ui")),
 
-            # Data Filtering Section
-            shiny::tags$hr(),
-            shiny::h5("2. Filter Data"),
-            shiny::uiOutput(ns("checkboxes")),
+            # Step 4: Trimming Section (rendered dynamically after step 1)
+            shiny::uiOutput(ns("trimming_section_ui")),
 
-            # Trimming Section
-            shiny::tags$hr(),
-            shiny::h5("3. Data Trimming"),
-            shiny::sliderInput(
-                inputId = ns("trim_slider"),
-                label = shiny::tags$span(
-                    "Trimming Value: ",
-                    bslib::tooltip(
-                        bsicons::bs_icon("info-circle", class = "text-muted"),
-                        paste0(
-                            "Data trimming removes a percentage of the highest and lowest values ",
-                            "to reduce the impact of outliers. Useful for non-normal distributions ",
-                            "or when heteroscedasticity is present."
-                        )
-                    )
-                ),
-                min = 0,
-                max = 100,
-                value = 0,
-                step = 1
-            ),
-
-            # Download Section
-            shiny::tags$hr(),
-            shiny::downloadButton(
-                outputId = ns("downloadData"),
-                label = "Download Filtered Data",
-                class = "btn-primary btn-sm w-100"
-            )
+            # Download Section (rendered dynamically after step 1)
+            shiny::uiOutput(ns("download_section_ui"))
         ),
 
         # Main content area - plots will be rendered here
