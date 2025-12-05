@@ -94,11 +94,11 @@ filter_categorical <- function(data, col, bad_values, grouping_cols) {
         
         message <- paste0(
             "Categorical quality filter applied.\n",
-            "Groups: ", n_groups_total, " total, ",
-            n_groups_all_bad, " with only bad values (kept intact), ",
-            n_groups_filtered, " had bad values removed.\n",
+            "Groups: ", n_groups_total, " total — ",
+            n_groups_all_bad, " kept intact (only bad values), ",
+            n_groups_filtered, " cleaned (bad rows removed).\n",
             "Rows: ", rows_before, " → ", rows_after, 
-            " (", rows_before - rows_after, " removed)"
+            " (", rows_before - rows_after, " bad rows removed)"
         )
         
     } else {
@@ -154,11 +154,11 @@ filter_numeric <- function(data, col, threshold, grouping_cols) {
         
         message <- paste0(
             "Numeric quality filter applied (threshold ≥ ", threshold, ").\n",
-            "Groups: ", n_groups_total, " total, ",
-            n_groups_all_bad, " with all values below threshold (kept intact), ",
-            n_groups_filtered, " had below-threshold values removed.\n",
+            "Groups: ", n_groups_total, " total — ",
+            n_groups_all_bad, " kept intact (all below threshold), ",
+            n_groups_filtered, " cleaned (below-threshold rows removed).\n",
             "Rows: ", rows_before, " → ", rows_after,
-            " (", rows_before - rows_after, " removed)"
+            " (", rows_before - rows_after, " rows removed)"
         )
         
     } else {
