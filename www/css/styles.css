@@ -10,6 +10,39 @@
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
 }
 
+/* Reduce spacing in sidebar header (title + collapse button) */
+.bslib-sidebar-layout .sidebar-title {
+    padding-top: 0.1rem;
+    padding-bottom: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* Reduce top padding inside sidebar to move title closer to top */
+.bslib-sidebar-layout>.sidebar>.sidebar-content {
+    padding-top: 0.25rem !important;
+}
+
+/* Move collapse icon to top-right of sidebar when open */
+.bslib-sidebar-layout:not(.sidebar-collapsed)>.collapse-toggle {
+    position: absolute;
+    top: 0.5rem;
+    right: auto;
+    left: calc(var(--_sidebar-width) - 2.5rem);
+    z-index: 10;
+}
+
+/* Keep collapse icon visible when sidebar is collapsed */
+.bslib-sidebar-layout.sidebar-collapsed>.collapse-toggle {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 10;
+}
+
+.bslib-sidebar-layout {
+    position: relative;
+}
+
 /* Settings gear icon styling */
 #settings_btn {
     color: inherit;
@@ -22,4 +55,17 @@
 #settings_btn:hover {
     opacity: 1;
     text-decoration: none;
+}
+
+/* Ensure welcome image uses transparency */
+.welcome-image,
+.welcome-image img {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+/* Override any Bootstrap/bslib image backgrounds */
+img[src*="Beckr_intro_Diamant"] {
+    background: none !important;
+    background-color: transparent !important;
 }

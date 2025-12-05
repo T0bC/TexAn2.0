@@ -12,6 +12,7 @@ source("R/server/modules/pages/server_median.R")
 # Load required packages
 library(shiny)
 library(bslib)
+
 library(openxlsx)
 library(DT)
 library(DataExplorer)
@@ -21,7 +22,7 @@ library(summarytools)
 # This avoids file clutter when DataExplorer or other packages open a default device
 pdf(NULL)
 
-# Register www folder for static resources
+# Register www folder for static resources (needed for proper image/CSS loading)
 shiny::addResourcePath("www", "www")
 
 app_ui <- bslib::page_navbar(

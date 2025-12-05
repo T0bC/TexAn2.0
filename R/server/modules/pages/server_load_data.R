@@ -43,11 +43,12 @@ server_load_data <- function(id) {
         shiny::tagList(
           shiny::includeMarkdown("docs/load_data/welcome.md"),
           shiny::tags$div(
+            class = "welcome-image",
             style = "max-width: 100%; text-align: center; margin-top: 20px;",
             shiny::tags$img(
-              src = "images/Beckr_intro_Diamant.png",
+              src = "www/images/Beckr_intro_Diamant.png",
               alt = "Example image from a 3D-ST Scan.",
-              style = "max-width: 100%; height: auto;"
+              style = "max-width: 100%; height: auto; background: transparent;"
             )
           )
         )
