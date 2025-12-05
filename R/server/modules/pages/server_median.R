@@ -8,6 +8,7 @@ server_median <- function(id, loaded_data, data_version = NULL) {
         filtered_data <- shiny::reactiveVal(NULL)
         filter_message <- shiny::reactiveVal("No data loaded.")
         median_results <- shiny::reactiveVal(NULL)
+        removed_cols <- shiny::reactiveVal(NULL)  # Columns removed due to within-group variation
 
         # Source modular component functions
         source("R/server/modules/pages/median/help_modal.R", local = TRUE)
@@ -26,6 +27,7 @@ server_median <- function(id, loaded_data, data_version = NULL) {
                 filtered_data(NULL)
                 filter_message("New data loaded. Configure grouping and filtering options.")
                 median_results(NULL)
+                removed_cols(NULL)
                 
                 # Reset UI inputs using updateSelectizeInput
                 shiny::updateSelectizeInput(session, "grouping_columns", selected = character(0))
@@ -82,6 +84,8 @@ server_median <- function(id, loaded_data, data_version = NULL) {
         output$filteringMessage <- shiny::renderUI({
             msg <- filter_message()
             data <- filtered_data()
+            grouping <- selected_grouping_cols()
+            removed <- removed_cols()
             
             if (is.null(data)) {
                 return(shiny::tags$div(
@@ -93,14 +97,53 @@ server_median <- function(id, loaded_data, data_version = NULL) {
             # Split message into lines for display
             msg_lines <- strsplit(msg, "\n")[[1]]
             
+            # Build grouping info
+            grouping_info <- if (is.null(grouping) || length(grouping) == 0) {
+                shiny::tags$p(
+                    class = "mb-1",
+                    shiny::tags$em("No grouping selected - showing filtered data without median calculation.")
+                )
+            } else {
+                shiny::tags$p(
+                    class = "mb-1",
+                    shiny::tags$strong("Grouping by: "), 
+                    paste(grouping, collapse = ", ")
+                )
+            }
+            
+            # Build removed columns info
+            removed_info <- if (!is.null(removed) && length(removed) > 0) {
+                shiny::tags$p(
+                    class = "mb-1 text-warning",
+                    shiny::tags$strong("Columns removed (vary within groups): "),
+                    paste(removed, collapse = ", ")
+                )
+            } else {
+                NULL
+            }
+            
             shiny::tags$div(
                 class = "alert alert-info",
-                shiny::tags$strong("Filter Results"),
-                shiny::tags$br(),
+                shiny::tags$strong("Processing Summary"),
+                shiny::tags$hr(class = "my-2"),
+                grouping_info,
+                removed_info,
+                shiny::tags$hr(class = "my-2"),
+                shiny::tags$strong("Quality Filter: "),
                 lapply(msg_lines, function(line) {
                     shiny::tags$span(line, shiny::tags$br())
                 })
             )
+        })
+
+        # Reactive for quality column name (extracted from quality_settings)
+        quality_col_name <- shiny::reactive({
+            settings <- quality_settings()
+            if (settings$enabled && !is.null(settings$column)) {
+                settings$column
+            } else {
+                NULL
+            }
         })
 
         # Median table renderer
@@ -108,7 +151,10 @@ server_median <- function(id, loaded_data, data_version = NULL) {
             output = output,
             output_id = "medianTable",
             filtered_data = filtered_data,
-            median_results = median_results
+            grouping_cols = selected_grouping_cols,
+            quality_col = quality_col_name,
+            median_results = median_results,
+            removed_cols = removed_cols
         )
 
         # Return reactive with median results
