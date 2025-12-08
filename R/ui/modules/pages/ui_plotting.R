@@ -457,6 +457,41 @@ UI_plotting <- function(id) {
                                 icon = bsicons::bs_icon("palette"),
                                 # Dynamic color pickers rendered by server
                                 shiny::uiOutput(ns("colorPickers"))
+                            ),
+                            
+                            # === Export Settings Section ===
+                            bslib::accordion_panel(
+                                title = "Export Settings",
+                                value = "export",
+                                icon = bsicons::bs_icon("download"),
+                                shiny::fluidRow(
+                                    shiny::column(
+                                        6,
+                                        shiny::numericInput(
+                                            ns("exportWidth"),
+                                            bslib::tooltip(
+                                                shiny::span("Width (cm) ", bsicons::bs_icon("info-circle", class = "text-muted")),
+                                                "Plot width in cm for SVG export. 16 cm fits typical Word documents."
+                                            ),
+                                            value = 16, min = 1, max = 50
+                                        )
+                                    ),
+                                    shiny::column(
+                                        6,
+                                        shiny::numericInput(
+                                            ns("exportHeight"),
+                                            bslib::tooltip(
+                                                shiny::span("Height (cm) ", bsicons::bs_icon("info-circle", class = "text-muted")),
+                                                "Plot height in cm for SVG export. 10 cm with 16 cm width gives a nice ratio."
+                                            ),
+                                            value = 10, min = 1, max = 50
+                                        )
+                                    )
+                                ),
+                                shiny::tags$p(
+                                    class = "small text-muted mt-2",
+                                    "Use the download button on each plot card to export as SVG."
+                                )
                             )
                         )
                     )
