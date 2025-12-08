@@ -196,6 +196,14 @@ server_plotting <- function(id, median_data, data_version) {
             input$windowSize
         }) |> shiny::debounce(250)
         
+        # Reactive: export dimensions from Plot Style tab
+        export_width <- shiny::reactive({
+            input$exportWidth %||% 16
+        })
+        export_height <- shiny::reactive({
+            input$exportHeight %||% 10
+        })
+        
         # Setup plot outputs using injected component
         # Following explicit dependency injection pattern
         setup_plot_outputs(
@@ -206,7 +214,9 @@ server_plotting <- function(id, median_data, data_version) {
             measure_cols = selected_measures,
             tooltip_cols = selected_tooltip_cols,
             create_scatter_plot = create_scatter_plot,
-            window_size = window_size
+            window_size = window_size,
+            export_width = export_width,
+            export_height = export_height
         )
         
         # Render the plots UI container

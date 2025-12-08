@@ -15,7 +15,9 @@
 #' @param tooltip_cols Reactive returning selected tooltip column names
 #' @param create_scatter_plot Function to create scatter plots (injected dependency)
 #' @param window_size Reactive returning list with width/height from JS (for dynamic SVG sizing)
-#' @return NULL (side effects only - registers plot outputs)
+#' @param export_width Reactive returning export width in cm
+#' @param export_height Reactive returning export height in cm
+#' @return NULL (side effects only - registers plot outputs and download handlers)
 setup_plot_outputs <- function(output, 
                                 ns, 
                                 filtered_data, 
@@ -23,7 +25,9 @@ setup_plot_outputs <- function(output,
                                 measure_cols,
                                 tooltip_cols,
                                 create_scatter_plot,
-                                window_size = NULL) {
+                                window_size = NULL,
+                                export_width = NULL,
+                                export_height = NULL) {
     
     # Register dynamic plot outputs for each measurement column
     # Width calculation MUST be outside renderGirafe to trigger re-registration on resize
@@ -49,6 +53,22 @@ setup_plot_outputs <- function(output,
                 local_width <- width_svg
                 # Create safe ID from measure name
                 plot_id <- paste0("plot_", gsub("[^a-zA-Z0-9]", "_", local_measure))
+                download_id <- paste0("download_", plot_id)
+                
+                # Helper function to create the ggplot (shared between render and download)
+                create_plot <- function() {
+                    df <- filtered_data()
+                    x <- x_cols()
+                    tt_cols <- tooltip_cols()
+                    shiny::req(df, x)
+                    
+                    create_scatter_plot(
+                        data = df,
+                        x_col = x,
+                        y_col = local_measure,
+                        tooltip_cols = tt_cols
+                    )
+                }
                 
                 # Register the girafe output for interactive plots
                 output[[plot_id]] <- ggiraph::renderGirafe({
@@ -88,6 +108,38 @@ setup_plot_outputs <- function(output,
                         )
                     )
                 })
+                
+                # Register download handler for SVG export
+                output[[download_id]] <- shiny::downloadHandler(
+                    filename = function() {
+                        paste0(local_measure, "_", Sys.Date(), ".svg")
+                    },
+                    content = function(file) {
+                        # Get export dimensions (convert cm to inches)
+                        width_cm <- if (!is.null(export_width) && is.function(export_width)) {
+                            export_width()
+                        } else {
+                            16
+                        }
+                        height_cm <- if (!is.null(export_height) && is.function(export_height)) {
+                            export_height()
+                        } else {
+                            10
+                        }
+                        
+                        # Convert cm to inches (1 inch = 2.54 cm)
+                        width_in <- width_cm / 2.54
+                        height_in <- height_cm / 2.54
+                        
+                        # Create the plot
+                        p <- create_plot()
+                        
+                        # Save as SVG
+                        grDevices::svg(file, width = width_in, height = height_in)
+                        print(p)
+                        grDevices::dev.off()
+                    }
+                )
             })
         })
     })
@@ -98,6 +150,7 @@ setup_plot_outputs <- function(output,
 #'
 #' Creates the UI container with plot cards stacked vertically (one per row).
 #' Uses ggiraph::girafeOutput for interactive plots.
+#' Each card includes a download button for SVG export.
 #'
 #' @param ns Namespace function from parent module
 #' @param measures Character vector of measurement column names
@@ -108,12 +161,20 @@ generate_plot_grid_ui <- function(ns, measures, plot_height = "400px") {
     # Generate plot cards for each measurement - one per row
     plot_cards <- lapply(measures, function(measure) {
         plot_id <- paste0("plot_", gsub("[^a-zA-Z0-9]", "_", measure))
+        download_id <- paste0("download_", plot_id)
         
         bslib::card(
             class = "mb-3",
             bslib::card_header(
-                class = "py-2",
-                shiny::tags$span(class = "fw-semibold", measure)
+                class = "py-2 d-flex justify-content-between align-items-center",
+                shiny::tags$span(class = "fw-semibold", measure),
+                shiny::downloadButton(
+                    outputId = ns(download_id),
+                    label = NULL,
+                    icon = shiny::icon("download"),
+                    class = "btn-sm btn-outline-secondary",
+                    title = "Download as SVG"
+                )
             ),
             bslib::card_body(
                 class = "p-2",
