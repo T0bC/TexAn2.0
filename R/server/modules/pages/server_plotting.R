@@ -87,6 +87,27 @@ server_plotting <- function(id, median_data, data_version) {
                 choices = selected_meta,
                 selected = input$tooltip[input$tooltip %in% selected_meta]
             )
+            
+            # Update pointShape choices (metaData columns + "none")
+            shiny::updateSelectizeInput(
+                session, "pointShape",
+                choices = c("none" = "", selected_meta),
+                selected = input$pointShape
+            )
+        })
+        
+        # Update pointColor choices based on X-axis selection
+        shiny::observe({
+            x_axis <- input$xAxis
+            if (is.null(x_axis) || length(x_axis) == 0) {
+                shiny::updateSelectizeInput(session, "pointColor", choices = character(0))
+            } else {
+                shiny::updateSelectizeInput(
+                    session, "pointColor",
+                    choices = x_axis,
+                    selected = if (is.null(input$pointColor)) x_axis[1] else input$pointColor
+                )
+            }
         })
         
         # Reactive: columns to show for filtering (metaData minus hideCols)
@@ -268,6 +289,62 @@ server_plotting <- function(id, median_data, data_version) {
                 measures = measures,
                 plot_height = "400px"
             )
+        })
+        
+        # Render dynamic color pickers for unique groups in the data
+        output$colorPickers <- shiny::renderUI({
+            data <- filtered_data()
+            color_cols <- input$pointColor
+            
+            # Need data and color column selection
+            if (is.null(data) || is.null(color_cols) || length(color_cols) == 0) {
+                return(shiny::tags$p(
+                    class = "text-muted small fst-italic",
+                    "Select X-Axis and Color columns to customize group colors."
+                ))
+            }
+            
+            # Get unique groups from the color columns
+            if (length(color_cols) == 1) {
+                groups <- unique(data[[color_cols]])
+            } else {
+                # Combine multiple columns into group labels
+                groups <- unique(apply(data[, color_cols, drop = FALSE], 1, paste, collapse = " : "))
+            }
+            groups <- sort(as.character(groups))
+            
+            if (length(groups) == 0) {
+                return(shiny::tags$p(class = "text-muted small", "No groups found."))
+            }
+            
+            # Generate a default color palette
+            default_colors <- if (length(groups) <= 8) {
+                scales::hue_pal()(length(groups))
+            } else {
+                grDevices::colorRampPalette(c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", 
+                                              "#9467bd", "#8c564b", "#e377c2", "#7f7f7f"))(length(groups))
+            }
+            
+            # Create color pickers in a responsive grid
+            num_cols <- min(3, length(groups))
+            col_width <- 12 / num_cols
+            
+            color_inputs <- lapply(seq_along(groups), function(i) {
+                group <- groups[i]
+                input_id <- paste0("color_", gsub("[^[:alnum:]]", "_", group))
+                
+                shiny::column(
+                    width = col_width,
+                    colourpicker::colourInput(
+                        inputId = ns(input_id),
+                        label = group,
+                        value = default_colors[i],
+                        showColour = "background"
+                    )
+                )
+            })
+            
+            shiny::fluidRow(color_inputs)
         })
         
         # Download handler for filtered data (Excel format)
