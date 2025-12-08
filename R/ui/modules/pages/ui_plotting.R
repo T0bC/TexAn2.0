@@ -7,23 +7,23 @@ UI_plotting <- function(id) {
 
     bslib::layout_sidebar(
         sidebar = bslib::sidebar(
-            title = "Plot Configuration",
-            width = 350,
+            title = NULL,  # No title - tabs serve as navigation
+            class = "plotting-sidebar",
             
-            # Tabbed navigation within sidebar
-            bslib::navset_pill_list(
+            # Horizontal tabs with icons only
+            bslib::navset_tab(
                 id = ns("sidebar_tabs"),
-                widths = c(3, 9),
-                well = FALSE,
                 
                 # ===== TAB 1: Data Selection =====
                 bslib::nav_panel(
-                    title = shiny::tags$span(
-                        bsicons::bs_icon("table"), " Data"
+                    title = bslib::tooltip(
+                        bsicons::bs_icon("table", size = "1.2em"),
+                        "Data Selection"
                     ),
                     value = "data_tab",
                     shiny::tags$div(
-                        class = "pt-2",
+                        class = "pt-3",
+                        shiny::h6(class = "text-muted mb-3", "Data Selection"),
                         # Descriptive columns
                         shiny::selectizeInput(
                             inputId = ns("metaData"),
@@ -93,12 +93,14 @@ UI_plotting <- function(id) {
                 
                 # ===== TAB 2: Filter =====
                 bslib::nav_panel(
-                    title = shiny::tags$span(
-                        bsicons::bs_icon("funnel"), " Filter"
+                    title = bslib::tooltip(
+                        bsicons::bs_icon("funnel", size = "1.2em"),
+                        "Filter Data"
                     ),
                     value = "filter_tab",
                     shiny::tags$div(
-                        class = "pt-2",
+                        class = "pt-3",
+                        shiny::h6(class = "text-muted mb-3", "Filter Data"),
                         # Hide from filter option
                         shiny::selectizeInput(
                             inputId = ns("hideCols"),
@@ -121,14 +123,16 @@ UI_plotting <- function(id) {
                 
                 # ===== TAB 3: Processing =====
                 bslib::nav_panel(
-                    title = shiny::tags$span(
-                        bsicons::bs_icon("sliders"), " Processing"
+                    title = bslib::tooltip(
+                        bsicons::bs_icon("sliders", size = "1.2em"),
+                        "Data Processing"
                     ),
                     value = "processing_tab",
                     shiny::tags$div(
-                        class = "pt-2",
+                        class = "pt-3",
+                        shiny::h6(class = "text-muted mb-3", "Data Processing"),
                         # Trimming
-                        shiny::h6("Data Trimming"),
+                        shiny::tags$label(class = "small fw-semibold", "Trimming"),
                         shiny::sliderInput(
                             inputId = ns("trim_slider"),
                             label = shiny::tags$span(
@@ -145,7 +149,7 @@ UI_plotting <- function(id) {
                         ),
                         shiny::tags$hr(),
                         # Outlier Detection
-                        shiny::h6("Outlier Detection"),
+                        shiny::tags$label(class = "small fw-semibold", "Outlier Detection"),
                         shiny::checkboxInput(
                             inputId = ns("enableOutlierDetection"),
                             label = shiny::tags$span(
@@ -246,12 +250,14 @@ UI_plotting <- function(id) {
                 
                 # ===== TAB 4: Plot Options =====
                 bslib::nav_panel(
-                    title = shiny::tags$span(
-                        bsicons::bs_icon("palette"), " Style"
+                    title = bslib::tooltip(
+                        bsicons::bs_icon("palette", size = "1.2em"),
+                        "Plot Style"
                     ),
                     value = "style_tab",
                     shiny::tags$div(
-                        class = "pt-2",
+                        class = "pt-3",
+                        shiny::h6(class = "text-muted mb-3", "Plot Style"),
                         shiny::tags$p(class = "text-muted small fst-italic", 
                             "Plot styling options coming soon...")
                         # Future: titles, legends, colors, etc.
