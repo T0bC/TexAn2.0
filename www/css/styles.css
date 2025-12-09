@@ -135,6 +135,12 @@ img[src*="Beckr_intro_Diamant"] {
     height: auto;
 }
 
+/* ===== Recalculating State ===== */
+/* Prevent graying out / opacity flash during Shiny recalculation */
+.recalculating {
+    opacity: inherit !important;
+}
+
 /* ===== Color Picker Styles ===== */
 
 /* Prevent sidebar and all ancestors from clipping color picker popup */
