@@ -20,6 +20,8 @@
 #' @param trim_percent Reactive returning trim percentage (0-100) from UI slider
 #' @param outlier_options Reactive returning list with outlier detection settings:
 #'   enabled (logical), method (character), factor (numeric), bootstrap_samples (integer)
+#' @param color_cols Reactive returning selected color column name(s) for interaction-based coloring
+#' @param color_map Reactive returning named vector of colors (group name -> hex color)
 #' @return NULL (side effects only - registers plot outputs and download handlers)
 setup_plot_outputs <- function(output, 
                                 ns, 
@@ -32,7 +34,9 @@ setup_plot_outputs <- function(output,
                                 export_width = NULL,
                                 export_height = NULL,
                                 trim_percent = NULL,
-                                outlier_options = NULL) {
+                                outlier_options = NULL,
+                                color_cols = NULL,
+                                color_map = NULL) {
     
     # Register dynamic plot outputs for each measurement column
     # Width calculation MUST be outside renderGirafe to trigger re-registration on resize
@@ -76,6 +80,17 @@ setup_plot_outputs <- function(output,
                     } else {
                         list(enabled = FALSE, method = "IQR", factor = 1.5, bootstrap_samples = 1000)
                     }
+                    # Get color columns and map
+                    clr_cols <- if (!is.null(color_cols) && is.function(color_cols)) {
+                        color_cols()
+                    } else {
+                        x  # Default to x-axis columns
+                    }
+                    clr_map <- if (!is.null(color_map) && is.function(color_map)) {
+                        color_map()
+                    } else {
+                        NULL
+                    }
                     shiny::req(df, x)
                     
                     create_scatter_plot(
@@ -87,7 +102,9 @@ setup_plot_outputs <- function(output,
                         outlier_detection = outlier_opts$enabled,
                         outlier_method = outlier_opts$method,
                         outlier_factor = outlier_opts$factor,
-                        bootstrap_samples = outlier_opts$bootstrap_samples
+                        bootstrap_samples = outlier_opts$bootstrap_samples,
+                        color_cols = clr_cols,
+                        color_map = clr_map
                     )
                 }
                 
@@ -107,6 +124,17 @@ setup_plot_outputs <- function(output,
                     } else {
                         list(enabled = FALSE, method = "IQR", factor = 1.5, bootstrap_samples = 1000)
                     }
+                    # Get color columns and map
+                    clr_cols <- if (!is.null(color_cols) && is.function(color_cols)) {
+                        color_cols()
+                    } else {
+                        x  # Default to x-axis columns
+                    }
+                    clr_map <- if (!is.null(color_map) && is.function(color_map)) {
+                        color_map()
+                    } else {
+                        NULL
+                    }
                     
                     shiny::req(df, x)
                     
@@ -120,7 +148,9 @@ setup_plot_outputs <- function(output,
                         outlier_detection = outlier_opts$enabled,
                         outlier_method = outlier_opts$method,
                         outlier_factor = outlier_opts$factor,
-                        bootstrap_samples = outlier_opts$bootstrap_samples
+                        bootstrap_samples = outlier_opts$bootstrap_samples,
+                        color_cols = clr_cols,
+                        color_map = clr_map
                     )
                     
                     # Convert to girafe interactive plot
