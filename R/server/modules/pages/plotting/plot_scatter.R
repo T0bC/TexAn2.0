@@ -8,7 +8,7 @@
 #' @param x_col Character vector of column name(s) for X-axis (will be combined if multiple)
 #' @param y_col Character string of column name for Y-axis (measurement)
 #' @param tooltip_cols Character vector of additional column names to show in tooltip (optional)
-#' @param point_style List with point styling: size, spread (jitter), alpha, shape_col
+#' @param point_style List with point styling: size, spread (jitter), alpha, shape_cols
 #' @param trim_percent Numeric, percentage (0-100) to trim from each end per group (default 0)
 #' @param outlier_detection Logical, whether to detect outliers (default FALSE)
 #' @param outlier_method Character, outlier detection method (default "IQR")
@@ -27,7 +27,7 @@ create_scatter_plot <- function(data,
                                  x_col, 
                                  y_col,
                                  tooltip_cols = NULL,
-                                 point_style = list(size = 4, spread = 0.15, alpha = 0.6, shape_col = NULL),
+                                 point_style = list(size = 4, spread = 0.15, alpha = 0.6, shape_cols = NULL),
                                  trim_percent = 0,
                                  outlier_detection = FALSE,
                                  outlier_method = "IQR",
@@ -46,7 +46,7 @@ create_scatter_plot <- function(data,
     point_size <- point_style$size %||% 4
     point_spread <- point_style$spread %||% 0.15
     point_alpha <- point_style$alpha %||% 0.6
-    shape_col <- point_style$shape_col
+    shape_cols <- point_style$shape_cols  # Character vector of column(s) for shape mapping
     
     # Validate inputs
     if (is.null(data) || nrow(data) == 0) {
@@ -66,14 +66,19 @@ create_scatter_plot <- function(data,
         source("R/utils/data_utils.R", local = TRUE)
     }
     
-    # Create interaction term for grouping (used for x-axis, outlier detection, trimming)
-    # create_interaction() uses "." separator which matches guide_axis_nested default
+    # Create interaction term for grouping (used for outlier detection, trimming)
+    # This uses original column order for consistent grouping behavior
     interaction_term <- create_interaction(data, x_col)
     
     # Set up x-axis variable
     if (length(x_col) > 1) {
-        # Multiple columns: use interaction term for nested axis
-        data$.x_nested <- interaction_term
+        # For nested axis: REVERSE column order so first selected = outer grouping
+        # guide_axis_nested expects: innermost.middle.outermost (splits by ".")
+        # User expects: first selected = outer, last selected = inner
+        # So we reverse: c("Outer", "Inner") -> c("Inner", "Outer") -> "Inner.Outer"
+        # guide_axis_nested then shows: Outer as top level, Inner closest to axis
+        x_nested_interaction <- create_interaction(data, rev(x_col))
+        data$.x_nested <- x_nested_interaction
         x_var <- ".x_nested"
         x_label <- paste(x_col, collapse = " | ")
     } else {
@@ -88,6 +93,28 @@ create_scatter_plot <- function(data,
     }
     color_interaction <- create_interaction(data, color_cols)
     data$.color_group <- as.character(color_interaction)
+    
+    # Create shape interaction term if shape columns specified
+    # Uses interaction of selected columns for shape mapping
+    use_shape_mapping <- !is.null(shape_cols) && length(shape_cols) > 0
+    if (use_shape_mapping) {
+        # Validate shape columns exist
+        valid_shape_cols <- shape_cols[shape_cols %in% names(data)]
+        if (length(valid_shape_cols) > 0) {
+            shape_interaction <- create_interaction(data, valid_shape_cols)
+            data$.shape_group <- as.character(shape_interaction)
+            shape_legend_title <- paste(valid_shape_cols, collapse = " | ")
+            
+            # Warn if too many unique shapes (ggplot2 has ~25 shapes, but only ~6 are easily distinguishable)
+            n_shapes <- length(unique(data$.shape_group))
+            if (n_shapes > 6) {
+                warning(paste0("Shape mapping has ", n_shapes, " unique groups. ",
+                              "Consider using fewer shape columns for better readability."))
+            }
+        } else {
+            use_shape_mapping <- FALSE
+        }
+    }
     
     # STEP 1: Detect outliers first (these are excluded from statistics)
     if (outlier_detection) {
@@ -167,19 +194,32 @@ create_scatter_plot <- function(data,
         paste(x_col, collapse = " | ")
     }
     
-    # Layer 1: Retained points (colored by group) - using geom_jitter_interactive
+    # Layer 1: Retained points (colored by group, optionally shaped by group)
     if (length(retained_idx) > 0) {
         retained_data <- data[retained_idx, , drop = FALSE]
         retained_data$.data_id <- retained_idx
         
-        p <- p + ggiraph::geom_jitter_interactive(
-            data = retained_data,
-            ggplot2::aes(
+        # Build aesthetic mapping - conditionally include shape
+        if (use_shape_mapping) {
+            aes_mapping <- ggplot2::aes(
+                tooltip = .data[[".tooltip"]],
+                data_id = .data[[".data_id"]],
+                color = .data[[".color_group"]],
+                fill = .data[[".color_group"]],
+                shape = .data[[".shape_group"]]
+            )
+        } else {
+            aes_mapping <- ggplot2::aes(
                 tooltip = .data[[".tooltip"]],
                 data_id = .data[[".data_id"]],
                 color = .data[[".color_group"]],
                 fill = .data[[".color_group"]]
-            ),
+            )
+        }
+        
+        p <- p + ggiraph::geom_jitter_interactive(
+            data = retained_data,
+            mapping = aes_mapping,
             hover_nearest = TRUE,
             width = point_spread,
             height = 0,
@@ -240,6 +280,20 @@ create_scatter_plot <- function(data,
         p <- p +
             ggplot2::scale_color_discrete(name = color_legend_title) +
             ggplot2::scale_fill_discrete(name = color_legend_title)
+    }
+    
+    # Add shape scale if shape mapping is used
+    # Use fillable shapes (21-25) to allow both color and fill aesthetics
+    if (use_shape_mapping) {
+        n_shapes <- length(unique(data$.shape_group))
+        # Fillable shapes that work well: 21=circle, 22=square, 23=diamond, 24=triangle up, 25=triangle down
+        fillable_shapes <- c(21, 22, 23, 24, 25, 3)  # 3=plus as fallback for 6th
+        shape_values <- fillable_shapes[seq_len(min(n_shapes, length(fillable_shapes)))]
+        
+        p <- p + ggplot2::scale_shape_manual(
+            values = shape_values,
+            name = shape_legend_title
+        )
     }
     
     # Extract grid/legend options with defaults
@@ -309,11 +363,10 @@ create_scatter_plot <- function(data,
             panel.grid.major.y = if (!h_grid) ggplot2::element_blank() else ggplot2::element_line(color = "gray90"),
             panel.grid.minor.y = if (!h_grid) ggplot2::element_blank() else ggplot2::element_line(color = "gray90"),
             axis.ticks.length = ggplot2::unit(tick_length, "cm"),
-            axis.line = ggplot2::element_line(colour = "black", linewidth = line_thickness),
-            panel.border = if (!top_right_borders) ggplot2::element_blank() else ggplot2::element_rect(
-                color = "black", 
-                linewidth = line_thickness
-            ),
+            # Use either panel.border (all 4 sides) or axis.line (just X/Y) - not both
+            # Note: element_rect linewidth renders thinner than element_line, so scale by ~2x for visual match
+            axis.line = if (top_right_borders) ggplot2::element_blank() else ggplot2::element_line(color = "black", linewidth = line_thickness),
+            panel.border = if (top_right_borders) ggplot2::element_rect(color = "black", fill = NA, linewidth = line_thickness * 2) else ggplot2::element_blank(),
             legend.position = legend_pos,
             plot.margin = ggplot2::margin(10, 10, 10, 10)
         )
