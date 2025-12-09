@@ -15,6 +15,8 @@
 #' @param outlier_method Character, outlier detection method (default "IQR")
 #' @param outlier_factor Numeric, threshold factor for outlier detection
 #' @param bootstrap_samples Integer, number of bootstrap samples (for bootstrap method)
+#' @param color_cols Character vector of column name(s) for color grouping (interaction-based)
+#' @param color_map Named character vector mapping group names to hex colors
 #' @return A ggplot2 object with ggiraph interactive layer
 #' @export
 create_scatter_plot <- function(data, 
@@ -27,7 +29,9 @@ create_scatter_plot <- function(data,
                                  outlier_detection = FALSE,
                                  outlier_method = "IQR",
                                  outlier_factor = 1.5,
-                                 bootstrap_samples = 1000) {
+                                 bootstrap_samples = 1000,
+                                 color_cols = NULL,
+                                 color_map = NULL) {
     
     # Validate inputs
     if (is.null(data) || nrow(data) == 0) {
@@ -58,6 +62,14 @@ create_scatter_plot <- function(data,
         source("R/utils/data_utils.R", local = TRUE)
     }
     interaction_term <- create_interaction(data, x_col)
+    
+    # Create color interaction term (may differ from x-axis grouping)
+    # Default to x_col if no color_cols specified
+    if (is.null(color_cols) || length(color_cols) == 0) {
+        color_cols <- x_col
+    }
+    color_interaction <- create_interaction(data, color_cols)
+    data$.color_group <- as.character(color_interaction)
     
     # STEP 1: Detect outliers first (these are excluded from statistics)
     if (outlier_detection) {
@@ -149,20 +161,49 @@ create_scatter_plot <- function(data,
         )
     }
     
-    # Layer 2: Retained points (colored, filled)
+    # Layer 2: Retained points (colored by group, filled)
     if (length(retained_idx) > 0) {
         retained_data <- data[retained_idx, , drop = FALSE]
         retained_data$.data_id <- retained_idx
-        p <- p + ggiraph::geom_point_interactive(
-            data = retained_data,
-            ggplot2::aes(
-                tooltip = .data[[".tooltip"]],
-                data_id = .data[[".data_id"]]
-            ),
-            alpha = point_alpha,
-            size = point_size,
-            color = "#0d6efd"
-        )
+        
+        # Determine if we have a custom color map
+        if (!is.null(color_map) && length(color_map) > 0) {
+            # Map colors to each point based on their group
+            retained_data$.point_color <- color_map[retained_data$.color_group]
+            # Fill any unmapped groups with default
+            unmapped <- is.na(retained_data$.point_color)
+            if (any(unmapped)) {
+                retained_data$.point_color[unmapped] <- "#0d6efd"
+            }
+            
+            p <- p + ggiraph::geom_point_interactive(
+                data = retained_data,
+                ggplot2::aes(
+                    tooltip = .data[[".tooltip"]],
+                    data_id = .data[[".data_id"]],
+                    color = .data[[".color_group"]]
+                ),
+                alpha = point_alpha,
+                size = point_size
+            ) +
+            ggplot2::scale_color_manual(
+                values = color_map,
+                name = paste(color_cols, collapse = " : ")
+            )
+        } else {
+            # No custom colors - use default ggplot2 color scale
+            p <- p + ggiraph::geom_point_interactive(
+                data = retained_data,
+                ggplot2::aes(
+                    tooltip = .data[[".tooltip"]],
+                    data_id = .data[[".data_id"]],
+                    color = .data[[".color_group"]]
+                ),
+                alpha = point_alpha,
+                size = point_size
+            ) +
+            ggplot2::scale_color_discrete(name = paste(color_cols, collapse = " : "))
+        }
     }
     
     p <- p +
