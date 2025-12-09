@@ -91,12 +91,6 @@ server_load_data <- function(id) {
       }
     })
     
-    # Source modular component functions
-    source("R/server/modules/pages/load_data/file_upload.R", local = TRUE)
-    source("R/server/modules/pages/load_data/data_preview.R", local = TRUE)
-    source("R/server/modules/pages/load_data/missing_values_plot.R", local = TRUE)
-    source("R/server/modules/pages/load_data/data_summary.R", local = TRUE)
-    
     # Initialize modular components with explicit dependency injection.
     # We pass the module's `input` object so the component can reactively
     # access inputs defined in ui_load_data.R (e.g., input$data_file, input$csv_delimiter).
