@@ -9,34 +9,20 @@
 #'
 #' @param output Shiny output object from parent module
 #' @param ns Namespace function from parent module (session$ns)
-#' @param filtered_data Reactive returning the filtered data frame
-#' @param x_cols Reactive returning selected X-axis column name(s)
+#' @param plot_params Reactive returning consolidated list of plot parameters:
+#'   data, x_cols, tooltip_cols, trim_percent, outlier_options, color_cols, color_map, window_size
 #' @param measure_cols Reactive returning selected measurement column names
-#' @param tooltip_cols Reactive returning selected tooltip column names
 #' @param create_scatter_plot Function to create scatter plots (injected dependency)
-#' @param window_size Reactive returning list with width/height from JS (for dynamic SVG sizing)
 #' @param export_width Reactive returning export width in cm
 #' @param export_height Reactive returning export height in cm
-#' @param trim_percent Reactive returning trim percentage (0-100) from UI slider
-#' @param outlier_options Reactive returning list with outlier detection settings:
-#'   enabled (logical), method (character), factor (numeric), bootstrap_samples (integer)
-#' @param color_cols Reactive returning selected color column name(s) for interaction-based coloring
-#' @param color_map Reactive returning named vector of colors (group name -> hex color)
 #' @return NULL (side effects only - registers plot outputs and download handlers)
 setup_plot_outputs <- function(output, 
                                 ns, 
-                                filtered_data, 
-                                x_cols, 
+                                plot_params,
                                 measure_cols,
-                                tooltip_cols,
                                 create_scatter_plot,
-                                window_size = NULL,
                                 export_width = NULL,
-                                export_height = NULL,
-                                trim_percent = NULL,
-                                outlier_options = NULL,
-                                color_cols = NULL,
-                                color_map = NULL) {
+                                export_height = NULL) {
     
     # Track which outputs have been registered to avoid re-registration
     registered_outputs <- shiny::reactiveVal(character(0))
@@ -71,102 +57,58 @@ setup_plot_outputs <- function(output,
                 
                 # Helper function to create the ggplot (shared between render and download)
                 create_plot <- function() {
-                    df <- filtered_data()
-                    x <- x_cols()
-                    tt_cols <- tooltip_cols()
-                    trim_pct <- if (!is.null(trim_percent) && is.function(trim_percent)) {
-                        trim_percent()
-                    } else {
-                        0
-                    }
-                    # Get outlier options
-                    outlier_opts <- if (!is.null(outlier_options) && is.function(outlier_options)) {
-                        outlier_options()
-                    } else {
+                    params <- plot_params()
+                    shiny::req(params$data, params$x_cols)
+                    
+                    outlier_opts <- params$outlier_options %||% 
                         list(enabled = FALSE, method = "IQR", factor = 1.5, bootstrap_samples = 1000)
-                    }
-                    # Get color columns and map
-                    clr_cols <- if (!is.null(color_cols) && is.function(color_cols)) {
-                        color_cols()
-                    } else {
-                        x  # Default to x-axis columns
-                    }
-                    clr_map <- if (!is.null(color_map) && is.function(color_map)) {
-                        color_map()
-                    } else {
-                        NULL
-                    }
-                    shiny::req(df, x)
                     
                     create_scatter_plot(
-                        data = df,
-                        x_col = x,
+                        data = params$data,
+                        x_col = params$x_cols,
                         y_col = local_measure,
-                        tooltip_cols = tt_cols,
-                        trim_percent = trim_pct,
+                        tooltip_cols = params$tooltip_cols,
+                        trim_percent = params$trim_percent %||% 0,
                         outlier_detection = outlier_opts$enabled,
                         outlier_method = outlier_opts$method,
                         outlier_factor = outlier_opts$factor,
                         bootstrap_samples = outlier_opts$bootstrap_samples,
-                        color_cols = clr_cols,
-                        color_map = clr_map
+                        color_cols = params$color_cols,
+                        color_map = params$color_map
                     )
                 }
                 
                 # Register the girafe output for interactive plots
+                # Uses consolidated plot_params for single-debounce reactivity
                 output[[plot_id]] <- ggiraph::renderGirafe({
-                    df <- filtered_data()
-                    x <- x_cols()
-                    tt_cols <- tooltip_cols()
-                    trim_pct <- if (!is.null(trim_percent) && is.function(trim_percent)) {
-                        trim_percent()
-                    } else {
-                        0
-                    }
-                    # Get outlier options
-                    outlier_opts <- if (!is.null(outlier_options) && is.function(outlier_options)) {
-                        outlier_options()
-                    } else {
-                        list(enabled = FALSE, method = "IQR", factor = 1.5, bootstrap_samples = 1000)
-                    }
-                    # Get color columns and map
-                    clr_cols <- if (!is.null(color_cols) && is.function(color_cols)) {
-                        color_cols()
-                    } else {
-                        x  # Default to x-axis columns
-                    }
-                    clr_map <- if (!is.null(color_map) && is.function(color_map)) {
-                        color_map()
-                    } else {
-                        NULL
-                    }
+                    # Get all parameters from consolidated reactive (single dependency)
+                    params <- plot_params()
+                    shiny::req(params$data, params$x_cols)
                     
-                    # Calculate SVG width based on window size (isolated to not trigger on resize)
-                    # Window resize is handled by CSS, this just sets initial size
-                    win_size <- shiny::isolate({
-                        if (!is.null(window_size) && is.function(window_size)) window_size() else NULL
-                    })
+                    outlier_opts <- params$outlier_options %||% 
+                        list(enabled = FALSE, method = "IQR", factor = 1.5, bootstrap_samples = 1000)
+                    
+                    # Calculate SVG width from window size
+                    win_size <- params$window_size
                     width_svg <- if (!is.null(win_size) && !is.null(win_size$width)) {
                         round(win_size$width / 100, 0) / 2.0
                     } else {
                         5.0  # Default width
                     }
                     
-                    shiny::req(df, x)
-                    
                     # Create the ggplot with interactive elements
                     p <- create_scatter_plot(
-                        data = df,
-                        x_col = x,
+                        data = params$data,
+                        x_col = params$x_cols,
                         y_col = local_measure,
-                        tooltip_cols = tt_cols,
-                        trim_percent = trim_pct,
+                        tooltip_cols = params$tooltip_cols,
+                        trim_percent = params$trim_percent %||% 0,
                         outlier_detection = outlier_opts$enabled,
                         outlier_method = outlier_opts$method,
                         outlier_factor = outlier_opts$factor,
                         bootstrap_samples = outlier_opts$bootstrap_samples,
-                        color_cols = clr_cols,
-                        color_map = clr_map
+                        color_cols = params$color_cols,
+                        color_map = params$color_map
                     )
                     
                     # Convert to girafe interactive plot
