@@ -112,12 +112,15 @@ setup_plot_outputs <- function(output,
                     outlier_opts <- params$outlier_options %||% 
                         list(enabled = FALSE, method = "IQR", factor = 1.5, bootstrap_samples = 1000)
                     
-                    # Calculate SVG width from window size
+                    # Calculate SVG width from container size
+                    # Container width is in pixels, convert to inches for SVG
+                    # 96 DPI is standard screen resolution
                     win_size <- params$window_size
                     width_svg <- if (!is.null(win_size) && !is.null(win_size$width)) {
-                        round(win_size$width / 100, 0) / 2.0
+                        # Convert pixels to inches, subtract small margin for card padding
+                        max(4, (win_size$width - 40) / 96)
                     } else {
-                        5.0  # Default width
+                        8.0  # Default width in inches
                     }
                     
                     # Create the ggplot with interactive elements
@@ -140,10 +143,13 @@ setup_plot_outputs <- function(output,
                     )
                     
                     # Convert to girafe interactive plot
+                    # Height: use a reasonable aspect ratio (roughly 2:1 width:height)
+                    height_svg <- max(3, width_svg * 0.5)
+                    
                     ggiraph::girafe(
                         ggobj = p,
                         width_svg = width_svg,
-                        height_svg = ceiling(650/100) / 2.0,
+                        height_svg = height_svg,
                         options = list(
                             ggiraph::opts_zoom(max = 5),
                             ggiraph::opts_selection(type = "single"),
