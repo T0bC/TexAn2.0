@@ -251,7 +251,8 @@ generate_plot_grid_ui <- function(ns, measures) {
                             width = "100%"
                         ),
                         type = 6,        # Spinner style (1-8)
-                        color = "#0d6efd" # Bootstrap primary color
+                        color = "#0d6efd", # Bootstrap primary color
+                        hide.ui = TRUE
                     )
                 )
             )
