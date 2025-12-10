@@ -1,5 +1,5 @@
 // Plot resize handler for ggiraph outputs
-// Reports window size to Shiny for dynamic SVG sizing
+// Reports container size to Shiny for dynamic SVG sizing
 
 // Debounce function to limit the rate at which a function can fire
 function debounce(func, wait, immediate) {
@@ -17,20 +17,32 @@ function debounce(func, wait, immediate) {
     };
 }
 
-// Initialize window size reporting for a specific module
-// targetId: unused, kept for API compatibility
-// windowInputId: the namespaced input ID to send window size to
+// Initialize container size reporting for a specific module
+// targetId: the namespaced ID of the plots container (e.g., "plotting-plots")
+// windowInputId: the namespaced input ID to send size to
 function initializeWindowSize(targetId, windowInputId) {
 
     // Track last reported size to avoid duplicate updates
     var lastWidth = null;
     var lastHeight = null;
 
-    // Function to report window size to Shiny (only if changed)
-    var reportWindowSize = function () {
+    // Function to report container size to Shiny (only if changed)
+    var reportContainerSize = function () {
         if (window.Shiny && Shiny.setInputValue) {
-            var currentWidth = window.innerWidth;
-            var currentHeight = window.innerHeight;
+            // Try to find the plots container element
+            var container = document.getElementById(targetId);
+            var currentWidth, currentHeight;
+
+            if (container && container.offsetWidth > 0) {
+                // Use actual container width (accounts for sidebar, padding, etc.)
+                currentWidth = container.offsetWidth;
+                currentHeight = container.offsetHeight || window.innerHeight;
+            } else {
+                // Fallback: estimate based on window width minus typical sidebar
+                // bslib sidebar is typically ~300px
+                currentWidth = Math.max(400, window.innerWidth - 350);
+                currentHeight = window.innerHeight;
+            }
 
             // Only send if values actually changed
             if (currentWidth !== lastWidth || currentHeight !== lastHeight) {
@@ -40,26 +52,29 @@ function initializeWindowSize(targetId, windowInputId) {
                 Shiny.setInputValue(windowInputId, {
                     width: currentWidth,
                     height: currentHeight
-                });  // No priority: "event" - let Shiny deduplicate
+                });
             }
         }
     };
 
     // Debounced version (250ms delay for resize dragging)
-    var debouncedReportWindowSize = debounce(reportWindowSize, 250);
+    var debouncedReportSize = debounce(reportContainerSize, 250);
 
-    // Update on window resize only
-    $(window).on('resize', debouncedReportWindowSize);
+    // Update on window resize
+    $(window).on('resize', debouncedReportSize);
 
     // Report on tab switches (but not on every visual change)
-    // shown.bs.tab fires when Bootstrap tabs become visible
     $(document).on('shown.bs.tab', function () {
-        // Small delay to let layout settle
-        setTimeout(reportWindowSize, 50);
+        setTimeout(reportContainerSize, 50);
     });
 
     // Initial report after page load
     $(document).on('shiny:connected', function () {
-        setTimeout(reportWindowSize, 100);
+        setTimeout(reportContainerSize, 100);
+    });
+
+    // Also observe sidebar toggle (bslib sidebar can be collapsed)
+    $(document).on('click', '[data-bs-toggle="collapse"]', function () {
+        setTimeout(reportContainerSize, 350);
     });
 }
