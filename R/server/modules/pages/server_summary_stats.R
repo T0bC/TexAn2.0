@@ -3,12 +3,16 @@
 #' Orchestrates all summary statistics components using explicit dependency injection.
 #' Components are sourced from R/server/modules/pages/summary_stats/
 #'
+#' Uses data from the Plotting tab as source of truth - this ensures summary statistics
+#' are calculated on the same filtered/trimmed/outlier-excluded data shown in plots.
+#'
 #' @param id Module namespace ID
-#' @param median_data Reactive containing the median-processed data from server_median
+#' @param plotting_data Reactive containing filtered data from plotting module
+#' @param trim_percent Reactive returning the trim percentage (0-100) from plotting
+#' @param outlier_options Reactive returning outlier detection settings from plotting
 #' @param data_version Reactive integer that increments when new data is loaded
-#' @param trim_value Reactive returning the trim percentage (0-100), optional
 #' @return NULL (side effects only)
-server_summary_stats <- function(id, median_data, data_version, trim_value = NULL) {
+server_summary_stats <- function(id, plotting_data, trim_percent, outlier_options, data_version) {
     shiny::moduleServer(id, function(input, output, session) {
         ns <- session$ns
         
@@ -18,16 +22,17 @@ server_summary_stats <- function(id, median_data, data_version, trim_value = NUL
         source("R/server/modules/pages/summary_stats/summary_tables.R", local = TRUE)
         
         # ----- 1. Column Reactives -----
+        # Use plotting_data as source (already filtered by group selections)
         measurement_cols <- shiny::reactive({
-            shiny::req(median_data())
-            cols <- get_measurement_cols(median_data())
-            # Exclude outlier columns
+            shiny::req(plotting_data())
+            cols <- get_measurement_cols(plotting_data())
+            # Exclude outlier columns from display
             cols[!grepl("_outlier", cols)]
         })
         
         descriptive_cols <- shiny::reactive({
-            shiny::req(median_data())
-            get_descriptive_cols_short(median_data())
+            shiny::req(plotting_data())
+            get_descriptive_cols(plotting_data())
         })
         
         # X-axis column (first descriptive column as default)
@@ -35,13 +40,6 @@ server_summary_stats <- function(id, median_data, data_version, trim_value = NUL
             desc_cols <- descriptive_cols()
             if (length(desc_cols) > 0) desc_cols[1] else NULL
         })
-        
-        # Trim value reactive (default to 0 if not provided)
-        trim_reactive <- if (is.null(trim_value)) {
-            shiny::reactive({ 0 })
-        } else {
-            trim_value
-        }
         
         # ----- 2. Reset state on new data -----
         if (!is.null(data_version)) {
@@ -64,7 +62,7 @@ server_summary_stats <- function(id, median_data, data_version, trim_value = NUL
             input = input,
             output = output,
             session = session,
-            median_data = median_data,
+            median_data = plotting_data,
             descriptive_cols = descriptive_cols,
             x_axis_col = x_axis_col
         )
@@ -72,11 +70,11 @@ server_summary_stats <- function(id, median_data, data_version, trim_value = NUL
         # ----- 4. Summary DataFrames -----
         summary_dfs <- create_summary_dfs_reactive(
             input = input,
-            median_data = median_data,
+            median_data = plotting_data,
             measurement_cols = measurement_cols,
             descriptive_cols = descriptive_cols,
             x_axis_col = x_axis_col,
-            trim_value = trim_reactive
+            trim_value = trim_percent
         )
         
         # ----- 5. Table Outputs -----
@@ -91,7 +89,7 @@ server_summary_stats <- function(id, median_data, data_version, trim_value = NUL
             output = output,
             ns = ns,
             summary_dfs = summary_dfs,
-            median_data = median_data
+            median_data = plotting_data
         )
         
         # ----- 7. Download All Handler -----
