@@ -6,6 +6,7 @@ source("R/utils/data_utils.R")
 source("R/ui/modules/pages/ui_load_data.R")
 source("R/ui/modules/pages/ui_median.R")
 source("R/ui/modules/pages/ui_plotting.R")
+source("R/ui/modules/pages/ui_summary_stats.R")
 
 # Source component modules
 source("R/ui/modules/components/settings_modal.R")
@@ -14,6 +15,7 @@ source("R/ui/modules/components/settings_modal.R")
 source("R/server/modules/pages/server_load_data.R")
 source("R/server/modules/pages/server_median.R")
 source("R/server/modules/pages/server_plotting.R")
+source("R/server/modules/pages/server_summary_stats.R")
 
 # Source server sub-modules: Load Data
 source("R/server/modules/pages/load_data/file_upload.R")
@@ -32,6 +34,9 @@ source("R/server/modules/pages/median/median_table.R")
 source("R/server/modules/pages/plotting/plot_scatter.R")
 source("R/server/modules/pages/plotting/plot_renderer.R")
 
+# Source server sub-modules: Summary Stats
+source("R/server/modules/pages/summary_stats/summary_utils.R")
+
 # Load required packages
 library(shiny)
 library(bslib)
@@ -47,6 +52,8 @@ library(ggh4x)
 library(colourpicker)
 library(scales)
 library(shinycssloaders)
+library(purrr)
+library(rlang)
 
 # Prevent Rplots.pdf creation by setting default PDF device to null
 # This avoids file clutter when DataExplorer or other packages open a default device
@@ -68,6 +75,7 @@ app_ui <- bslib::page_navbar(
   bslib::nav_panel(title = "Load Data", value = "load_data", UI_load_data("load_data_id")),
   bslib::nav_panel(title = "Median Analysis", value = "median", UI_median("median_id")),
   bslib::nav_panel(title = "Plotting", value = "plotting", UI_plotting("plotting_id")),
+  bslib::nav_panel(title = "Summary Stats", value = "summary_stats", UI_summary_stats("summary_stats_id")),
   bslib::nav_panel(title = "Reporting", value = "reporting", shiny::p("TODO: Add reporting UI.")),
   bslib::nav_spacer(),
   bslib::nav_item(
@@ -94,6 +102,11 @@ app_server <- function(input, output, session) {
   server_plotting("plotting_id",
                   median_data = median_result,
                   data_version = load_data_result$version)
+  
+  # Pass median data to summary stats module
+  server_summary_stats("summary_stats_id",
+                       median_data = median_result,
+                       data_version = load_data_result$version)
 
   # Initialize settings modal
   settings_modal_server(input, session)
@@ -103,7 +116,7 @@ app_server <- function(input, output, session) {
     has_data <- !is.null(load_data_result$data())
     
     # Tabs that require data to be loaded
-    data_dependent_tabs <- c("median", "plotting", "reporting")
+    data_dependent_tabs <- c("median", "plotting", "summary_stats", "reporting")
     
     for (tab in data_dependent_tabs) {
       if (has_data) {
