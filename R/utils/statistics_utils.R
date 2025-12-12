@@ -9,8 +9,8 @@
 
 #' Create a structured error object for statistical tests
 #'
-#' Returns a standardized error structure with message, raw error,
-#' a filtered stack trace, and context about the function arguments.
+#' Wrapper around create_app_error() specialized for statistical tests.
+#' Uses stat_error_parser for user-friendly messages.
 #'
 #' @param user_msg Character, user-friendly error message
 #' @param raw_msg Character, original error message from R
@@ -19,80 +19,33 @@
 #' @param context List, optional context with function arguments for debugging
 #' @return List with is_error=TRUE and structured error information
 create_stat_error <- function(user_msg, raw_msg, error_obj, test_name, context = NULL) {
-    # Capture stack trace filtered to app code only (frames with file references)
-    stack_trace <- tryCatch(
-        {
-            raw_output <- utils::capture.output(shiny::printStackTrace(error_obj), type = "message")
-            if (length(raw_output) > 0) {
-                # Filter to only lines containing file references [path#line]
-                # These are the frames from our application code
-                filtered <- raw_output[grepl("\\[.*#[0-9]+\\]", raw_output)]
-                if (length(filtered) > 0) {
-                    paste(cli::ansi_html(filtered), collapse = "\n")
-                } else {
-                    # Fallback: show top frames if no file refs found
-                    paste(cli::ansi_html(head(raw_output, 20)), collapse = "\n")
-                }
-            } else {
-                NULL
-            }
-        },
-        error = function(e) NULL
-    )
-    
-    list(
-        is_error = TRUE,
-        test_name = test_name,
-        message = user_msg,
-        raw_message = raw_msg,
-        context = context,
-        traces = list(
-            stack_trace = stack_trace
-        )
+    # Delegate to global error handling with test_name as operation_name
+    create_app_error(
+        user_msg = user_msg,
+        raw_msg = raw_msg,
+        error_obj = error_obj,
+        operation_name = test_name,
+        context = context
     )
 }
 
 
 #' Safe execution wrapper for statistical tests
 #'
-#' Wraps a statistical test in error handling, returning a standardized
-#' result structure with either results or a structured error object.
+#' Wrapper around safe_execute() specialized for statistical tests.
+#' Uses stat_error_parser for user-friendly error messages.
 #'
 #' @param expr Expression to evaluate
 #' @param test_name Character, name of the test for error messages
 #' @param context List, optional context with function arguments for debugging
 #' @return List with success flag and either result or structured error
 safe_stat_test <- function(expr, test_name = "test", context = NULL) {
-    # Capture the expression for evaluation with stack trace capture
-    expr_quoted <- substitute(expr)
-    
-    tryCatch(
-        {
-            # Use captureStackTraces to enable stack trace capture on errors
-            result <- shiny::captureStackTraces(eval(expr_quoted, envir = parent.frame()))
-            list(success = TRUE, result = result, error = NULL)
-        },
-        error = function(e) {
-            # Parse common error messages into user-friendly versions
-            error_msg <- conditionMessage(e)
-            
-            user_msg <- if (grepl("groups", error_msg, ignore.case = TRUE)) {
-                paste0(test_name, ": Insufficient groups for comparison. Need at least 2 groups with data.")
-            } else if (grepl("sample size|observations", error_msg, ignore.case = TRUE)) {
-                paste0(test_name, ": Insufficient sample size in one or more groups.")
-            } else if (grepl("NA|missing", error_msg, ignore.case = TRUE)) {
-                paste0(test_name, ": Too many missing values in the data.")
-            } else if (grepl("variance|constant", error_msg, ignore.case = TRUE)) {
-                paste0(test_name, ": Cannot compute - one or more groups have zero variance.")
-            } else {
-                paste0(test_name, " failed: ", error_msg)
-            }
-            
-            # Create structured error with context
-            error_struct <- create_stat_error(user_msg, error_msg, e, test_name, context)
-            
-            list(success = FALSE, result = NULL, error = error_struct)
-        }
+    # Delegate to global safe_execute with stat-specific error parser
+    safe_execute(
+        expr = expr,
+        operation_name = test_name,
+        context = context,
+        error_parser = stat_error_parser
     )
 }
 
