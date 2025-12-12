@@ -10,14 +10,15 @@
 #' Create a structured error object for statistical tests
 #'
 #' Returns a standardized error structure with message, raw error,
-#' and a filtered stack trace showing only application code.
+#' a filtered stack trace, and context about the function arguments.
 #'
 #' @param user_msg Character, user-friendly error message
 #' @param raw_msg Character, original error message from R
 #' @param error_obj The error condition object
 #' @param test_name Character, name of the test that failed
+#' @param context List, optional context with function arguments for debugging
 #' @return List with is_error=TRUE and structured error information
-create_stat_error <- function(user_msg, raw_msg, error_obj, test_name) {
+create_stat_error <- function(user_msg, raw_msg, error_obj, test_name, context = NULL) {
     # Capture stack trace filtered to app code only (frames with file references)
     stack_trace <- tryCatch(
         {
@@ -44,6 +45,7 @@ create_stat_error <- function(user_msg, raw_msg, error_obj, test_name) {
         test_name = test_name,
         message = user_msg,
         raw_message = raw_msg,
+        context = context,
         traces = list(
             stack_trace = stack_trace
         )
@@ -58,8 +60,9 @@ create_stat_error <- function(user_msg, raw_msg, error_obj, test_name) {
 #'
 #' @param expr Expression to evaluate
 #' @param test_name Character, name of the test for error messages
+#' @param context List, optional context with function arguments for debugging
 #' @return List with success flag and either result or structured error
-safe_stat_test <- function(expr, test_name = "test") {
+safe_stat_test <- function(expr, test_name = "test", context = NULL) {
     # Capture the expression for evaluation with stack trace capture
     expr_quoted <- substitute(expr)
     
@@ -85,8 +88,8 @@ safe_stat_test <- function(expr, test_name = "test") {
                 paste0(test_name, " failed: ", error_msg)
             }
             
-            # Create structured error with multiple trace formats
-            error_struct <- create_stat_error(user_msg, error_msg, e, test_name)
+            # Create structured error with context
+            error_struct <- create_stat_error(user_msg, error_msg, e, test_name, context)
             
             list(success = FALSE, result = NULL, error = error_struct)
         }
@@ -178,6 +181,16 @@ perform_t1way <- function(df, x_axis, measure_col, tr_value,
         sample_size <- NULL
     }
     
+    # Build context for error reporting
+    error_context <- list(
+        measure = measure_col,
+        grouping = group_col,
+        n_groups = n_groups,
+        n_observations = nrow(df),
+        trim = tr_value,
+        bootstrap = use_bootstrap
+    )
+    
     # Run the test (with or without bootstrap)
     test_result <- safe_stat_test({
         # Storage for bootstrap iterations
@@ -220,7 +233,7 @@ perform_t1way <- function(df, x_axis, measure_col, tr_value,
         }
         
         results_matrix
-    }, test_name = "t1way")
+    }, test_name = "t1way", context = error_context)
     
     # Handle errors - return structured error object
     if (!test_result$success) {
@@ -286,6 +299,18 @@ perform_t2way <- function(df, x_axis, measure_col, tr_value,
         sample_size <- NULL
     }
     
+    # Build context for error reporting
+    error_context <- list(
+        measure = measure_col,
+        factor1 = factor1,
+        factor2 = factor2,
+        levels_factor1 = n_levels_1,
+        levels_factor2 = n_levels_2,
+        n_observations = nrow(df),
+        trim = tr_value,
+        bootstrap = use_bootstrap
+    )
+    
     # Run the test (with or without bootstrap)
     test_result <- safe_stat_test({
         # Storage for bootstrap iterations
@@ -333,7 +358,7 @@ perform_t2way <- function(df, x_axis, measure_col, tr_value,
         }
         
         results_matrix
-    }, test_name = "t2way")
+    }, test_name = "t2way", context = error_context)
     
     # Handle errors - return structured error object
     if (!test_result$success) {
