@@ -468,11 +468,13 @@ img[src*="Beckr_intro_Diamant"] {
 }
 
 /* Expandable details section */
-.app-error-details {
+.app-error-details,
+.alert details.app-error-details,
+details.app-error-details.mt-2 {
     margin-top: 0.5rem;
-    border: 1px solid var(--bs-border-color);
+    border: 1px solid rgba(220, 53, 69, 0.3) !important;
     border-radius: 4px;
-    background: var(--bs-tertiary-bg);
+    background-color: rgba(220, 53, 69, 0.15) !important;
 }
 
 /* Summary (clickable header) */
@@ -480,20 +482,21 @@ img[src*="Beckr_intro_Diamant"] {
     padding: 0.5rem 0.75rem;
     cursor: pointer;
     font-size: 0.85rem;
-    color: var(--bs-secondary);
+    color: inherit;
+    opacity: 0.8;
     user-select: none;
 }
 
 .app-error-details summary:hover {
-    color: var(--bs-body-color);
-    background: var(--bs-secondary-bg);
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.05);
 }
 
 /* Details content area */
 .app-error-details-content {
     padding: 0.75rem;
-    background: var(--bs-body-bg);
-    border-top: 1px solid var(--bs-border-color);
+    background-color: rgba(220, 53, 69, 0.15) !important;
+    border-top: 1px solid rgba(220, 53, 69, 0.3);
     max-height: 300px;
     overflow: auto;
 }
@@ -502,13 +505,14 @@ img[src*="Beckr_intro_Diamant"] {
 .app-error-context-info {
     padding-bottom: 0.75rem;
     margin-bottom: 0.75rem;
-    border-bottom: 1px solid var(--bs-border-color);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .app-error-context-title {
     font-size: 0.7rem;
     font-weight: 600;
-    color: var(--bs-secondary);
+    color: inherit;
+    opacity: 0.7;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 0.5rem;
@@ -523,14 +527,15 @@ img[src*="Beckr_intro_Diamant"] {
 }
 
 .app-error-context-key {
-    color: var(--bs-secondary) !important;
+    color: inherit !important;
+    opacity: 0.7;
     min-width: 130px !important;
     flex-shrink: 0;
 }
 
 .app-error-context-value {
     font-family: var(--bs-font-monospace) !important;
-    color: var(--bs-body-color) !important;
+    color: inherit !important;
 }
 
 /* Stack trace wrapper */
@@ -541,10 +546,11 @@ img[src*="Beckr_intro_Diamant"] {
 /* Pre-formatted trace output */
 .app-error-trace-pre {
     margin: 0;
-    padding: 0;
+    padding: 0.5rem;
     font-size: 0.7rem;
     line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-word;
-    background: transparent;
+    background: inherit;
+    border-radius: 4px;
 }
