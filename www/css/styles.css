@@ -70,13 +70,28 @@ img[src*="Beckr_intro_Diamant"] {
     background-color: transparent !important;
 }
 
+/* ===== Remove gap spacing from plotting tab pane ===== */
+/* The tagList wrapper in UI_plotting causes bslib to add gap spacing */
+.tab-pane[data-value="plotting"].bslib-gap-spacing,
+.tab-pane[data-value="statistics"].bslib-gap-spacing {
+    gap: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Ensure layout_sidebar fills the tab pane without extra margins */
+.tab-pane[data-value="plotting"]>.bslib-sidebar-layout,
+.tab-pane[data-value="statistics"]>.bslib-sidebar-layout {
+    margin: 0 !important;
+}
+
 /* ===== Sidebar Tab Styles (Plotting & Statistics) ===== */
 
 /* Position tabs at top of sidebar like a title */
 .plotting-sidebar .nav-tabs,
 .statistics-sidebar .nav-tabs {
-    margin: -0.5rem -1rem 0.5rem -1rem;
-    padding: 0.5rem 1rem 0;
+    margin: -0.25rem -1rem 0.5rem -1rem;
+    padding: 0.25rem 1rem 0;
     border-bottom: 1px solid var(--bs-border-color);
     background: var(--bs-tertiary-bg);
 }
@@ -89,6 +104,8 @@ img[src*="Beckr_intro_Diamant"] {
 }
 
 /* Style the tab links */
+.sidebar-content .plotting-sidebar .nav-tabs .nav-link,
+.sidebar-content .statistics-sidebar .nav-tabs .nav-link,
 .plotting-sidebar .nav-tabs .nav-link,
 .statistics-sidebar .nav-tabs .nav-link {
     padding: 0.5rem 0.25rem;
@@ -101,6 +118,8 @@ img[src*="Beckr_intro_Diamant"] {
 }
 
 /* Active tab styling */
+.sidebar-content .plotting-sidebar .nav-tabs .nav-link.active,
+.sidebar-content .statistics-sidebar .nav-tabs .nav-link.active,
 .plotting-sidebar .nav-tabs .nav-link.active,
 .statistics-sidebar .nav-tabs .nav-link.active {
     background: transparent !important;
@@ -109,6 +128,8 @@ img[src*="Beckr_intro_Diamant"] {
 }
 
 /* Hover state */
+.sidebar-content .plotting-sidebar .nav-tabs .nav-link:hover:not(.active),
+.sidebar-content .statistics-sidebar .nav-tabs .nav-link:hover:not(.active),
 .plotting-sidebar .nav-tabs .nav-link:hover:not(.active),
 .statistics-sidebar .nav-tabs .nav-link:hover:not(.active) {
     border-bottom-color: var(--bs-border-color);
@@ -218,18 +239,9 @@ img[src*="Beckr_intro_Diamant"] {
     overflow: visible !important;
 }
 
-/* Color picker panel - reposition to avoid right-side clipping */
+/* Color picker panel - ensure proper z-index */
 .colourpicker-panel {
     z-index: 1050 !important;
-    /* Shift popup leftward ~33% to balance between left and right clipping */
-    margin-left: -50px !important;
-}
-
-/* Alternative: for very narrow sidebars, shift even more */
-@media (max-width: 400px) {
-    .colourpicker-panel {
-        margin-left: -120px !important;
-    }
 }
 
 /* ===== Summary Statistics Sidebar Styles ===== */
