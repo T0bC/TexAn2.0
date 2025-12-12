@@ -50,6 +50,7 @@ source("R/server/modules/pages/summary_stats/summary_utils.R")
 # Source server sub-modules: Statistics
 source("R/server/modules/pages/statistics/sidebar_logic.R")
 source("R/server/modules/pages/statistics/statistics_output.R")
+source("R/server/modules/pages/statistics/statistics_report.R")
 
 # Load required packages
 library(shiny)
@@ -71,6 +72,7 @@ library(rlang)
 library(WRS2)
 library(cli)
 library(htmltools)
+library(base64enc)
 
 # Prevent Rplots.pdf creation by setting default PDF device to null
 # This avoids file clutter when DataExplorer or other packages open a default device
