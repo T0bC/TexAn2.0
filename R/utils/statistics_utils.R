@@ -189,17 +189,148 @@ perform_t1way <- function(df, x_axis, measure_col, tr_value,
 
 #' Perform Two-Way Robust ANOVA (Welch-Yuen t2way)
 #'
+#' Returns main effects (A, B) and interaction (AB) with Q statistics and p-values.
+#'
 #' @inheritParams perform_t1way
-#' @return List with test results or error
+#' @return Data frame with test results or error data frame
 perform_t2way <- function(df, x_axis, measure_col, tr_value,
                           use_bootstrap = FALSE, boot_samples = 599,
                           boot_sample_size = NULL, p_adjust_method = "bonferroni") {
-    # TODO: Implement actual t2way test
-    list(
-        test = "t2way",
-        status = "placeholder",
-        message = "Two-way Welch-Yuen ANOVA not yet implemented"
-    )
+    
+    # Validate inputs - must have exactly 2 grouping columns
+    if (length(x_axis) != 2) {
+        return(data.frame(Error = "t2way requires exactly two grouping variables.",
+                          stringsAsFactors = FALSE))
+    }
+    
+    factor1 <- x_axis[1]
+    factor2 <- x_axis[2]
+    
+    # Check each factor has at least 2 levels
+    n_levels_1 <- length(unique(df[[factor1]]))
+    n_levels_2 <- length(unique(df[[factor2]]))
+    
+    if (n_levels_1 < 2) {
+        return(data.frame(Error = paste0("t2way requires at least 2 levels in '", factor1, 
+                                         "', found ", n_levels_1, "."),
+                          stringsAsFactors = FALSE))
+    }
+    if (n_levels_2 < 2) {
+        return(data.frame(Error = paste0("t2way requires at least 2 levels in '", factor2, 
+                                         "', found ", n_levels_2, "."),
+                          stringsAsFactors = FALSE))
+    }
+    
+    # Determine sample size for bootstrap
+    if (use_bootstrap) {
+        smallest_group <- calculate_smallest_group(df, x_axis)
+        sample_size <- if (!is.null(boot_sample_size) && !is.na(boot_sample_size)) {
+            min(boot_sample_size, smallest_group)
+        } else {
+            smallest_group
+        }
+        n_iterations <- boot_samples
+    } else {
+        n_iterations <- 1
+        sample_size <- NULL
+    }
+    
+    # Run the test (with or without bootstrap)
+    test_result <- safe_stat_test({
+        # Storage for bootstrap iterations
+        # Columns: Qa, Qb, Qab, A.p.value, B.p.value, AB.p.value
+        results_matrix <- data.frame(
+            Qa = numeric(n_iterations),
+            Qb = numeric(n_iterations),
+            Qab = numeric(n_iterations),
+            A.p.value = numeric(n_iterations),
+            B.p.value = numeric(n_iterations),
+            AB.p.value = numeric(n_iterations)
+        )
+        
+        for (i in seq_len(n_iterations)) {
+            # Sample data if bootstrapping
+            if (use_bootstrap) {
+                sample_data <- df %>%
+                    dplyr::group_by(dplyr::across(dplyr::all_of(x_axis))) %>%
+                    dplyr::slice_sample(n = sample_size, replace = TRUE) %>%
+                    dplyr::ungroup()
+            } else {
+                sample_data <- df
+            }
+            
+            # Build formula dynamically with backtick quoting
+            formula_obj <- stats::as.formula(
+                paste0("`", measure_col, "` ~ `", factor1, "` * `", factor2, "`")
+            )
+            
+            # Perform t2way test
+            t2way_out <- WRS2::t2way(
+                formula = formula_obj,
+                data = sample_data,
+                tr = tr_value
+            )
+            
+            results_matrix[i, ] <- c(
+                t2way_out$Qa,
+                t2way_out$Qb,
+                t2way_out$Qab,
+                t2way_out$A.p.value,
+                t2way_out$B.p.value,
+                t2way_out$AB.p.value
+            )
+        }
+        
+        results_matrix
+    }, test_name = "t2way")
+    
+    # Handle errors
+    if (!test_result$success) {
+        return(data.frame(Error = test_result$error, stringsAsFactors = FALSE))
+    }
+    
+    # Format results
+    boot_results <- test_result$result
+    
+    # Create effect labels
+    effect_labels <- c(factor1, factor2, paste0(factor1, ":", factor2))
+    
+    if (use_bootstrap) {
+        # Calculate CIs and format
+        ci_bounds <- apply(boot_results, 2, function(x) {
+            stats::quantile(x, c(0.025, 0.975), na.rm = TRUE)
+        })
+        
+        final_results <- data.frame(
+            Effect = effect_labels,
+            Q.Statistic = c(
+                paste0(signif(mean(boot_results$Qa, na.rm = TRUE), 3), " [",
+                       signif(ci_bounds[1, "Qa"], 3), " - ", signif(ci_bounds[2, "Qa"], 3), "]"),
+                paste0(signif(mean(boot_results$Qb, na.rm = TRUE), 3), " [",
+                       signif(ci_bounds[1, "Qb"], 3), " - ", signif(ci_bounds[2, "Qb"], 3), "]"),
+                paste0(signif(mean(boot_results$Qab, na.rm = TRUE), 3), " [",
+                       signif(ci_bounds[1, "Qab"], 3), " - ", signif(ci_bounds[2, "Qab"], 3), "]")
+            ),
+            p.value = c(
+                paste0(signif(mean(boot_results$A.p.value, na.rm = TRUE), 3), " [",
+                       signif(ci_bounds[1, "A.p.value"], 3), " - ", signif(ci_bounds[2, "A.p.value"], 3), "]"),
+                paste0(signif(mean(boot_results$B.p.value, na.rm = TRUE), 3), " [",
+                       signif(ci_bounds[1, "B.p.value"], 3), " - ", signif(ci_bounds[2, "B.p.value"], 3), "]"),
+                paste0(signif(mean(boot_results$AB.p.value, na.rm = TRUE), 3), " [",
+                       signif(ci_bounds[1, "AB.p.value"], 3), " - ", signif(ci_bounds[2, "AB.p.value"], 3), "]")
+            ),
+            stringsAsFactors = FALSE
+        )
+    } else {
+        final_results <- data.frame(
+            Effect = effect_labels,
+            Q.Statistic = signif(c(boot_results$Qa[1], boot_results$Qb[1], boot_results$Qab[1]), 3),
+            p.value = signif(c(boot_results$A.p.value[1], boot_results$B.p.value[1], boot_results$AB.p.value[1]), 3),
+            stringsAsFactors = FALSE
+        )
+    }
+    
+    final_results
 }
 
 
