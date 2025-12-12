@@ -41,8 +41,17 @@ render_stat_error <- function(error_obj) {
             }
             shiny::tags$div(
                 class = "stat-context-item",
-                shiny::tags$span(class = "stat-context-key", paste0(key, ": ")),
-                shiny::tags$span(class = "stat-context-value", formatted_value)
+                style = "margin-left: 1rem; display: flex; gap: 0.5rem;",
+                shiny::tags$span(
+                    class = "stat-context-key",
+                    style = "min-width: 130px; color: #6c757d;",
+                    paste0(key, ":")
+                ),
+                shiny::tags$span(
+                    class = "stat-context-value",
+                    style = "font-family: monospace;",
+                    formatted_value
+                )
             )
         })
         context_section <- shiny::tags$div(
