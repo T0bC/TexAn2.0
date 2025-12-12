@@ -63,6 +63,7 @@ render_stats_table <- function(df) {
 #' @param cached_plot_objects Reactive containing cached ggplot objects from plotting tab
 #' @param plot_params Reactive containing plot parameters including window_size from plotting tab
 #' @param debug Logical, whether to enable debug logging
+#' @return Reactive containing computation results (for use by download handlers)
 setup_statistics_output <- function(input, output, session, processed_data, 
                                      selected_measures, x_axis, trim_percent,
                                      stats_params, cached_plot_objects, plot_params, debug = FALSE) {
@@ -361,16 +362,30 @@ setup_statistics_output <- function(input, output, session, processed_data,
         if (status == "done") {
             # Build UI for each measurement result
             measurement_cards <- lapply(results$results, function(res) {
-                # Header with design type
+                # Create download button ID for this measurement
+                safe_measure <- gsub("[^a-zA-Z0-9]", "_", res$measure)
+                download_id <- paste0("download_report_", safe_measure)
+                
+                # Header with design type and download button
                 header_content <- shiny::tags$div(
                     class = "d-flex justify-content-between align-items-center",
                     shiny::tags$span(
                         bsicons::bs_icon("graph-up", class = "me-2"),
                         res$measure
                     ),
-                    shiny::tags$span(
-                        class = "badge bg-secondary",
-                        res$design_type
+                    shiny::tags$div(
+                        class = "d-flex align-items-center gap-2",
+                        shiny::tags$span(
+                            class = "badge bg-secondary",
+                            res$design_type
+                        ),
+                        shiny::downloadButton(
+                            outputId = ns(download_id),
+                            label = "",
+                            icon = shiny::icon("file-arrow-down"),
+                            class = "btn-sm btn-outline-primary",
+                            title = "Download report (HTML)"
+                        )
                     )
                 )
                 
@@ -474,4 +489,7 @@ setup_statistics_output <- function(input, output, session, processed_data,
             )
         }
     })
+    
+    # Return computation_results for use by download handlers
+    computation_results
 }
