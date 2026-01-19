@@ -141,7 +141,7 @@ create_combined_results <- function(result_lincon, result_cliff, measure_col,
             dplyr::select("InteractionKey", "psihat", "p.value") %>%
             dplyr::rename(
                 `Cliff: p.hat` = "psihat",
-                `Cliff: p.value` = "p.value"
+                `Cliff: p.raw` = "p.value"
             )
         
         # Merge by InteractionKey
@@ -153,7 +153,7 @@ create_combined_results <- function(result_lincon, result_cliff, measure_col,
                 "Lincon: p.raw",
                 "Lincon: adj.p.value",
                 "Cliff: p.hat",
-                "Cliff: p.value"
+                "Cliff: p.raw"
             )
         
         # Filter for valid comparisons if requested (multi-factor designs)
@@ -163,7 +163,7 @@ create_combined_results <- function(result_lincon, result_cliff, measure_col,
         
         # Apply p-value adjustment (only for non-bootstrap numeric values)
         # Lincon already has adjusted p-values, only adjust Cliff if needed
-        cliff_p_raw <- combined$`Cliff: p.value`
+        cliff_p_raw <- combined$`Cliff: p.raw`
         
         # Check if values are numeric (not bootstrap CI strings)
         if (is.numeric(cliff_p_raw)) {
@@ -186,7 +186,7 @@ create_combined_results <- function(result_lincon, result_cliff, measure_col,
                 dplyr::mutate(
                     `Lincon: p.raw` = formatC(.data$`Lincon: p.raw`, format = "e", digits = 2),
                     `Lincon: adj.p.value` = formatC(.data$`Lincon: adj.p.value`, format = "e", digits = 2),
-                    `Cliff: p.value` = formatC(.data$`Cliff: p.value`, format = "e", digits = 2),
+                    `Cliff: p.raw` = formatC(.data$`Cliff: p.raw`, format = "e", digits = 2),
                     `Cliff: adj.p.value` = formatC(.data$`Cliff: adj.p.value`, format = "e", digits = 2),
                     `Lincon: p.hat` = round(.data$`Lincon: p.hat`, 4),
                     `Cliff: p.hat` = round(.data$`Cliff: p.hat`, 4)
