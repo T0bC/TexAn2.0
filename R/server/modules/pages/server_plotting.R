@@ -14,8 +14,8 @@ server_plotting <- function(id, median_data, data_version) {
     shiny::moduleServer(id, function(input, output, session) {
         ns <- session$ns
         
-        # ===== DEBUG: Toggle to enable/disable debug logging =====
-        DEBUG_REACTIVES <- FALSE
+        # Debug flag from environment variable (set TEXAN_DEBUG_REACTIVES=true to enable)
+        DEBUG_REACTIVES <- tolower(Sys.getenv("TEXAN_DEBUG_REACTIVES", "false")) == "true"
         
         # Source component files
         source("R/server/modules/pages/plotting/input_updaters.R", local = TRUE)
