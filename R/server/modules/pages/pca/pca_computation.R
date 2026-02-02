@@ -30,28 +30,40 @@ handle_pca_computation <- function(input, median_data, pca_state) {
             return()
         }
         
-        # Check for missing values
-        pca_subset <- data[, measure_cols, drop = FALSE]
-        if (any(is.na(pca_subset))) {
-            pca_state$kmo_result <- simple_error(
-                "Selected columns contain missing values. Please handle missing data first.",
-                operation_name = "PCA Validation",
-                context = list(columns_with_na = names(which(colSums(is.na(pca_subset)) > 0)))
-            )
-            return()
-        }
-        
         # Compute with progress
         shiny::withProgress(message = "Computing KMO measures...", {
-            prepared_data <- prepare_pca_data(
+            # Prepare data: subset, remove NA rows, optionally scale
+            prep_result <- prepare_pca_data(
                 data = data,
                 measure_cols = measure_cols,
                 scale = isTRUE(input$scale_data)
             )
             
+            prepared_data <- prep_result$data
+            
+            # Check if we have enough data after NA removal
+            if (nrow(prepared_data) < 2) {
+                pca_state$kmo_result <- simple_error(
+                    "Not enough complete observations after removing rows with missing values.",
+                    operation_name = "PCA Validation",
+                    context = list(
+                        original_rows = prep_result$original_rows,
+                        rows_removed = prep_result$rows_removed,
+                        remaining_rows = nrow(prepared_data)
+                    )
+                )
+                return()
+            }
+            
             shiny::incProgress(0.3)
             
             kmo_result <- calculate_kmo(prepared_data)
+            
+            # Add info about removed rows to KMO result if any were removed
+            if (!is_app_error(kmo_result) && prep_result$rows_removed > 0) {
+                kmo_result$rows_removed <- prep_result$rows_removed
+                kmo_result$original_rows <- prep_result$original_rows
+            }
             
             shiny::incProgress(0.7)
             
