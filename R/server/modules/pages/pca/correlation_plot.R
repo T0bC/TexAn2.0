@@ -76,14 +76,17 @@ create_correlation_plot <- function(data, measurement_cols) {
         ggplot2::geom_text(
             ggplot2::aes(label = sprintf("%.2f", correlation)),
             color = ifelse(abs(cor_long$correlation) > 0.5, "white", "black"),
-            size = 3
+            size = 4
         ) +
         ggplot2::theme_minimal() +
         ggplot2::theme(
-            axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1),
+            axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1, size = 12),
+            axis.text.y = ggplot2::element_text(size = 12),
             axis.title = ggplot2::element_blank(),
             panel.grid = ggplot2::element_blank(),
-            legend.position = "right"
+            legend.position = "right",
+            legend.title = ggplot2::element_text(size = 12),
+            legend.text = ggplot2::element_text(size = 10)
         ) +
         ggplot2::coord_fixed()
     
