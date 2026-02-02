@@ -15,6 +15,7 @@ source("R/ui/modules/pages/ui_median.R")
 source("R/ui/modules/pages/ui_plotting.R")
 source("R/ui/modules/pages/ui_summary_stats.R")
 source("R/ui/modules/pages/ui_statistics.R")
+source("R/ui/modules/pages/ui_pca.R")
 
 # Source component modules
 source("R/ui/modules/components/settings_modal.R")
@@ -26,6 +27,7 @@ source("R/server/modules/pages/server_median.R")
 source("R/server/modules/pages/server_plotting.R")
 source("R/server/modules/pages/server_summary_stats.R")
 source("R/server/modules/pages/server_statistics.R")
+source("R/server/modules/pages/server_pca.R")
 
 # Source server sub-modules: Load Data
 source("R/server/modules/pages/load_data/file_upload.R")
@@ -119,9 +121,9 @@ app_ui <- bslib::page_navbar(
     UI_statistics("statistics_id")
   ),
   bslib::nav_panel(
-    title = shiny::tagList(bsicons::bs_icon("file-earmark-text"), "Reporting"),
-    value = "reporting",
-    shiny::p("TODO: Add reporting UI.")
+    title = shiny::tagList(bsicons::bs_icon("bar-chart-steps"), "PCA"),
+    value = "pca",
+    UI_pca("pca_id")
   ),
   bslib::nav_spacer(),
   bslib::nav_item(
@@ -169,6 +171,11 @@ app_server <- function(input, output, session) {
                     cached_plot_objects = plotting_result$cached_plot_objects,
                     plot_params = plotting_result$plot_params,
                     data_version = load_data_result$version)
+  
+  # Pass median data to PCA module
+  server_pca("pca_id",
+             median_data = median_result,
+             data_version = load_data_result$version)
 
   # Initialize settings modal
   settings_modal_server(input, session)
@@ -178,7 +185,7 @@ app_server <- function(input, output, session) {
     has_data <- !is.null(load_data_result$data())
     
     # Tabs that require data to be loaded (hide completely)
-    data_dependent_tabs <- c("median", "plotting", "summary_stats", "reporting")
+    data_dependent_tabs <- c("median", "plotting", "summary_stats", "pca")
     
     for (tab in data_dependent_tabs) {
       if (has_data) {
