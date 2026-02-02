@@ -52,9 +52,9 @@ create_cached_plot_objects <- function(plot_params, measure_cols, create_scatter
         measure_cols(),
         plot_params()$x_cols,
         plot_params()$trim_percent,
-        plot_params()$outlier_options$enabled,
-        plot_params()$outlier_options$method,
-        plot_params()$outlier_options$factor,
+        plot_params()$outlier_options$enabled %||% FALSE,
+        plot_params()$outlier_options$method %||% "IQR",
+        plot_params()$outlier_options$factor %||% 1.5,
         plot_params()$color_cols,
         plot_params()$color_map,
         plot_params()$point_style,
@@ -105,10 +105,9 @@ setup_plot_outputs <- function(output,
         
         # Check which measures need new output registration
         already_registered <- registered_outputs()
-        new_measures <- setdiff(measures, already_registered)
         
-        # Only register outputs for new measures
-        if (length(new_measures) == 0 && length(measures) == length(already_registered)) {
+        # Check if measures are identical (both content and length)
+        if (setequal(measures, already_registered)) {
             if (DEBUG_PLOT_RENDERER) message("  -> No new measures, skipping re-registration")
             return()  # No changes needed
         }
