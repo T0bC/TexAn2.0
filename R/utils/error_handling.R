@@ -10,7 +10,9 @@
 #' @return Logical, TRUE if obj is a structured error from create_app_error()
 #' @export
 is_app_error <- function(obj) {
-    is.list(obj) && isTRUE(obj$is_error)
+    # Use "is_error" %in% names() to avoid warning when checking data frames
+    # Data frames are lists, so obj$is_error on a df triggers "Unknown column" warning
+    is.list(obj) && !is.data.frame(obj) && "is_error" %in% names(obj) && isTRUE(obj$is_error)
 }
 
 
