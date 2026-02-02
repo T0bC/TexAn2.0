@@ -88,8 +88,8 @@ setup_plot_outputs <- function(output,
     # Track which outputs have been registered to avoid re-registration
     registered_outputs <- shiny::reactiveVal(character(0))
     
-    # ===== DEBUG: Toggle to enable/disable debug logging =====
-    DEBUG_PLOT_RENDERER <- FALSE
+    # Debug flag from environment variable (set TEXAN_DEBUG_PLOT_RENDERER=true to enable)
+    DEBUG_PLOT_RENDERER <- tolower(Sys.getenv("TEXAN_DEBUG_PLOT_RENDERER", "false")) == "true"
     
     # Register dynamic plot outputs for each measurement column
     # Only re-register when measure_cols actually changes (not on other reactive updates)
