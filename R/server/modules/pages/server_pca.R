@@ -11,6 +11,7 @@ server_pca <- function(id, median_data, data_version) {
         ns <- session$ns
         
         # Source components
+        source("R/utils/column_utils.R", local = TRUE)
         source("R/server/modules/pages/pca/pca_utils.R", local = TRUE)
         source("R/utils/error_handling.R", local = TRUE)
         source("R/ui/modules/components/error_display.R", local = TRUE)
@@ -29,19 +30,15 @@ server_pca <- function(id, median_data, data_version) {
             last_computation = NULL
         )
         
-        # Get available columns from median data
+        # Get available columns from median data using column naming conventions
+        # Matches the Plotting tab behavior: descriptive = UPPERCASE, measurement = mixed case
         available_cols <- shiny::reactive({
             data <- median_data()
             if (is.null(data)) return(list(descriptive = NULL, measurement = NULL))
             
-            # Use column utility functions if available
-            all_cols <- names(data)
-            numeric_cols <- names(data)[sapply(data, is.numeric)]
-            non_numeric_cols <- setdiff(all_cols, numeric_cols)
-            
             list(
-                descriptive = all_cols,
-                measurement = numeric_cols
+                descriptive = get_descriptive_cols(data),
+                measurement = get_measurement_cols(data)
             )
         })
         
@@ -255,10 +252,10 @@ server_pca <- function(id, median_data, data_version) {
             }
         )
         
-        # Download handler for RDA export (PCA object for later use)
+        # Download handler for RDS export (PCA object for later use)
         output$download_pca_rda <- shiny::downloadHandler(
             filename = function() {
-                paste0("pca_object_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".rda")
+                paste0("pca_object_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".rds")
             },
             content = function(file) {
                 pca <- pca_state$pca_result
