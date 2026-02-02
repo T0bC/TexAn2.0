@@ -73,7 +73,8 @@ img[src*="Beckr_intro_Diamant"] {
 /* ===== Remove gap spacing from plotting tab pane ===== */
 /* The tagList wrapper in UI_plotting causes bslib to add gap spacing */
 .tab-pane[data-value="plotting"].bslib-gap-spacing,
-.tab-pane[data-value="statistics"].bslib-gap-spacing {
+.tab-pane[data-value="statistics"].bslib-gap-spacing,
+.tab-pane[data-value="pca"].bslib-gap-spacing {
     gap: 0 !important;
     padding: 0 !important;
     margin: 0 !important;
@@ -81,15 +82,17 @@ img[src*="Beckr_intro_Diamant"] {
 
 /* Ensure layout_sidebar fills the tab pane without extra margins */
 .tab-pane[data-value="plotting"]>.bslib-sidebar-layout,
-.tab-pane[data-value="statistics"]>.bslib-sidebar-layout {
+.tab-pane[data-value="statistics"]>.bslib-sidebar-layout,
+.tab-pane[data-value="pca"]>.bslib-sidebar-layout {
     margin: 0 !important;
 }
 
-/* ===== Sidebar Tab Styles (Plotting & Statistics) ===== */
+/* ===== Sidebar Tab Styles (Plotting, Statistics & PCA) ===== */
 
 /* Position tabs at top of sidebar like a title */
 .plotting-sidebar .nav-tabs,
-.statistics-sidebar .nav-tabs {
+.statistics-sidebar .nav-tabs,
+.pca-sidebar .nav-tabs {
     margin: -0.25rem -1rem 0.5rem -1rem;
     padding: 0.25rem 1rem 0;
     border-bottom: 1px solid var(--bs-border-color);
@@ -98,7 +101,8 @@ img[src*="Beckr_intro_Diamant"] {
 
 /* Make tabs distribute evenly */
 .plotting-sidebar .nav-tabs .nav-item,
-.statistics-sidebar .nav-tabs .nav-item {
+.statistics-sidebar .nav-tabs .nav-item,
+.pca-sidebar .nav-tabs .nav-item {
     flex: 1;
     text-align: center;
 }
@@ -106,8 +110,10 @@ img[src*="Beckr_intro_Diamant"] {
 /* Style the tab links */
 .sidebar-content .plotting-sidebar .nav-tabs .nav-link,
 .sidebar-content .statistics-sidebar .nav-tabs .nav-link,
+.sidebar-content .pca-sidebar .nav-tabs .nav-link,
 .plotting-sidebar .nav-tabs .nav-link,
-.statistics-sidebar .nav-tabs .nav-link {
+.statistics-sidebar .nav-tabs .nav-link,
+.pca-sidebar .nav-tabs .nav-link {
     padding: 0.5rem 0.25rem;
     border: none !important;
     border-bottom: 2px solid transparent !important;
@@ -120,8 +126,10 @@ img[src*="Beckr_intro_Diamant"] {
 /* Active tab styling */
 .sidebar-content .plotting-sidebar .nav-tabs .nav-link.active,
 .sidebar-content .statistics-sidebar .nav-tabs .nav-link.active,
+.sidebar-content .pca-sidebar .nav-tabs .nav-link.active,
 .plotting-sidebar .nav-tabs .nav-link.active,
-.statistics-sidebar .nav-tabs .nav-link.active {
+.statistics-sidebar .nav-tabs .nav-link.active,
+.pca-sidebar .nav-tabs .nav-link.active {
     background: transparent !important;
     border-bottom-color: var(--bs-primary) !important;
     color: var(--bs-primary) !important;
@@ -130,15 +138,18 @@ img[src*="Beckr_intro_Diamant"] {
 /* Hover state */
 .sidebar-content .plotting-sidebar .nav-tabs .nav-link:hover:not(.active),
 .sidebar-content .statistics-sidebar .nav-tabs .nav-link:hover:not(.active),
+.sidebar-content .pca-sidebar .nav-tabs .nav-link:hover:not(.active),
 .plotting-sidebar .nav-tabs .nav-link:hover:not(.active),
-.statistics-sidebar .nav-tabs .nav-link:hover:not(.active) {
+.statistics-sidebar .nav-tabs .nav-link:hover:not(.active),
+.pca-sidebar .nav-tabs .nav-link:hover:not(.active) {
     border-bottom-color: var(--bs-border-color);
     color: var(--bs-body-color);
 }
 
 /* Ensure icons are centered */
 .plotting-sidebar .nav-tabs .nav-link svg,
-.statistics-sidebar .nav-tabs .nav-link svg {
+.statistics-sidebar .nav-tabs .nav-link svg,
+.pca-sidebar .nav-tabs .nav-link svg {
     vertical-align: middle;
 }
 
@@ -232,6 +243,13 @@ img[src*="Beckr_intro_Diamant"] {
 .plotting-sidebar .accordion-collapse,
 .plotting-sidebar .tab-content,
 .plotting-sidebar .tab-pane,
+.pca-sidebar,
+.pca-sidebar .accordion,
+.pca-sidebar .accordion-item,
+.pca-sidebar .accordion-body,
+.pca-sidebar .accordion-collapse,
+.pca-sidebar .tab-content,
+.pca-sidebar .tab-pane,
 .bslib-sidebar-layout>.sidebar,
 .bslib-sidebar-layout>.sidebar>.sidebar-content,
 .sidebar-content,
