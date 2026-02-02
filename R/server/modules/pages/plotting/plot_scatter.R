@@ -57,6 +57,12 @@ create_scatter_plot <- function(data,
         return(create_empty_plot("No X-axis column selected"))
     }
     
+    # Validate all x_col columns exist in data
+    missing_x_cols <- x_col[!x_col %in% names(data)]
+    if (length(missing_x_cols) > 0) {
+        return(create_empty_plot(paste("X-axis column(s) not found:", paste(missing_x_cols, collapse = ", "))))
+    }
+    
     if (is.null(y_col) || !y_col %in% names(data)) {
         return(create_empty_plot(paste("Column", y_col, "not found")))
     }
@@ -68,11 +74,19 @@ create_scatter_plot <- function(data,
     # Set up x-axis variable
     if (length(x_col) > 1) {
         # For nested axis: REVERSE column order so first selected = outer grouping
-        # guide_axis_nested expects: innermost.middle.outermost (splits by ".")
+        # guide_axis_nested expects: innermost.middle.outermost (splits by separator)
         # User expects: first selected = outer, last selected = inner
         # So we reverse: c("Outer", "Inner") -> c("Inner", "Outer") -> "Inner.Outer"
         # guide_axis_nested then shows: Outer as top level, Inner closest to axis
         x_nested_interaction <- create_interaction(data, rev(x_col))
+        
+        # DEBUG: Print interaction levels to console
+        message("=== DEBUG: Nested axis interaction ===")
+        message("Columns (reversed): ", paste(rev(x_col), collapse = ", "))
+        message("Unique levels: ", paste(head(unique(x_nested_interaction), 10), collapse = " | "))
+        message("Sample label: ", as.character(x_nested_interaction[1]))
+        message("======================================")
+        
         data$.x_nested <- x_nested_interaction
         x_var <- ".x_nested"
         x_label <- paste(x_col, collapse = " | ")
@@ -364,16 +378,22 @@ create_scatter_plot <- function(data,
         p <- p + ggplot2::theme(aspect.ratio = 1)
     }
     
-    # Add nested axis support using ggh4x if multiple x columns
+    # Add nested axis support using legendry if multiple x columns
     # guide_axis_nested parses the interaction labels by delimiter to create hierarchy
+    # Supports arbitrary nesting depth (3-way, 4-way, etc.)
     if (length(x_col) > 1) {
-        if (requireNamespace("ggh4x", quietly = TRUE)) {
-            p <- p + 
-                ggplot2::scale_x_discrete(guide = ggh4x::guide_axis_nested(delim = ".")) +
-                ggplot2::theme(
-                    ggh4x.axis.nestline.x = ggplot2::element_line(linewidth = 0.5)
-                )
-        }
+        # Create centered text elements for each nesting level
+        # Use replicate to support arbitrary depth (up to 10 levels)
+        centered_text <- replicate(
+            10, 
+            ggplot2::element_text(hjust = 0.5),
+            simplify = FALSE
+        )
+        
+        p <- p + 
+            ggplot2::guides(x = legendry::guide_axis_nested(
+                levels_text = centered_text
+            ))
     }
     
     return(p)
