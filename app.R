@@ -10,50 +10,50 @@ source("R/utils/Rallfun-v43.R")
 source("R/utils/statistics_utils.R")
 
 # Source UI modules
-source("R/ui/modules/pages/ui_load_data.R")
-source("R/ui/modules/pages/ui_median.R")
-source("R/ui/modules/pages/ui_plotting.R")
-source("R/ui/modules/pages/ui_summary_stats.R")
-source("R/ui/modules/pages/ui_statistics.R")
-source("R/ui/modules/pages/ui_pca.R")
+source("R/ui/load_data/ui_load_data.R")
+source("R/ui/median/ui_median.R")
+source("R/ui/plotting/ui_plotting.R")
+source("R/ui/summary_stats/ui_summary_stats.R")
+source("R/ui/statistics/ui_statistics.R")
+source("R/ui/pca/ui_pca.R")
 
 # Source component modules
-source("R/ui/modules/components/settings_modal.R")
-source("R/ui/modules/components/error_display.R")
+source("R/ui/components/settings_modal.R")
+source("R/ui/components/error_display.R")
 
 # Source server modules
-source("R/server/modules/pages/server_load_data.R")
-source("R/server/modules/pages/server_median.R")
-source("R/server/modules/pages/server_plotting.R")
-source("R/server/modules/pages/server_summary_stats.R")
-source("R/server/modules/pages/server_statistics.R")
-source("R/server/modules/pages/server_pca.R")
+source("R/server/load_data/server_load_data.R")
+source("R/server/median/server_median.R")
+source("R/server/plotting/server_plotting.R")
+source("R/server/summary_stats/server_summary_stats.R")
+source("R/server/statistics/server_statistics.R")
+source("R/server/pca/server_pca.R")
 
 # Source server sub-modules: Load Data
-source("R/server/modules/pages/load_data/file_upload.R")
-source("R/server/modules/pages/load_data/data_preview.R")
-source("R/server/modules/pages/load_data/missing_values_plot.R")
-source("R/server/modules/pages/load_data/data_summary.R")
+source("R/server/load_data/file_upload.R")
+source("R/server/load_data/data_preview.R")
+source("R/server/load_data/missing_values_plot.R")
+source("R/server/load_data/data_summary.R")
 
 # Source server sub-modules: Median
-source("R/server/modules/pages/median/help_modal.R")
-source("R/server/modules/pages/median/grouping_ui.R")
-source("R/server/modules/pages/median/quality_filter_ui.R")
-source("R/server/modules/pages/median/quality_filter_logic.R")
-source("R/server/modules/pages/median/median_table.R")
-source("R/server/modules/pages/median/median_params.R")
+source("R/server/median/help_modal.R")
+source("R/ui/median/grouping_ui.R")
+source("R/ui/median/quality_filter_ui.R")
+source("R/server/median/quality_filter_logic.R")
+source("R/server/median/median_table.R")
+source("R/server/median/median_params.R")
 
 # Source server sub-modules: Plotting
-source("R/server/modules/pages/plotting/plot_scatter.R")
-source("R/server/modules/pages/plotting/plot_renderer.R")
+source("R/server/plotting/plot_scatter.R")
+source("R/server/plotting/plot_renderer.R")
 
 # Source server sub-modules: Summary Stats
-source("R/server/modules/pages/summary_stats/summary_utils.R")
+source("R/server/summary_stats/summary_utils.R")
 
 # Source server sub-modules: Statistics
-source("R/server/modules/pages/statistics/sidebar_logic.R")
-source("R/server/modules/pages/statistics/statistics_output.R")
-source("R/server/modules/pages/statistics/statistics_report.R")
+source("R/server/statistics/sidebar_logic.R")
+source("R/server/statistics/statistics_output.R")
+source("R/server/statistics/statistics_report.R")
 
 # Load required packages
 library(shiny)

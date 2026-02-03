@@ -1,7 +1,7 @@
 #' UI for the PCA page
 #'
 #' Orchestrates all PCA UI components.
-#' Tab components are sourced from R/server/modules/pages/pca/
+#' Tab components are sourced from R/ui/pca/
 #'
 #' @param id Module namespace ID
 #' @return A bslib layout_sidebar UI element
@@ -9,9 +9,9 @@ UI_pca <- function(id) {
     ns <- shiny::NS(id)
     
     # Source UI tab components
-    source("R/server/modules/pages/pca/ui_tab_data_selection.R", local = TRUE)
-    source("R/server/modules/pages/pca/ui_tab_plotting_controls.R", local = TRUE)
-    source("R/server/modules/pages/pca/ui_tab_actions.R", local = TRUE)
+    source("R/ui/pca/ui_tab_data_selection.R", local = TRUE)
+    source("R/ui/pca/ui_tab_plotting_controls.R", local = TRUE)
+    source("R/ui/pca/ui_tab_actions.R", local = TRUE)
 
     shiny::tagList(
         # Initialize window size reporting with namespaced IDs

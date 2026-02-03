@@ -1,7 +1,7 @@
 #' Server logic for the Summary Statistics page
 #'
 #' Orchestrates all summary statistics components using explicit dependency injection.
-#' Components are sourced from R/server/modules/pages/summary_stats/
+#' Components are sourced from R/server/summary_stats/
 #'
 #' Uses data from the Plotting tab as source of truth - this ensures summary statistics
 #' are calculated on the same filtered/trimmed/outlier-excluded data shown in plots.
@@ -19,9 +19,9 @@ server_summary_stats <- function(id, processed_data, selected_measures, x_axis, 
         ns <- session$ns
         
         # Source component files
-        source("R/server/modules/pages/summary_stats/summary_utils.R", local = TRUE)
-        source("R/server/modules/pages/summary_stats/sidebar_logic.R", local = TRUE)
-        source("R/server/modules/pages/summary_stats/summary_tables.R", local = TRUE)
+        source("R/server/summary_stats/summary_utils.R", local = TRUE)
+        source("R/server/summary_stats/sidebar_logic.R", local = TRUE)
+        source("R/server/summary_stats/summary_tables.R", local = TRUE)
         
         # ----- 1. Column Reactives -----
         # Use only the selected measurements from plotting (already have _outlier/_trimmed flags)

@@ -15,7 +15,7 @@
 # The `moduleServer()` function provides three implicit objects:
 # - `input`: A reactive list containing all UI inputs namespaced to this module.
 #     For example, `input$data_file` corresponds to the fileInput with
-#     inputId = ns("data_file") defined in `R/ui/modules/pages/ui_load_data.R`.
+#     inputId = ns("data_file") defined in `R/ui/load_data/ui_load_data.R`.
 # - `output`: A reactive list for rendering outputs (tables, plots, etc.)
 # - `session`: The Shiny session object, used for namespace management via `session$ns`
 #
@@ -94,7 +94,7 @@ server_load_data <- function(id) {
     # Initialize modular components with explicit dependency injection.
     # We pass the module's `input` object so the component can reactively
     # access inputs defined in ui_load_data.R (e.g., input$data_file, input$csv_delimiter).
-    # See function documentation in R/server/modules/pages/load_data/file_upload.R
+    # See function documentation in R/server/load_data/file_upload.R
     handle_file_upload(
       input = input,  # Module input object from moduleServer() above
       loaded_data = loaded_data,

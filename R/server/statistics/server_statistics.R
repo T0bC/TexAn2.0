@@ -1,7 +1,7 @@
 #' Server logic for the Statistics page
 #'
 #' Orchestrates all statistics components using explicit dependency injection.
-#' Components are sourced from R/server/modules/pages/statistics/
+#' Components are sourced from R/server/statistics/
 #'
 #' @param id Module namespace ID
 #' @param processed_data Reactive containing the processed data from server_plotting
@@ -21,9 +21,9 @@ server_statistics <- function(id, processed_data, selected_measures, x_axis, tri
         DEBUG_REACTIVES <- tolower(Sys.getenv("TEXAN_DEBUG_REACTIVES", "false")) == "true"
         
         # Source component files
-        source("R/server/modules/pages/statistics/sidebar_logic.R", local = TRUE)
-        source("R/server/modules/pages/statistics/statistics_output.R", local = TRUE)
-        source("R/server/modules/pages/statistics/statistics_report.R", local = TRUE)
+        source("R/server/statistics/sidebar_logic.R", local = TRUE)
+        source("R/server/statistics/statistics_output.R", local = TRUE)
+        source("R/server/statistics/statistics_report.R", local = TRUE)
         
         # ----- 1. Sidebar Logic -----
         # Setup dynamic UI elements in sidebar

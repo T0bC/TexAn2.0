@@ -12,16 +12,16 @@ server_pca <- function(id, median_data, data_version) {
         
         # Source components
         source("R/utils/column_utils.R", local = TRUE)
-        source("R/server/modules/pages/pca/pca_utils.R", local = TRUE)
+        source("R/server/pca/pca_utils.R", local = TRUE)
         source("R/utils/error_handling.R", local = TRUE)
-        source("R/ui/modules/components/error_display.R", local = TRUE)
-        source("R/server/modules/pages/pca/kmo_results.R", local = TRUE)
-        source("R/server/modules/pages/pca/kmo_computation.R", local = TRUE)
-        source("R/server/modules/pages/pca/pca_computation.R", local = TRUE)
-        source("R/server/modules/pages/pca/correlation_plot.R", local = TRUE)
-        source("R/server/modules/pages/pca/pca_results.R", local = TRUE)
-        source("R/server/modules/pages/pca/optimal_components.R", local = TRUE)
-        source("R/server/modules/pages/pca/optimal_components_results.R", local = TRUE)
+        source("R/ui/components/error_display.R", local = TRUE)
+        source("R/server/pca/kmo_results.R", local = TRUE)
+        source("R/server/pca/kmo_computation.R", local = TRUE)
+        source("R/server/pca/pca_computation.R", local = TRUE)
+        source("R/server/pca/correlation_plot.R", local = TRUE)
+        source("R/server/pca/pca_results.R", local = TRUE)
+        source("R/server/pca/optimal_components.R", local = TRUE)
+        source("R/server/pca/optimal_components_results.R", local = TRUE)
         
         # Reactive values for PCA state
         pca_state <- shiny::reactiveValues(
