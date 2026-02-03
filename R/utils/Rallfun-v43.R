@@ -37221,7 +37221,7 @@ cidmulv2_labelled <- function(
   )
   
   # remove NAs
-  for (j in seq_len(J)) x[[j]] <- na.omit(x[[j]])
+  for (j in seq_len(J)) x[[j]] <- stats::na.omit(x[[j]])
   
   # run pairs
   jcom <- 0
@@ -38005,10 +38005,10 @@ di<-NA
 for (i in 1:length(x))di[i]<-sum(x[i]>y)/length(y)-sum(x[i]<y)/length(y)
 dh<-NA
 for (i in 1:length(y))dh[i]<-sum(y[i]>x)/length(x)-sum(y[i]<x)/length(x)
-sdi<-var(di)
-sdh<-var(dh)
+sdi<-stats::var(di)
+sdh<-stats::var(dh)
 sh<-((length(y)-1)*sdi+(length(x)-1)*sdh+sigdih)/(length(x)*length(y))
-zv<-qnorm(alpha/2)
+zv<-stats::qnorm(alpha/2)
 cu<-(d-d^3-zv*sqrt(sh)*sqrt((1-d^2)^2+zv^2*sh))/(1-d^2+zv^2*sh)
 cl<-(d-d^3+zv*sqrt(sh)*sqrt((1-d^2)^2+zv^2*sh))/(1-d^2+zv^2*sh)
 }
