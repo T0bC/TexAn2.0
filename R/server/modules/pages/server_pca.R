@@ -20,6 +20,8 @@ server_pca <- function(id, median_data, data_version) {
         source("R/server/modules/pages/pca/pca_computation.R", local = TRUE)
         source("R/server/modules/pages/pca/correlation_plot.R", local = TRUE)
         source("R/server/modules/pages/pca/pca_results.R", local = TRUE)
+        source("R/server/modules/pages/pca/optimal_components.R", local = TRUE)
+        source("R/server/modules/pages/pca/optimal_components_results.R", local = TRUE)
         
         # Reactive values for PCA state
         pca_state <- shiny::reactiveValues(
@@ -27,6 +29,7 @@ server_pca <- function(id, median_data, data_version) {
             kmo_result = NULL,
             prepared_data = NULL,
             correlation_result = NULL,
+            optimal_result = NULL,
             last_computation = NULL
         )
         
@@ -84,6 +87,7 @@ server_pca <- function(id, median_data, data_version) {
             pca_state$kmo_result <- NULL
             pca_state$prepared_data <- NULL
             pca_state$correlation_result <- NULL
+            pca_state$optimal_result <- NULL
             pca_state$last_computation <- NULL
         }, ignoreInit = TRUE)
         
@@ -202,7 +206,24 @@ server_pca <- function(id, median_data, data_version) {
                     render_kmo_results(kmo)
                 ),
                 
-                # Section 4: PCA Results (grouped)
+                # Section 4: Optimal Components
+                shiny::tags$div(
+                    class = "mb-2",
+                    bslib::accordion(
+                        id = "optimal_components_accordion",
+                        open = FALSE,
+                        bslib::accordion_panel(
+                            title = shiny::tags$span(
+                                bsicons::bs_icon("sliders", class = "me-1"),
+                                "Optimal Number of Components"
+                            ),
+                            value = "optimal_components",
+                            render_optimal_components_content(pca_state$optimal_result, ns)
+                        )
+                    )
+                ),
+                
+                # Section 5: PCA Results (grouped)
                 shiny::tags$div(
                     class = "mb-2",
                     shiny::tags$h5(
@@ -219,6 +240,17 @@ server_pca <- function(id, median_data, data_version) {
         # Computation now happens in handle_pca_computation with unified progress
         correlation_plot_result <- shiny::reactive({
             pca_state$correlation_result
+        })
+        
+        # Render optimal components scree plot
+        output$optimal_scree_plot <- ggiraph::renderGirafe({
+            optimal <- pca_state$optimal_result
+            
+            if (is.null(optimal) || is_app_error(optimal)) {
+                return(NULL)
+            }
+            
+            render_optimal_scree_girafe(optimal)
         })
         
         # Render correlation plot - only renders if computation succeeded
