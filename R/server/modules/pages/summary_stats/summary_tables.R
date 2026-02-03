@@ -26,13 +26,45 @@ create_summary_dfs_reactive <- function(input, median_data, measurement_cols) {
         # Grouping variables from filter options
         grouping_vars <- input$filter_options_select
         
+        # Validate grouping variables exist in data
+        available_cols <- names(data)
+        valid_grouping_vars <- grouping_vars[grouping_vars %in% available_cols]
+        
+        # Return error if no valid grouping variables
+        if (length(valid_grouping_vars) == 0) {
+            return(simple_error(
+                message = "Selected grouping columns are not available in the current dataset. Please select valid columns.",
+                operation_name = "Summary Statistics",
+                context = list(
+                    requested_cols = grouping_vars,
+                    available_cols = paste(head(available_cols, 10), collapse = ", ")
+                )
+            ))
+        }
+        
         # Summarize the data (uses {col}_outlier and {col}_trimmed columns)
-        summary_df <- summarize_data(
-            data = data,
-            grouping_vars = grouping_vars,
-            measure_vars = measure_cols,
-            shapiro_test = input$shapiro
+        summary_result <- safe_execute(
+            expr = summarize_data(
+                data = data,
+                grouping_vars = valid_grouping_vars,
+                measure_vars = measure_cols,
+                shapiro_test = input$shapiro
+            ),
+            operation_name = "Summary Statistics",
+            context = list(
+                grouping_vars = valid_grouping_vars,
+                n_measures = length(measure_cols),
+                n_rows = nrow(data)
+            ),
+            error_parser = default_error_parser
         )
+        
+        # Return error if summarization failed
+        if (!summary_result$success) {
+            return(summary_result$error)
+        }
+        
+        summary_df <- summary_result$result
         
         # Split by measurement - one table per measurement column
         lapply(measure_cols, function(measurement) {
@@ -151,6 +183,12 @@ setup_summary_tables_ui <- function(output, ns, summary_dfs, median_data) {
         
         # Check if summary data is available
         summaries <- summary_dfs()
+        
+        # Check for structured error from summarize_data
+        if (is_app_error(summaries)) {
+            return(error_alert_structured(summaries, type = "danger"))
+        }
+        
         if (is.null(summaries) || length(summaries) == 0) {
             return(
                 bslib::card(
