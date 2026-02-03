@@ -10,6 +10,9 @@
 #' @name reactive_params
 NULL
 
+# Import column utilities
+box::use(../../utils/column_utils)
+
 
 #' Create Column Reactives
 #'
@@ -22,11 +25,11 @@ create_column_reactives <- function(median_data) {
     list(
         descriptive_cols = shiny::reactive({
             shiny::req(median_data())
-            get_descriptive_cols(median_data())
+            column_utils$get_descriptive_cols(median_data())
         }),
         measurement_cols = shiny::reactive({
             shiny::req(median_data())
-            get_measurement_cols(median_data())
+            column_utils$get_measurement_cols(median_data())
         })
     )
 }
