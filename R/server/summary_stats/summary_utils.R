@@ -8,6 +8,9 @@
 #'
 #' @param data Data frame containing the data with {col}_outlier and {col}_trimmed columns
 #' @param grouping_vars Character vector of column names to group by
+
+# Import dplyr for pipe operator and data manipulation functions
+box::use(dplyr[...])
 #' @param measure_vars Character vector of measurement column names
 #' @param exclude_vars Character vector of columns to exclude from results
 #' @param shapiro_test Logical, whether to include Shapiro-Wilk test

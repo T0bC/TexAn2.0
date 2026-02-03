@@ -4,6 +4,9 @@
 #' robust and parametric statistical test approaches. It handles the different
 #' column naming conventions and p-value adjustment logic for each approach.
 
+# Import dplyr for pipe operator and data manipulation functions
+box::use(dplyr[...])
+
 # Import error handling module
 box::use(../error_handling)
 

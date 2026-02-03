@@ -5,6 +5,9 @@
 #' - Two-way (t2way)
 #' - Three-way (t3way)
 
+# Import dplyr for pipe operator and data manipulation functions
+box::use(../../../dplyr[...])
+
 # Import required modules
 box::use(../statistics_utils)
 box::use(../error_handling)

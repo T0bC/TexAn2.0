@@ -1,6 +1,9 @@
 ﻿# Data utility functions for data transformations
 # These functions are used for creating interaction terms and marking trimmed data
 
+# Import dplyr for pipe operator and data manipulation functions
+box::use(dplyr[...])
+
 #' Create interaction term from multiple columns
 #'
 #' Combines multiple factor columns into a single interaction term.

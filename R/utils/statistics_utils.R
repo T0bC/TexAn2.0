@@ -8,6 +8,9 @@
 #' - tests_effect_size.R: Cliff's Delta
 #' - tests_combined_results.R: Result formatting
 
+# Import dplyr for pipe operator and data manipulation functions
+box::use(dplyr[...])
+
 # Import test implementation modules
 box::use(./statistics/tests_robust_anova)
 box::use(./statistics/tests_parametric_anova)
