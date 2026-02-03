@@ -11,6 +11,9 @@
 # Import dplyr for pipe operator and data manipulation functions
 box::use(dplyr[...])
 
+# Import utility modules
+box::use(./data_utils)
+
 # Import test implementation modules
 box::use(./statistics/tests_robust_anova)
 box::use(./statistics/tests_parametric_anova)
