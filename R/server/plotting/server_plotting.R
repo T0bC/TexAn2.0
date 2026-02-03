@@ -1,7 +1,7 @@
 #' Server logic for the Plotting page
 #'
 #' Orchestrates all plotting components using explicit dependency injection.
-#' Components are sourced from R/server/modules/pages/plotting/
+#' Components are sourced from R/server/plotting/
 #'
 #' @param id Module namespace ID
 #' @param median_data Reactive containing the median-processed data from server_median
@@ -21,13 +21,13 @@ server_plotting <- function(id, median_data, data_version) {
         saved_filter_state <- shiny::reactiveVal(list())
         
         # Source component files
-        source("R/server/modules/pages/plotting/input_updaters.R", local = TRUE)
-        source("R/server/modules/pages/plotting/filter_logic.R", local = TRUE)
-        source("R/server/modules/pages/plotting/reactive_params.R", local = TRUE)
-        source("R/server/modules/pages/plotting/color_pickers.R", local = TRUE)
-        source("R/server/modules/pages/plotting/plots_ui.R", local = TRUE)
-        source("R/server/modules/pages/plotting/download_handler.R", local = TRUE)
-        source("R/server/modules/pages/plotting/data_processing.R", local = TRUE)
+        source("R/server/plotting/input_updaters.R", local = TRUE)
+        source("R/server/plotting/filter_logic.R", local = TRUE)
+        source("R/server/plotting/reactive_params.R", local = TRUE)
+        source("R/server/plotting/color_pickers.R", local = TRUE)
+        source("R/ui/plotting/plots_ui.R", local = TRUE)
+        source("R/server/plotting/download_handler.R", local = TRUE)
+        source("R/server/plotting/data_processing.R", local = TRUE)
         
         # ----- 1. Column Reactives -----
         column_reactives <- create_column_reactives(median_data)

@@ -1,7 +1,7 @@
 #' UI for the Statistics page
 #'
 #' Orchestrates all statistics UI components.
-#' Tab components are sourced from R/server/modules/pages/statistics/
+#' Tab components are sourced from R/ui/statistics/
 #'
 #' @param id Module namespace ID
 #' @return A bslib layout_sidebar UI element
@@ -9,9 +9,9 @@ UI_statistics <- function(id) {
     ns <- shiny::NS(id)
     
     # Source UI tab components
-    source("R/server/modules/pages/statistics/ui_tab_options.R", local = TRUE)
-    source("R/server/modules/pages/statistics/ui_tab_bootstrap.R", local = TRUE)
-    source("R/server/modules/pages/statistics/ui_tab_adjustments.R", local = TRUE)
+    source("R/ui/statistics/ui_tab_options.R", local = TRUE)
+    source("R/ui/statistics/ui_tab_bootstrap.R", local = TRUE)
+    source("R/ui/statistics/ui_tab_adjustments.R", local = TRUE)
 
     shiny::tagList(
         bslib::layout_sidebar(

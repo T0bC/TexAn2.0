@@ -1,7 +1,7 @@
 #' UI for the Plotting page
 #'
 #' Orchestrates all plotting UI components.
-#' Tab components are sourced from R/server/modules/pages/plotting/
+#' Tab components are sourced from R/ui/plotting/
 #'
 #' @param id Module namespace ID
 #' @return A bslib layout_sidebar UI element
@@ -9,10 +9,10 @@ UI_plotting <- function(id) {
     ns <- shiny::NS(id)
     
     # Source UI tab components
-    source("R/server/modules/pages/plotting/ui_tab_data_selection.R", local = TRUE)
-    source("R/server/modules/pages/plotting/ui_tab_filter.R", local = TRUE)
-    source("R/server/modules/pages/plotting/ui_tab_processing.R", local = TRUE)
-    source("R/server/modules/pages/plotting/ui_tab_style.R", local = TRUE)
+    source("R/ui/plotting/ui_tab_data_selection.R", local = TRUE)
+    source("R/ui/plotting/ui_tab_filter.R", local = TRUE)
+    source("R/ui/plotting/ui_tab_processing.R", local = TRUE)
+    source("R/ui/plotting/ui_tab_style.R", local = TRUE)
 
     shiny::tagList(
         # Initialize window size reporting with namespaced IDs
