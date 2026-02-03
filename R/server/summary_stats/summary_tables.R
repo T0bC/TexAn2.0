@@ -3,6 +3,9 @@ box::use(../summary_stats/summary_utils)
 box::use(../../utils/error_handling)
 box::use(../../ui/components/error_display)
 
+# Import dplyr for pipe operator and data manipulation functions
+box::use(dplyr[...])
+
 #' Create summary dataframes reactive
 #'
 #' Computes summary statistics for each measurement column.
