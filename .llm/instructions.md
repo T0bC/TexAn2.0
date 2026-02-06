@@ -174,6 +174,15 @@ default:
 - **Production**: Set `RHINO_LOG_FILE=app.log` and `RHINO_LOG_LEVEL=WARN` as environment variables.
 - `app.log` is excluded from version control via `.gitignore`.
 
+## Error handling
+
+Use the two-layer error handling pattern defined in `.llm/error_handling.md`:
+
+- **Logic layer** (`app/logic/error_handling.R`): `safe_execute()`, `simple_error()`, `is_app_error()`, parsers
+- **View layer** (`app/view/error_display.R`): `error_alert_structured()`, `render_app_error()`, modals
+
+Wrap risky operations in `error_handling$safe_execute()`. Use `error_handling$simple_error()` for validation failures. Display errors in the UI via `error_display$error_alert_structured()`.
+
 ## Code style
 
 The maximum line length is 100 characters.
