@@ -1,5 +1,0 @@
-linters:
-  linters_with_defaults(
-    defaults = box.linters::box_default_linters
-  )
-encoding: "UTF-8"
