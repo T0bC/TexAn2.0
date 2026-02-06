@@ -5,5 +5,11 @@
 .Ruserdata
 node_modules/
 
+
+# Log file
+app.log
+
 # Legacy reference code (read-only, not part of new codebase)
 legacy_texan2/
+
+
