@@ -155,35 +155,33 @@ list(
 
 ```r
 box::use(
-    app/logic/error_handling[safe_execute, stat_error_parser]
+  WRS2,
+)
+
+box::use(
+  app/logic/error_handling,
 )
 
 perform_t1way <- function(df, x_axis, measure_col, tr_value, ...) {
-    # Build context for error reporting
-    error_context <- list(
-        measure = measure_col,
-        grouping = x_axis,
-        n_observations = nrow(df),
-        trim = tr_value
-    )
-    
-    # Wrap risky operation
-    test_result <- safe_execute(
-        expr = {
-            WRS2::t1way(formula = formula_obj, data = df, tr = tr_value)
-        },
-        operation_name = "t1way",
-        context = error_context,
-        error_parser = stat_error_parser
-    )
-    
-    # Return error if failed
-    if (!test_result$success) {
-        return(test_result$error)
-    }
-    
-    # Process and return successful result
-    test_result$result
+  error_context <- list(
+    measure = measure_col,
+    grouping = x_axis,
+    n_observations = nrow(df),
+    trim = tr_value
+  )
+
+  test_result <- error_handling$safe_execute(
+    expr = WRS2$t1way(formula = formula_obj, data = df, tr = tr_value),
+    operation_name = "t1way",
+    context = error_context,
+    error_parser = error_handling$stat_error_parser
+  )
+
+  if (!test_result$success) {
+    return(test_result$error)
+  }
+
+  test_result$result
 }
 ```
 
@@ -191,18 +189,19 @@ perform_t1way <- function(df, x_axis, measure_col, tr_value, ...) {
 
 ```r
 box::use(
-    app/logic/error_handling[is_app_error, render_app_error],
-    shiny[tags]
+  shiny,
+)
+
+box::use(
+  app/logic/error_handling,
+  app/view/error_display,
 )
 
 # Check and render appropriately
-if (is_app_error(res$result_t_way)) {
-    tway_ui <- tags$div(
-        class = "alert alert-danger",
-        render_app_error(res$result_t_way)
-    )
+if (error_handling$is_app_error(res$result_t_way)) {
+  tway_ui <- error_display$error_alert_structured(res$result_t_way)
 } else {
-    tway_ui <- render_stats_table(res$result_t_way)
+  tway_ui <- render_stats_table(res$result_t_way)
 }
 ```
 
@@ -210,14 +209,21 @@ if (is_app_error(res$result_t_way)) {
 
 ## Available Functions
 
+### Logic layer (`app/logic/error_handling.R`)
+
 | Function | Purpose |
-|----------|---------|
+|----------|--------|
 | `safe_execute()` | Wrap risky operations, returns `{success, result, error}` |
 | `create_app_error()` | Create structured error with full details |
 | `simple_error()` | Create error for validation failures (no stack trace) |
 | `is_app_error()` | Check if object is a structured error |
 | `default_error_parser()` | Parse common R errors to user-friendly messages |
 | `stat_error_parser()` | Parse statistical test errors |
+
+### View layer (`app/view/error_display.R`)
+
+| Function | Purpose |
+|----------|--------|
 | `render_app_error()` | Render structured error with expandable details |
 | `error_alert()` | Simple Bootstrap alert |
 | `error_alert_structured()` | Alert containing structured error |
@@ -242,37 +248,29 @@ if (is_app_error(res$result_t_way)) {
 
 ```r
 box::use(
-    app/logic/error_handling[safe_execute, simple_error, is_app_error]
+  app/logic/error_handling,
 )
+
+# Usage:
+# error_handling$safe_execute(...)
+# error_handling$simple_error(...)
+# error_handling$is_app_error(obj)
 ```
 
-### In View Files (app/view/)
+### In View/Module Files (app/view/)
 
 ```r
 box::use(
-    app/logic/error_handling[is_app_error, render_app_error, error_alert],
-    shiny[tags, showModal, modalDialog]
+  shiny,
 )
-```
 
-### In Module Files
-
-```r
 box::use(
-    shiny[moduleServer, NS],
-    app/logic/error_handling[safe_execute, is_app_error]
+  app/logic/error_handling,
+  app/view/error_display,
 )
 
-#' @export
-ui <- function(id) {
-    ns <- NS(id)
-    # UI code here
-}
-
-#' @export
-server <- function(id) {
-    moduleServer(id, function(input, output, session) {
-        # Module server code with error handling
-    })
-}
+# Usage:
+# error_handling$is_app_error(obj)
+# error_display$error_alert_structured(err)
+# error_display$show_error_modal(err, session = session)
 ```
