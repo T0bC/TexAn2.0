@@ -1,2 +1,0 @@
-rhino::test_r()
-
