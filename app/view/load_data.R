@@ -12,6 +12,7 @@ box::use(
 box::use(
   app/logic/error_handling,
   app/logic/load_data,
+  app/view/components/sidebar_tabs,
   app/view/error_display,
 )
 
@@ -19,60 +20,67 @@ box::use(
 ui <- function(id) {
   ns <- shiny$NS(id)
 
-  bslib$layout_sidebar(
-    sidebar = bslib$sidebar(
-      title = "Instructions",
-      shiny$fileInput(
-        inputId = ns("data_file"),
-        label = "Upload dataset",
-        multiple = FALSE,
-        accept = c(
-          "text/csv",
-          "text/comma-separated-values,text/plain",
-          ".csv",
-          ".xlsx"
+  sidebar_tabs$tab_layout(
+    ns = ns,
+    sidebar_id = "sidebar_tabs",
+    tabs = list(
+      sidebar_tabs$create_tab(
+        icon = "file-earmark-arrow-up",
+        tooltip_text = "Load Data",
+        value = "upload_tab",
+        shiny$h6(class = "text-muted mb-3", "Upload Dataset"),
+        shiny$fileInput(
+          inputId = ns("data_file"),
+          label = "Upload dataset",
+          multiple = FALSE,
+          accept = c(
+            "text/csv",
+            "text/comma-separated-values,text/plain",
+            ".csv",
+            ".xlsx"
+          )
+        ),
+        shiny$helpText(
+          "Accepted formats: CSV or XLSX (single file)."
         )
       ),
-      shiny$helpText("Accepted formats: CSV or XLSX (single file)."),
-      bslib$accordion(
-        id = ns("csv_settings_collapse"),
-        open = FALSE,
-        bslib$accordion_panel(
-          title = "CSV settings",
-          value = "csv_settings_panel",
-          shiny$helpText(
-            "The following settings only apply to CSV uploads.",
-            "XLSX files ignore these options."
+      sidebar_tabs$create_tab(
+        icon = "gear",
+        tooltip_text = "CSV Settings",
+        value = "csv_settings_tab",
+        shiny$h6(class = "text-muted mb-3", "CSV Settings"),
+        shiny$helpText(
+          "The following settings only apply to CSV uploads.",
+          "XLSX files ignore these options."
+        ),
+        shiny$checkboxInput(
+          inputId = ns("csv_has_header"),
+          label = "CSV includes header row",
+          value = TRUE
+        ),
+        shiny$radioButtons(
+          inputId = ns("csv_delimiter"),
+          label = "Delimiter",
+          choices = c(
+            ", (comma)" = ",",
+            "; (semicolon)" = ";",
+            "Tab" = "\t"
           ),
-          shiny$checkboxInput(
-            inputId = ns("csv_has_header"),
-            label = "CSV includes header row",
-            value = TRUE
+          selected = ","
+        ),
+        shiny$radioButtons(
+          inputId = ns("csv_quote"),
+          label = "Quote character",
+          choices = c(
+            "None" = "",
+            "Double quote (\"\")" = '"',
+            "Single quote (')" = "'"
           ),
-          shiny$radioButtons(
-            inputId = ns("csv_delimiter"),
-            label = "Delimiter",
-            choices = c(
-              ", (comma)" = ",",
-              "; (semicolon)" = ";",
-              "Tab" = "\t"
-            ),
-            selected = ","
-          ),
-          shiny$radioButtons(
-            inputId = ns("csv_quote"),
-            label = "Quote character",
-            choices = c(
-              "None" = "",
-              "Double quote (\"\")" = '"',
-              "Single quote (')" = "'"
-            ),
-            selected = '"'
-          )
+          selected = '"'
         )
       )
     ),
-    shiny$uiOutput(ns("main_content"))
+    main_content = shiny$uiOutput(ns("main_content"))
   )
 }
 
