@@ -13,7 +13,7 @@
 }
 
 // Sidebar shadow for visual distinction
-.bslib-sidebar-layout > .sidebar {
+.bslib-sidebar-layout>.sidebar {
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
 }
 
@@ -25,12 +25,12 @@
 }
 
 // Reduce top padding inside sidebar to move title closer to top
-.bslib-sidebar-layout > .sidebar > .sidebar-content {
+.bslib-sidebar-layout>.sidebar>.sidebar-content {
   padding-top: 0.25rem !important;
 }
 
 // Move collapse icon to top-right of sidebar when open
-.bslib-sidebar-layout:not(.sidebar-collapsed) > .collapse-toggle {
+.bslib-sidebar-layout:not(.sidebar-collapsed)>.collapse-toggle {
   position: absolute;
   top: 0.5rem;
   right: auto;
@@ -39,11 +39,29 @@
 }
 
 // Keep collapse icon visible when sidebar is collapsed
-.bslib-sidebar-layout.sidebar-collapsed > .collapse-toggle {
+.bslib-sidebar-layout.sidebar-collapsed>.collapse-toggle {
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
   z-index: 10;
+}
+
+// =============================================================================
+// Global: Settings Gear Icon
+// =============================================================================
+
+// Settings gear icon in navbar
+.settings-gear {
+  color: inherit;
+  font-size: 1.2rem;
+  padding: 0.5rem;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+
+  &:hover {
+    opacity: 1;
+    text-decoration: none;
+  }
 }
 
 // =============================================================================
