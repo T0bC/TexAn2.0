@@ -6,7 +6,9 @@ box::use(
 )
 
 box::use(
+  app/logic/error_handling,
   app/logic/load_data,
+  app/view/error_display,
 )
 
 #' @export
@@ -77,6 +79,7 @@ server <- function(id) {
 
     loaded_data <- shiny$reactiveVal(NULL)
     data_version <- shiny$reactiveVal(0)
+    last_error <- shiny$reactiveVal(NULL)
 
     # Handle file upload
     shiny$observeEvent(input$data_file, {
@@ -110,11 +113,7 @@ server <- function(id) {
 
       if (!result$success) {
         loaded_data(NULL)
-        shiny$showNotification(
-          paste("Error reading file:", result$error),
-          type = "error",
-          duration = 5
-        )
+        last_error(result$error)
         return()
       }
 
@@ -122,11 +121,12 @@ server <- function(id) {
       validation <- load_data$validate_data(result$data)
       if (!validation$valid) {
         loaded_data(NULL)
-        shiny$showNotification(validation$message, type = "error")
+        last_error(validation$error)
         return()
       }
 
       # Success — update reactives
+      last_error(NULL)
       rhino$log$info(
         "Load complete: '{file_info$name}' "
       )
@@ -143,9 +143,12 @@ server <- function(id) {
       )
     })
 
-    # Main content: welcome screen or data panels
+    # Main content: welcome screen, error, or data panels
     output$main_content <- shiny$renderUI({
-      if (is.null(loaded_data())) {
+      err <- last_error()
+      if (error_handling$is_app_error(err)) {
+        error_display$error_alert_structured(err, type = "danger")
+      } else if (is.null(loaded_data())) {
         shiny$tags$div(
           class = "d-flex align-items-center justify-content-center",
           style = "min-height: 400px;",
