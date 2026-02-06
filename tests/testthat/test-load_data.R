@@ -24,7 +24,7 @@ describe("validate_file_extension", {
   })
 
   it("accepts .xlsx files", {
-    result <- load_data$validate_file_extension("report.xlsx")
+    result <- load_data$validate_file_extension("testData_with_perc.xlsx")
     expect_true(result$valid)
     expect_equal(result$ext, "xlsx")
   })
