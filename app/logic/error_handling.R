@@ -146,7 +146,7 @@ default_error_parser <- function(error_msg, operation_name = "Operation") {
     paste0(operation_name, ": Permission denied. Check file permissions.")
   } else if (grepl("connection|timeout", error_msg, ignore.case = TRUE)) {
     paste0(operation_name, ": Connection error. Please try again.")
-  } else if (grepl("memory|allocation", error_msg, ignore.case = TRUE)) {
+  } else if (grepl("memory|allocat", error_msg, ignore.case = TRUE)) {
     paste0(operation_name, ": Out of memory. Try with smaller data.")
   } else if (grepl("NA|missing|NULL", error_msg, ignore.case = TRUE)) {
     paste0(operation_name, ": Missing or invalid data encountered.")
