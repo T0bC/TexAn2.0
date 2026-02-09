@@ -66,7 +66,7 @@ tab_server <- function(input, output, session, input_data,
     )
   })
 
-  # Update pointColor choices from xAxis
+  # Update pointColor choices from xAxis (empty = use all xAxis)
   shiny$observe({
     x_axis <- input$xAxis
     if (is.null(x_axis) || length(x_axis) == 0) {
@@ -74,25 +74,24 @@ tab_server <- function(input, output, session, input_data,
         session, "pointColor", choices = character(0)
       )
     } else {
+      current <- input$pointColor
+      valid <- current[current %in% x_axis]
       shiny$updateSelectizeInput(
         session, "pointColor",
         choices = x_axis,
-        selected = if (is.null(input$pointColor)) {
-          x_axis[1]
-        } else {
-          input$pointColor
-        }
+        selected = valid
       )
     }
   })
 
-  # Color columns: pointColor selection, fallback to xAxis
+  # Color columns: pointColor if user explicitly picked subset,
+  # otherwise all xAxis columns
   color_cols <- shiny$reactive({
+    xa <- input$xAxis
+    if (is.null(xa) || length(xa) == 0) return(character(0))
     pc <- input$pointColor
     if (!is.null(pc) && length(pc) > 0) return(pc)
-    xa <- input$xAxis
-    if (!is.null(xa) && length(xa) > 0) return(xa)
-    character(0)
+    xa
   })
 
   # Unique color groups from interaction of color columns
