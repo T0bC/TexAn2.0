@@ -11,6 +11,7 @@ box::use(
   app/view/plotting/data_selection,
   app/view/plotting/filter,
   app/view/plotting/processing,
+  app/view/plotting/style,
 )
 
 #' @export
@@ -23,7 +24,8 @@ ui <- function(id) {
     tabs = list(
       data_selection$tab_ui(ns),
       filter$tab_ui(ns),
-      processing$tab_ui(ns)
+      processing$tab_ui(ns),
+      style$tab_ui(ns)
     ),
     main_content = shiny$uiOutput(ns("main_content"))
   )
@@ -51,6 +53,9 @@ server <- function(id, input_data, data_version) {
       input, output, session, input_data, data_version
     )
     processing$tab_server(
+      input, output, session, data_version
+    )
+    style$tab_server(
       input, output, session, data_version
     )
 
