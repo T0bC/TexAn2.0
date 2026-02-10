@@ -1,6 +1,7 @@
 box::use(
   bsicons,
   bslib,
+  rhino,
   shiny,
 )
 
@@ -140,6 +141,7 @@ tab_server <- function(input, output, session, input_data,
   shiny$observeEvent(data_version(), {
     data <- input_data()
     if (is.null(data)) {
+      rhino$log$info("Plotting data_selection: reset (no data)")
       shiny$updateSelectizeInput(
         session, "metaData",
         choices = character(0), selected = character(0)
@@ -171,6 +173,11 @@ tab_server <- function(input, output, session, input_data,
     ret_meas <- intersect(cur_meas, meas_cols)
     ret_x    <- intersect(cur_x, ret_meta)
     ret_tip  <- intersect(cur_tip, ret_meta)
+
+    rhino$log$info(
+      "Plotting data_selection: {length(desc_cols)} descriptive, ",
+      "{length(meas_cols)} measurement cols available"
+    )
 
     shiny$updateSelectizeInput(
       session, "metaData",

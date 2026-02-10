@@ -2,6 +2,7 @@ box::use(
   bsicons,
   bslib,
   colourpicker,
+  rhino,
   shiny,
 )
 
@@ -105,7 +106,11 @@ tab_server <- function(input, output, session, input_data,
     interaction_factor <- data_utils$create_interaction(
       data, cols
     )
-    sort(as.character(unique(interaction_factor)))
+    groups <- sort(as.character(unique(interaction_factor)))
+    rhino$log$info(
+      "Plotting style: {length(groups)} color group(s)"
+    )
+    groups
   })
 
   # Render dynamic color pickers

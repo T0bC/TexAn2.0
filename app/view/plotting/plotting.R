@@ -2,6 +2,7 @@ box::use(
   bsicons,
   bslib,
   ggiraph,
+  rhino,
   shiny,
 )
 
@@ -43,6 +44,7 @@ server <- function(id, input_data, data_version) {
 
     # Reset state when new data is loaded
     shiny$observeEvent(data_version(), {
+      rhino$log$info("Plotting: state reset for new data")
       result(NULL)
       last_error(NULL)
     }, ignoreInit = TRUE)
@@ -126,6 +128,11 @@ server <- function(id, input_data, data_version) {
       data <- filter_result$filtered_data()
       shiny$req(data, nrow(data) > 0)
       shiny$req(params$measure_cols, length(params$measure_cols) > 0)
+
+      rhino$log$info(
+        "Plotting: rendering {length(params$measure_cols)} plot(s) ",
+        "for x={paste(params$x_cols, collapse = ' | ')}"
+      )
 
       lapply(params$measure_cols, function(y_col) {
         exec_result <- error_handling$safe_execute(

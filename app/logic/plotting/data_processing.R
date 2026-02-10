@@ -1,4 +1,8 @@
 box::use(
+  rhino,
+)
+
+box::use(
   app/logic/data_utils,
 )
 
@@ -45,6 +49,10 @@ detect_outliers <- function(data, value_col, group_col,
     bootstrap        = detect_bootstrap
   )
 
+  rhino$log$info(
+    "Outlier: {method} (factor={factor}) on '{value_col}'"
+  )
+
   result <- rep(FALSE, nrow(data))
   groups <- levels(group_col)
   if (is.null(groups)) groups <- unique(as.character(group_col))
@@ -60,6 +68,10 @@ detect_outliers <- function(data, value_col, group_col,
     }
   }
 
+  n_outliers <- sum(result)
+  rhino$log$info(
+    "Outlier: {n_outliers}/{nrow(data)} flagged"
+  )
   result
 }
 

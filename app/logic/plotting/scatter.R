@@ -2,6 +2,7 @@ box::use(
   ggplot2,
   ggiraph,
   legendry,
+  rhino,
 )
 
 box::use(
@@ -49,6 +50,11 @@ create_scatter_plot <- function(data,
   # --- Validate inputs ---
   validation <- validate_plot_inputs(data, x_cols, y_col)
   if (!is.null(validation)) return(validation)
+
+  rhino$log$info(
+    "Plot: {y_col} by {paste(x_cols, collapse = ' | ')} ",
+    "({nrow(data)} rows)"
+  )
 
   # --- Defaults ---
   ps <- resolve_point_style(point_style)
@@ -251,19 +257,26 @@ resolve_axis_style <- function(ax) {
 #' Validate required plot inputs; returns empty plot or NULL if valid
 validate_plot_inputs <- function(data, x_cols, y_col) {
   if (is.null(data) || nrow(data) == 0) {
+    rhino$log$info("Plot: skipped, no data available")
     return(create_empty_plot("No data available"))
   }
   if (is.null(x_cols) || length(x_cols) == 0) {
+    rhino$log$info("Plot: skipped, no X-axis selected")
     return(create_empty_plot("No X-axis column selected"))
   }
   missing_x <- x_cols[!x_cols %in% names(data)]
   if (length(missing_x) > 0) {
+    rhino$log$warn(
+      "Plot: X-axis column(s) not found: ",
+      "{paste(missing_x, collapse = ', ')}"
+    )
     return(create_empty_plot(paste(
       "X-axis column(s) not found:",
       paste(missing_x, collapse = ", ")
     )))
   }
   if (is.null(y_col) || !y_col %in% names(data)) {
+    rhino$log$warn("Plot: Y column '{y_col}' not found")
     return(create_empty_plot(paste("Column", y_col, "not found")))
   }
   NULL
@@ -305,10 +318,10 @@ prepare_shape <- function(data, shape_cols) {
   )
   n_shapes <- length(unique(data$.shape_group))
   if (n_shapes > 6) {
-    warning(paste0(
-      "Shape mapping has ", n_shapes, " unique groups. ",
-      "Consider using fewer shape columns for readability."
-    ))
+    rhino$log$warn(
+      "Plot: shape mapping has {n_shapes} groups ",
+      "(>6 may reduce readability)"
+    )
   }
   list(
     data = data,
