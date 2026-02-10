@@ -70,7 +70,9 @@ ui <- function(id) {
 }
 
 #' @export
-server <- function(id, input_data, data_version) {
+server <- function(id, input_data, data_version,
+                   plotting_x_axis = NULL,
+                   plotting_measures = NULL) {
   shiny$moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -116,9 +118,18 @@ server <- function(id, input_data, data_version) {
         character(0)
       }
 
-      # Default to first descriptive column
+      # Default: use plotting X-axis if available
       selected <- if (length(valid_current) > 0) {
         valid_current
+      } else if (!is.null(plotting_x_axis)) {
+        x <- plotting_x_axis()
+        if (!is.null(x) && length(x) > 0) {
+          x[x %in% desc_cols]
+        } else if (length(desc_cols) > 0) {
+          desc_cols[1]
+        } else {
+          character(0)
+        }
       } else if (length(desc_cols) > 0) {
         desc_cols[1]
       } else {
@@ -134,12 +145,45 @@ server <- function(id, input_data, data_version) {
       )
     })
 
+    # --- Sync from plotting tab when selections change ---
+    if (!is.null(plotting_x_axis)) {
+      shiny$observeEvent(plotting_x_axis(), {
+        desc_cols <- descriptive_cols()
+        x <- plotting_x_axis()
+        if (!is.null(x) && length(x) > 0) {
+          valid <- x[x %in% desc_cols]
+          if (length(valid) > 0) {
+            shiny$updateSelectizeInput(
+              session, "filter_options_select",
+              selected = valid
+            )
+          }
+        }
+      }, ignoreInit = TRUE)
+    }
+
+    # --- Resolve measurement columns ---
+    # Use plotting selections if available, otherwise auto-detect
+    active_measures <- shiny$reactive({
+      if (!is.null(plotting_measures)) {
+        m <- plotting_measures()
+        if (!is.null(m) && length(m) > 0) return(m)
+      }
+      # Fallback: auto-detect from data
+      data <- input_data()
+      if (is.null(data)) return(NULL)
+      cols <- column_utils$get_measurement_cols(data)
+      cols[!grepl("_outlier|_trimmed", cols)]
+    })
+
     # --- Debounced computation inputs ---
     debounced_inputs <- shiny$reactive({
       shiny$req(input_data())
       shiny$req(input$filter_options_select)
+      shiny$req(active_measures())
       list(
         grouping_vars = input$filter_options_select,
+        measure_vars  = active_measures(),
         shapiro       = input$shapiro %||% FALSE
       )
     }) |> shiny$debounce(400)
@@ -154,9 +198,10 @@ server <- function(id, input_data, data_version) {
       last_error(NULL)
 
       result <- summary$run_summary(
-        data         = data,
+        data          = data,
         grouping_vars = params$grouping_vars,
-        shapiro_test = params$shapiro
+        measure_vars  = params$measure_vars,
+        shapiro_test  = params$shapiro
       )
 
       if (!result$success) {
