@@ -1,6 +1,7 @@
 box::use(
   bsicons,
   bslib,
+  rhino,
   shiny,
 )
 
@@ -143,6 +144,7 @@ tab_server <- function(input, output, session, data_version) {
     shiny$updateNumericInput(
       session, "bootstrapSamples", value = 1000
     )
+    rhino$log$info("Plotting processing: reset for new data")
   }, ignoreInit = TRUE)
 }
 

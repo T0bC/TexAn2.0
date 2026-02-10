@@ -1,6 +1,7 @@
 box::use(
   bsicons,
   bslib,
+  rhino,
   shiny,
 )
 
@@ -78,6 +79,7 @@ tab_server <- function(input, output, session, input_data,
     )
     # Clear saved filter state — checkbox values may differ
     saved_filter_state(list())
+    rhino$log$info("Plotting filter: reset for new data")
   }, ignoreInit = TRUE)
 
   # Update hideCols choices from selected metaData
@@ -171,7 +173,11 @@ tab_server <- function(input, output, session, input_data,
     filters <- lapply(cols, function(col) input[[col]])
     names(filters) <- cols
 
-    data_utils$filter_data(data, filters)
+    result <- data_utils$filter_data(data, filters)
+    rhino$log$info(
+      "Plotting filter: {nrow(result)}/{nrow(data)} rows retained"
+    )
+    result
   })
 
   # Return filtered data for downstream use
