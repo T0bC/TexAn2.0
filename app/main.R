@@ -21,7 +21,12 @@ ui <- function(id) {
     id = ns("active_page"),
     title = "TexAn 2.0",
     theme = settings$get_default_theme(),
-    header = help_modal$panel(ns("help")),
+    header = shiny$tagList(
+      shiny$tags$head(
+        shiny$tags$script(src = "static/js/plot_resize.js")
+      ),
+      help_modal$panel(ns("help"))
+    ),
     bslib$nav_panel(
       title = shiny$tagList(
         bsicons$bs_icon("file-earmark-arrow-up"), "Load Data"
