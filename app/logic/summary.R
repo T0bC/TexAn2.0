@@ -282,11 +282,14 @@ split_by_measurement <- function(summary_df) {
 #'
 #' @param data Data frame
 #' @param grouping_vars Character vector of grouping column names
+#' @param measure_vars Character vector of measurement column names.
+#'   If NULL, auto-detected via column_utils$get_measurement_cols().
 #' @param shapiro_test Logical, include Shapiro-Wilk test
 #' @return List with $success, $result (list of list(col, df))
 #'   or $error
 #' @export
 run_summary <- function(data, grouping_vars,
+                        measure_vars = NULL,
                         shapiro_test = FALSE) {
   # Validate grouping columns
   validation <- validate_inputs(grouping_vars, data)
@@ -297,8 +300,10 @@ run_summary <- function(data, grouping_vars,
     ))
   }
 
-  # Identify measurement columns
-  measure_vars <- column_utils$get_measurement_cols(data)
+  # Use provided measure_vars or auto-detect
+  if (is.null(measure_vars) || length(measure_vars) == 0) {
+    measure_vars <- column_utils$get_measurement_cols(data)
+  }
   measure_vars <- measure_vars[
     !grepl("_outlier|_trimmed", measure_vars)
   ]
