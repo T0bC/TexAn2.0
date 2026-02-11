@@ -3,7 +3,7 @@ box::use(
 )
 
 box::use(
-  app/logic/statistics,
+  app/logic/statistics/validate,
 )
 
 # =============================================================================
@@ -13,19 +13,19 @@ box::use(
 describe("validate_inputs", {
   it("returns valid = TRUE for valid columns", {
     data <- data.frame(a = 1:3, b = 4:6, c = 7:9)
-    result <- statistics$validate_inputs(c("a", "b"), data)
+    result <- validate$validate_inputs(c("a", "b"), data)
     expect_true(result$valid)
   })
 
   it("returns valid = FALSE when no columns selected", {
     data <- data.frame(a = 1:3)
-    result <- statistics$validate_inputs(NULL, data)
+    result <- validate$validate_inputs(NULL, data)
     expect_true(!result$valid)
   })
 
   it("returns valid = FALSE for missing columns", {
     data <- data.frame(a = 1:3)
-    result <- statistics$validate_inputs(c("a", "z"), data)
+    result <- validate$validate_inputs(c("a", "z"), data)
     expect_true(!result$valid)
   })
 })
@@ -37,13 +37,13 @@ describe("validate_inputs", {
 describe("run_analysis", {
   it("returns success for valid input", {
     data <- data.frame(a = 1:3, b = 4:6)
-    result <- statistics$run_analysis(data, c("a", "b"))
+    result <- validate$run_analysis(data, c("a", "b"))
     expect_true(result$success)
   })
 
   it("returns error for invalid columns", {
     data <- data.frame(a = 1:3)
-    result <- statistics$run_analysis(data, c("nonexistent"))
+    result <- validate$run_analysis(data, c("nonexistent"))
     expect_true(!result$success)
   })
 })
