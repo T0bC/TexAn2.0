@@ -526,6 +526,47 @@
       "Maintainer": "Hadley Wickham <hadley@posit.co>",
       "Repository": "CRAN"
     },
+    "WRS2": {
+      "Package": "WRS2",
+      "Version": "1.1-7",
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "A Collection of Robust Statistical Methods",
+      "Date": "2025-05-21",
+      "Authors@R": "c(person(given=\"Patrick\", family=\"Mair\", email=\"mair@fas.harvard.edu\", role=c(\"cre\",\"aut\")), person(given=\"Rand\", family=\"Wilcox\", email=\"rwilcox@usc.edu\", role=c(\"aut\")), person(given=\"Indrajeet\", family=\"Patil\", email=\"patilindrajeet.science@gmail.com\", role=c(\"ctb\")))",
+      "Description": "A collection of robust statistical methods based on Wilcox' WRS functions. It implements robust t-tests (independent and dependent samples), robust ANOVA (including between-within subject designs), quantile ANOVA, robust correlation, robust mediation, and nonparametric ANCOVA models based on robust location measures.",
+      "License": "GPL-3",
+      "URL": "https://r-forge.r-project.org/projects/psychor/",
+      "Imports": [
+        "MASS",
+        "reshape",
+        "plyr",
+        "stats",
+        "graphics",
+        "grDevices",
+        "utils"
+      ],
+      "Depends": [
+        "R (>= 4.0.0)"
+      ],
+      "Suggests": [
+        "knitr",
+        "car",
+        "ggplot2",
+        "colorspace",
+        "mediation",
+        "GGally",
+        "codetools"
+      ],
+      "VignetteBuilder": "knitr",
+      "LazyData": "yes",
+      "LazyLoad": "yes",
+      "ByteCompile": "yes",
+      "NeedsCompilation": "no",
+      "Author": "Patrick Mair [cre, aut], Rand Wilcox [aut], Indrajeet Patil [ctb]",
+      "Maintainer": "Patrick Mair <mair@fas.harvard.edu>",
+      "Repository": "CRAN"
+    },
     "backports": {
       "Package": "backports",
       "Version": "1.5.0",
@@ -3960,6 +4001,27 @@
       "NeedsCompilation": "no",
       "Author": "Kevin Ushey [aut, cre] (ORCID: <https://orcid.org/0000-0003-2880-7407>), Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Posit Software, PBC [cph, fnd]",
       "Maintainer": "Kevin Ushey <kevin@rstudio.com>",
+      "Repository": "CRAN"
+    },
+    "reshape": {
+      "Package": "reshape",
+      "Version": "0.8.10",
+      "Source": "Repository",
+      "Title": "Flexibly Reshape Data",
+      "Description": "Flexibly restructure and aggregate data using  just two functions: melt and cast.",
+      "Authors@R": "person(\"Hadley\", \"Wickham\", , \"hadley@rstudio.com\", c(\"aut\", \"cre\"))",
+      "URL": "http://had.co.nz/reshape",
+      "Depends": [
+        "R (>= 2.6.1)"
+      ],
+      "Imports": [
+        "plyr"
+      ],
+      "License": "MIT + file LICENSE",
+      "LazyData": "true",
+      "NeedsCompilation": "no",
+      "Author": "Hadley Wickham [aut, cre]",
+      "Maintainer": "Hadley Wickham <hadley@rstudio.com>",
       "Repository": "CRAN"
     },
     "reshape2": {
