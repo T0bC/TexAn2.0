@@ -384,6 +384,134 @@ filter_valid_comparisons <- function(df, x_axis) {
 }
 
 
+#' Run lincon on combined groups (1-way style) for multi-way designs
+#'
+#' Combines multi-factor groups into a single factor using "." separator
+#' (matching Cliff's Delta convention) and runs WRS2::lincon.
+#' This produces pairwise comparisons compatible with Cliff's output.
+#'
+#' @param sample_data Data frame
+#' @param x_axis Grouping columns
+#' @param measure_col Measurement column
+#' @param tr_value Trim proportion
+#' @return Data frame with lincon results
+run_lincon_combined <- function(sample_data, x_axis, measure_col,
+                                 tr_value) {
+  if (length(x_axis) > 1) {
+    sample_data$combinedGroups <- do.call(
+      paste, c(sample_data[x_axis], sep = ".")
+    )
+  } else {
+    sample_data$combinedGroups <- sample_data[[x_axis[1]]]
+  }
+  sample_data$combinedGroups <- as.factor(
+    sample_data$combinedGroups
+  )
+  formula_obj <- stats$as.formula(
+    paste0("`", measure_col, "` ~ combinedGroups")
+  )
+  lincon_result <- WRS2$lincon(
+    formula = formula_obj,
+    data = sample_data,
+    tr = tr_value,
+    method = "none"
+  )
+  comp_df <- as.data.frame(lincon_result$comp)
+  interaction_labels <- paste(
+    lincon_result$fnames[comp_df[, 1]],
+    "vs.",
+    lincon_result$fnames[comp_df[, 2]]
+  )
+  data.frame(
+    Interaction = interaction_labels,
+    Lincon.psihat = comp_df$psihat,
+    Lincon.ci.lower = comp_df$ci.lower,
+    Lincon.ci.upper = comp_df$ci.upper,
+    Lincon.p.value = comp_df$p.value,
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Perform lincon on combined groups for the combined posthoc table
+#'
+#' For multi-way designs, combines factors into a single group using "."
+#' separator and runs WRS2::lincon (1-way style). This produces pairwise
+#' comparisons that match Cliff's Delta output for merging.
+#'
+#' @param df Data frame
+#' @param x_axis Character vector of grouping column(s)
+#' @param measure_col Character, measurement column name
+#' @param tr_value Numeric, trim proportion (0-0.5)
+#' @param use_bootstrap Logical
+#' @param boot_samples Integer, number of bootstrap samples
+#' @param boot_sample_size Integer or NULL
+#' @return Data frame with lincon results or app_error
+perform_lincon_combined <- function(df, x_axis, measure_col,
+                                     tr_value,
+                                     use_bootstrap = FALSE,
+                                     boot_samples = 599,
+                                     boot_sample_size = NULL) {
+  rhino$log$info(
+    "lincon_combined: starting for measure='{measure_col}',",
+    " factors='{paste(x_axis, collapse=\", \")}'"
+  )
+
+  validation <- validate_posthoc(df, x_axis)
+  if (error_handling$is_app_error(validation)) {
+    return(validation)
+  }
+
+  boot_params <- omnibus$setup_bootstrap_params(
+    df, x_axis, use_bootstrap, boot_samples, boot_sample_size
+  )
+
+  error_context <- build_posthoc_context(
+    df, x_axis, measure_col, tr_value, use_bootstrap
+  )
+
+  test_result <- error_handling$safe_execute(
+    expr = {
+      results_list <- vector("list", boot_params$n_iterations)
+      for (i in seq_len(boot_params$n_iterations)) {
+        sample_data <- omnibus$sample_for_iteration(
+          df, x_axis, use_bootstrap, boot_params$sample_size
+        )
+        results_list[[i]] <- run_lincon_combined(
+          sample_data, x_axis, measure_col, tr_value
+        )
+      }
+      results_list
+    },
+    operation_name = "lincon_combined",
+    context = error_context,
+    error_parser = error_handling$stat_error_parser
+  )
+
+  if (!test_result$success) return(test_result$error)
+
+  if (use_bootstrap) {
+    format_posthoc_bootstrap(
+      test_result$result,
+      c(
+        "Lincon.psihat", "Lincon.ci.lower",
+        "Lincon.ci.upper", "Lincon.p.value"
+      )
+    )
+  } else {
+    result_df <- test_result$result[[1]]
+    numeric_cols <- c(
+      "Lincon.psihat", "Lincon.ci.lower",
+      "Lincon.ci.upper", "Lincon.p.value"
+    )
+    avail <- intersect(numeric_cols, names(result_df))
+    result_df[avail] <- lapply(
+      result_df[avail], function(x) signif(x, 3)
+    )
+    result_df
+  }
+}
+
+
 # =============================================================================
 # Exported functions
 # =============================================================================
@@ -592,12 +720,25 @@ perform_combined_posthoc <- function(df, x_axis, measure_col,
     "combined_posthoc: starting for measure='{measure_col}'"
   )
 
-  lincon_result <- perform_lincon(
-    df = df, x_axis = x_axis, measure_col = measure_col,
-    tr_value = tr_value, use_bootstrap = use_bootstrap,
-    boot_samples = boot_samples,
-    boot_sample_size = boot_sample_size
-  )
+  # For multi-way designs, run lincon on combined groups (1-way style)
+  # to produce pairwise comparisons matching Cliff's Delta output.
+  # Structured contrasts (mcp2atm/mcp3atm) test main effects/interactions
+  # which are not comparable to Cliff's pairwise comparisons.
+  lincon_result <- if (length(x_axis) > 1) {
+    perform_lincon_combined(
+      df = df, x_axis = x_axis, measure_col = measure_col,
+      tr_value = tr_value, use_bootstrap = use_bootstrap,
+      boot_samples = boot_samples,
+      boot_sample_size = boot_sample_size
+    )
+  } else {
+    perform_lincon(
+      df = df, x_axis = x_axis, measure_col = measure_col,
+      tr_value = tr_value, use_bootstrap = use_bootstrap,
+      boot_samples = boot_samples,
+      boot_sample_size = boot_sample_size
+    )
+  }
 
   cliff_result <- perform_cliff(
     df = df, x_axis = x_axis, measure_col = measure_col,
