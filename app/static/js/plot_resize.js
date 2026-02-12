@@ -139,3 +139,114 @@ function initializeWindowSize(targetId, windowInputId) {
         );
     });
 }
+
+// =============================================================================
+// DEBUG: Visible on-screen overlay for environments without a console.
+// Set TEXAN_DEBUG = true to enable. Disabled by default.
+// =============================================================================
+
+var TEXAN_DEBUG = false;
+
+(function () {
+    if (!TEXAN_DEBUG) {
+        window._texanDbg = function () { };
+        return;
+    }
+
+    var debugLines = [];
+    var debugEl = null;
+
+    function ensureOverlay() {
+        if (debugEl) return;
+        debugEl = document.createElement('div');
+        debugEl.id = 'texan-debug-overlay';
+        debugEl.style.cssText = [
+            'position:fixed', 'bottom:0', 'left:0', 'right:0',
+            'max-height:40vh', 'overflow:auto', 'background:rgba(0,0,0,0.85)',
+            'color:#0f0', 'font:11px/1.4 monospace', 'padding:8px 12px',
+            'z-index:99999', 'pointer-events:auto', 'white-space:pre-wrap'
+        ].join(';');
+        document.body.appendChild(debugEl);
+    }
+
+    function dbg(msg) {
+        debugLines.push('[' + new Date().toLocaleTimeString() + '] ' + msg);
+        if (debugLines.length > 80) debugLines.shift();
+        ensureOverlay();
+        debugEl.textContent = debugLines.join('\n');
+        debugEl.scrollTop = debugEl.scrollHeight;
+    }
+
+    window._texanDbg = dbg;
+})();
+
+// =============================================================================
+// Post-render resize hook for ggiraph SVGs
+// Ensures SVGs fill their container in all environments (browsers + IDE preview).
+// With rescale = FALSE, ggiraph sets width/height as SVG attributes.
+// This observer removes those attributes after render so CSS can control sizing.
+// =============================================================================
+
+(function () {
+    function fixGirafeSvg(svg) {
+        var container = svg.closest('.responsive-plot');
+        if (!container) return;
+
+        // Remove SVG width/height attributes so CSS can control sizing
+        if (svg.hasAttribute('width') && svg.hasAttribute('viewBox')) {
+            svg.removeAttribute('width');
+            svg.removeAttribute('height');
+        }
+
+        svg.style.setProperty('width', '100%', 'important');
+        svg.style.setProperty('height', 'auto', 'important');
+        svg.style.display = 'block';
+
+        var girafeContainer = svg.closest('.girafe_container_std');
+        if (girafeContainer) {
+            girafeContainer.style.width = '100%';
+        }
+
+        var widget = svg.closest('.html-widget');
+        if (widget) {
+            widget.style.setProperty('width', '100%', 'important');
+        }
+    }
+
+    function fixAllGirafeSvgs() {
+        var svgs = document.querySelectorAll(
+            '.responsive-plot .girafe_container_std svg'
+        );
+        for (var i = 0; i < svgs.length; i++) {
+            fixGirafeSvg(svgs[i]);
+        }
+    }
+
+    var observer = new MutationObserver(function (mutations) {
+        for (var i = 0; i < mutations.length; i++) {
+            var added = mutations[i].addedNodes;
+            for (var j = 0; j < added.length; j++) {
+                var node = added[j];
+                if (node.nodeType !== 1) continue;
+                if (node.tagName === 'svg') {
+                    fixGirafeSvg(node);
+                } else if (node.querySelectorAll) {
+                    var svgs = node.querySelectorAll(
+                        '.girafe_container_std svg'
+                    );
+                    for (var k = 0; k < svgs.length; k++) {
+                        fixGirafeSvg(svgs[k]);
+                    }
+                }
+            }
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        fixAllGirafeSvgs();
+    });
+})();
