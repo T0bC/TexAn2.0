@@ -180,6 +180,7 @@
 // Responsive plot container
 .responsive-plot {
   width: 100%;
+  min-width: 200px;
 }
 
 // ggiraph widget — with opts_sizing(rescale = FALSE), ggiraph
