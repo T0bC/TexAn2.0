@@ -100,6 +100,32 @@ render_omnibus_result <- function(result, x_axis, approach) {
   )
 }
 
+# --- Private helper: build a compact HTML table from a data frame ---
+build_posthoc_table <- function(df) {
+  shiny$tags$table(
+    class = "table table-sm table-striped table-hover mb-0",
+    shiny$tags$thead(
+      shiny$tags$tr(
+        lapply(names(df), function(col) {
+          shiny$tags$th(class = "small", col)
+        })
+      )
+    ),
+    shiny$tags$tbody(
+      lapply(seq_len(nrow(df)), function(i) {
+        shiny$tags$tr(
+          lapply(names(df), function(col) {
+            shiny$tags$td(
+              class = "small",
+              as.character(df[i, col])
+            )
+          })
+        )
+      })
+    )
+  )
+}
+
 # --- Private helper: render post-hoc result as UI ---
 render_posthoc_result <- function(result, x_axis, params) {
   if (is.null(result)) return(NULL)
@@ -137,49 +163,55 @@ render_posthoc_result <- function(result, x_axis, params) {
       ))
     }
 
+    # Split into Lincon and Cliff sub-tables
+    lincon_cols <- grep(
+      "^Lincon\\.", names(display_df), value = TRUE
+    )
+    cliff_cols <- grep(
+      "^Cliff\\.", names(display_df), value = TRUE
+    )
+
+    # Lincon table: Interaction + lincon columns, strip prefix
+    lincon_df <- display_df[
+      , c("Interaction", lincon_cols), drop = FALSE
+    ]
+    names(lincon_df) <- gsub("^Lincon\\.", "", names(lincon_df))
+
+    # Cliff table: cliff columns only (no Interaction), strip prefix
+    cliff_df <- display_df[, cliff_cols, drop = FALSE]
+    names(cliff_df) <- gsub("^Cliff\\.", "", names(cliff_df))
+
     return(shiny$tags$div(
       class = "mt-3 px-2",
       shiny$tags$h6(
         class = "text-primary mb-2",
         bsicons$bs_icon("table", class = "me-1"),
-        "Combined Pairwise Comparisons"
+        "Pairwise Comparisons"
       ),
       shiny$tags$div(
-        class = "table-responsive",
-        shiny$tags$table(
-          class = paste(
-            "table table-sm table-striped",
-            "table-hover mb-0"
+        class = "d-flex gap-3",
+        # Lincon panel
+        shiny$tags$div(
+          class = "flex-fill",
+          shiny$tags$h6(
+            class = "text-secondary mb-1 small fw-bold",
+            "Lincon (Trimmed Means)"
           ),
-          shiny$tags$thead(
-            shiny$tags$tr(
-              lapply(names(display_df), function(col) {
-                shiny$tags$th(
-                  class = "small",
-                  gsub("_", " ", col)
-                )
-              })
-            )
+          shiny$tags$div(
+            class = "table-responsive",
+            build_posthoc_table(lincon_df)
+          )
+        ),
+        # Cliff panel
+        shiny$tags$div(
+          class = "flex-fill",
+          shiny$tags$h6(
+            class = "text-secondary mb-1 small fw-bold",
+            "Cliff's Delta"
           ),
-          shiny$tags$tbody(
-            lapply(
-              seq_len(nrow(display_df)),
-              function(i) {
-                shiny$tags$tr(
-                  lapply(
-                    names(display_df),
-                    function(col) {
-                      shiny$tags$td(
-                        class = "small",
-                        as.character(
-                          display_df[i, col]
-                        )
-                      )
-                    }
-                  )
-                )
-              }
-            )
+          shiny$tags$div(
+            class = "table-responsive",
+            build_posthoc_table(cliff_df)
           )
         )
       )
