@@ -340,12 +340,19 @@ server <- function(id, input_data, data_version,
               measure_col = m,
               tr_value = tr_val
             )
+          } else if (n_ways == 3) {
+            parametric_tests$perform_anova3way(
+              df = data,
+              x_axis = x_cols,
+              measure_col = m,
+              tr_value = tr_val
+            )
           } else {
             error_handling$simple_error(
               message = paste0(
                 n_ways,
-                "-way parametric test is not yet ",
-                "implemented."
+                "-way parametric test is not ",
+                "supported."
               ),
               operation_name = "statistics_compute"
             )
