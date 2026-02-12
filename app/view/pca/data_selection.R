@@ -44,7 +44,8 @@ tab_ui <- function(ns) {
       choices = NULL,
       multiple = TRUE,
       options = list(
-        placeholder = "Select descriptive columns..."
+        placeholder = "Select descriptive columns...",
+        closeAfterSelect = FALSE
       )
     ),
     # Measurement columns selection
@@ -69,7 +70,8 @@ tab_ui <- function(ns) {
       choices = NULL,
       multiple = TRUE,
       options = list(
-        placeholder = "Select measurement columns..."
+        placeholder = "Select measurement columns...",
+        closeAfterSelect = FALSE
       )
     ),
     shiny$tags$hr(),
