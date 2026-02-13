@@ -95,8 +95,13 @@ render_app_error <- function(error_obj, show_icon = TRUE,
   }
 
   # Combine context and trace into expandable details
+  # Hidden in production — details are logged instead
   details_content <- NULL
-  if (!is.null(context_section) || !is.null(trace_section)) {
+  is_production <- identical(
+    Sys.getenv("R_CONFIG_ACTIVE"), "production"
+  )
+  if (!is_production &&
+      (!is.null(context_section) || !is.null(trace_section))) {
     details_content <- shiny$tags$details(
       class = "app-error-details mt-2",
       shiny$tags$summary(
