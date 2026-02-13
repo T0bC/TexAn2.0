@@ -51,20 +51,28 @@ tab_ui <- function(ns) {
     # Measurement columns selection
     shiny$selectizeInput(
       inputId = ns("measureVar"),
-      label = shiny$tags$span(
-        "Measurement columns ",
-        bslib$tooltip(
-          bsicons$bs_icon(
-            "info-circle", class = "text-muted"
-          ),
-          paste(
-            "Select columns that contain the",
-            "actual measurements, such as texture",
-            "or other parameters, that you want",
-            "to include in the PCA analysis.",
-            "Only select columns that contain",
-            "numerical data!"
+      label = shiny$tags$div(
+        class = "d-flex justify-content-between align-items-center",
+        shiny$tags$span(
+          "Measurement columns ",
+          bslib$tooltip(
+            bsicons$bs_icon(
+              "info-circle", class = "text-muted"
+            ),
+            paste(
+              "Select columns that contain the",
+              "actual measurements, such as texture",
+              "or other parameters, that you want",
+              "to include in the PCA analysis.",
+              "Only select columns that contain",
+              "numerical data!"
+            )
           )
+        ),
+        shiny$actionLink(
+          inputId = ns("select_all_measure"),
+          label = "   Select all",
+          class = "small ms-2"
         )
       ),
       choices = NULL,
@@ -194,6 +202,17 @@ tab_server <- function(input, output, session,
       selected = input$measureVar[
         input$measureVar %in% cols
       ]
+    )
+  })
+
+  # Select all measurement columns on link click
+  shiny$observeEvent(input$select_all_measure, {
+    data <- input_data()
+    if (is.null(data)) return()
+    cols <- column_utils$get_measurement_cols(data)
+    shiny$updateSelectizeInput(
+      session, "measureVar",
+      choices = cols, selected = cols
     )
   })
 
