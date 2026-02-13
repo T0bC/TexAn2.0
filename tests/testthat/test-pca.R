@@ -122,6 +122,66 @@ describe("run_pca", {
 })
 
 # =============================================================================
+# run_pca with meta_cols
+# =============================================================================
+
+describe("run_pca with meta_cols", {
+  test_data <- data.frame(
+    SEX = c("M", "F", "M", "F", "M"),
+    TREATMENT = c("A", "B", "A", "B", "A"),
+    x = c(1.0, 2.0, 3.0, 4.0, 5.0),
+    y = c(2.0, 4.0, 5.0, 4.0, 5.0),
+    z = c(3.0, 1.0, 2.0, 5.0, 4.0),
+    stringsAsFactors = FALSE
+  )
+
+  it("attaches metadata to ind$meta", {
+    res <- pca$run_pca(
+      test_data, c("x", "y", "z"),
+      meta_cols = c("SEX", "TREATMENT")
+    )
+    expect_true(res$success)
+    r <- res$result
+    expect_true("meta" %in% names(r$ind))
+    expect_equal(ncol(r$ind$meta), 2)
+    expect_equal(nrow(r$ind$meta), 5)
+    expect_equal(names(r$ind$meta), c("SEX", "TREATMENT"))
+  })
+
+  it("uses metadata for row labels", {
+    res <- pca$run_pca(
+      test_data, c("x", "y", "z"),
+      meta_cols = c("SEX", "TREATMENT")
+    )
+    r <- res$result
+    labels <- rownames(r$ind$coord)
+    expect_true(all(grepl("\\|", labels)))
+  })
+
+  it("falls back to row numbers without meta_cols", {
+    res <- pca$run_pca(
+      test_data, c("x", "y", "z")
+    )
+    r <- res$result
+    expect_true("meta" %in% names(r$ind))
+    expect_equal(names(r$ind$meta), "Row")
+    labels <- rownames(r$ind$coord)
+    expect_equal(labels, as.character(1:5))
+  })
+
+  it("handles duplicate metadata labels", {
+    res <- pca$run_pca(
+      test_data, c("x", "y", "z"),
+      meta_cols = c("SEX")
+    )
+    r <- res$result
+    labels <- rownames(r$ind$coord)
+    # 3 M's and 2 F's — duplicates get suffixed
+    expect_equal(length(unique(labels)), 5)
+  })
+})
+
+# =============================================================================
 # build_pca_result (internal)
 # =============================================================================
 
