@@ -5,6 +5,7 @@ box::use(
 )
 
 box::use(
+  app/logic/logging,
   app/logic/settings,
   app/view/help_modal,
   app/view/load_data,
@@ -86,6 +87,8 @@ ui <- function(id) {
 #' @export
 server <- function(id) {
   shiny$moduleServer(id, function(input, output, session) {
+    logging$configure_session_logging()
+
     load_data_result <- load_data$server("load_data")
     median_result <- median$server(
       "median",
