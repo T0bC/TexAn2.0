@@ -327,6 +327,12 @@ server <- function(id, input_data, data_version) {
         )
       }
 
+      # Compute display_ncp from optimal result
+      # Show optimal median + 2 extra dims for context
+      display_ncp <- compute_display_ncp(
+        opt_res, pca_result()
+      )
+
       # PCA results panel content
       pca_res <- pca_result()
       pca_content <- if (
@@ -339,7 +345,8 @@ server <- function(id, input_data, data_version) {
         !is.null(pca_res) && pca_res$success
       ) {
         pca_results$render_pca_results(
-          pca_res$result, ns
+          pca_res$result, ns,
+          display_ncp = display_ncp
         )
       } else {
         NULL
@@ -428,4 +435,49 @@ server <- function(id, input_data, data_version) {
     # Return for downstream modules
     invisible(NULL)
   })
+}
+
+
+# =============================================================================
+# Internal helpers (not exported)
+# =============================================================================
+
+#' Compute display_ncp: how many dimensions to show in UI
+#'
+#' Uses the optimal components median recommendation + 2 extra
+#' dimensions for context. Falls back to 5 if optimal result
+#' is unavailable. Clamped to the actual number of components
+#' in the PCA result.
+#'
+#' @param opt_res Optimal components result (may be NULL or failed)
+#' @param pca_res PCA result wrapper (may be NULL or failed)
+#' @return Integer, number of dimensions to display
+compute_display_ncp <- function(opt_res, pca_res) {
+  default_display <- 5
+  extra_dims <- 2
+  min_display <- 3
+
+  # Get median recommendation from optimal result
+  recommended <- if (
+    !is.null(opt_res) && isTRUE(opt_res$success) &&
+    !is.null(opt_res$result$summary$median_ncp)
+  ) {
+    opt_res$result$summary$median_ncp
+  } else {
+    NULL
+  }
+
+  display <- if (!is.null(recommended)) {
+    max(recommended + extra_dims, min_display)
+  } else {
+    default_display
+  }
+
+  # Clamp to actual number of components
+  if (!is.null(pca_res) && isTRUE(pca_res$success)) {
+    total_dims <- ncol(pca_res$result$var$coord)
+    display <- min(display, total_dims)
+  }
+
+  as.integer(display)
 }
