@@ -12,6 +12,7 @@ box::use(
   app/logic/pca/kmo[calculate_kmo],
   app/logic/pca/na_handling[clean_na_rows],
   app/logic/pca/pca[validate_inputs, run_analysis],
+  app/logic/pca/scaling[scale_data],
   app/view/components/sidebar_tabs,
   app/view/error_display,
   app/view/pca/actions,
@@ -125,15 +126,28 @@ server <- function(id, input_data, data_version) {
         return()
       }
 
+      # Scale data if requested
+      analysis_data <- cleaned_data
+      if (isTRUE(input$scale_data)) {
+        scale_res <- scale_data(
+          cleaned_data, measure_cols
+        )
+        if (!scale_res$success) {
+          last_error(scale_res$error)
+          return()
+        }
+        analysis_data <- scale_res$result
+      }
+
       rhino$log$info(
         "PCA: computing correlation plot",
         " ({length(measure_cols)} columns,",
-        " {nrow(cleaned_data)} rows)"
+        " {nrow(analysis_data)} rows)"
       )
 
-      # Compute correlation on cleaned data
+      # Compute correlation on prepared data
       corr_res <- compute_correlation_data(
-        cleaned_data, measure_cols
+        analysis_data, measure_cols
       )
       correlation_result(corr_res)
 
@@ -142,12 +156,12 @@ server <- function(id, input_data, data_version) {
         return()
       }
 
-      # Compute KMO measure on cleaned data
+      # Compute KMO measure on prepared data
       rhino$log$info(
         "PCA: computing KMO measure",
         " ({length(measure_cols)} columns)"
       )
-      numeric_subset <- cleaned_data[
+      numeric_subset <- analysis_data[
         , measure_cols, drop = FALSE
       ]
       kmo_res <- calculate_kmo(numeric_subset)
