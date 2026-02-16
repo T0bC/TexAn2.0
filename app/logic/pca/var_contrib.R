@@ -95,20 +95,9 @@ create_var_contrib_circles_plot <- function(pca_result,
         cos2_vals <- cos2[, dim]
         vars <- rownames(contrib)
 
-        # Radius proportional to sqrt(cos2) so area ~ cos2
-        # Scale to reasonable range
-        min_r <- 0.8
-        max_r <- 3.0
-        cos2_range <- range(cos2_vals)
-        if (cos2_range[2] - cos2_range[1] < 1e-10) {
-          radii <- rep(
-            (min_r + max_r) / 2, length(cos2_vals)
-          )
-        } else {
-          radii <- min_r + (max_r - min_r) *
-            (sqrt(cos2_vals) - sqrt(cos2_range[1])) /
-            (sqrt(cos2_range[2]) - sqrt(cos2_range[1]))
-        }
+        # Uniform radius for all circles
+        uniform_r <- 10.0
+        radii <- rep(uniform_r, length(cos2_vals))
 
         # Use circleRepelLayout with random x starts
         # so repulsion spreads circles horizontally
@@ -170,6 +159,7 @@ create_var_contrib_circles_plot <- function(pca_result,
 
         vertices$dim_label <- dim_label
         vertices$variable <- vars[vertices$id]
+        vertices$cos2 <- cos2_vals[vertices$id]
         vertices$tooltip <- circle_data$tooltip[vertices$id]
         vertices$data_id <- circle_data$data_id[vertices$id]
 
@@ -203,13 +193,18 @@ create_var_contrib_circles_plot <- function(pca_result,
             x = x, y = y, group = interaction(
               dim_label, id
             ),
+            fill = cos2,
             tooltip = tooltip,
             data_id = data_id
           ),
-          fill = "white",
           color = "black",
-          alpha = 0.8,
+          alpha = 0.85,
           linewidth = 0.4
+        ) +
+        ggplot2$scale_fill_viridis_c(
+          option = "C",
+          limits = c(0, 1),
+          name = expression(cos^2)
         ) +
         ggiraph$geom_text_interactive(
           data = circle_df,
@@ -219,7 +214,7 @@ create_var_contrib_circles_plot <- function(pca_result,
             tooltip = tooltip,
             data_id = data_id
           ),
-          size = 4.5,
+          size = 3,
           color = "#333333"
         ) +
         ggplot2$geom_hline(
@@ -229,35 +224,28 @@ create_var_contrib_circles_plot <- function(pca_result,
           linewidth = 0.5
         ) +
         ggplot2$facet_wrap(
-          ~ dim_label, nrow = 1
+          ~ dim_label, nrow = 1,
+          strip.position = "bottom"
         ) +
         ggplot2$coord_fixed() +
         var_contrib_theme() +
         ggplot2$theme(
-          legend.position = "none",
-          plot.title = ggplot2$element_text(
-            hjust = 0.5, size = 16, face = "bold"
-          ),
-          axis.title = ggplot2$element_text(size = 14),
-          axis.text.y = ggplot2$element_text(size = 12),
+          legend.position = "right",
+          axis.title = ggplot2$element_text(size = 10),
+          axis.text.y = ggplot2$element_text(size = 8),
           panel.grid.major.y = ggplot2$element_line(),
           panel.grid.minor = ggplot2$element_blank(),
           axis.text.x = ggplot2$element_blank(),
           axis.ticks.x = ggplot2$element_blank(),
+          strip.placement = "outside",
           strip.text = ggplot2$element_text(
-            size = 13, face = "bold"
+            size = 8, face = "bold"
           )
         ) +
         ggplot2$labs(
           x = NULL,
           y = "Contribution (%)"
         )
-
-      if (show_title) {
-        p <- p + ggplot2$ggtitle(
-          "Variable Contributions \u2014 Circle Pack"
-        )
-      }
 
       p
     },
