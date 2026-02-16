@@ -9,7 +9,7 @@ box::use(
 box::use(
   app/logic/error_handling,
   app/logic/pca/correlation_plot[compute_correlation_data],
-  app/logic/pca/kmo[calculate_kmo],
+  app/logic/pca/kmo[calculate_kmo, kmo_badge_class, kmo_interpretation],
   app/logic/pca/na_handling[clean_na_rows],
   app/logic/pca/optimal_components[calculate_optimal_components],
   app/logic/pca/pca[validate_inputs, run_pca],
@@ -334,13 +334,37 @@ server <- function(id, input_data, data_version) {
       }
 
       kmo_panel <- if (!is.null(kmo_content)) {
-        bslib$accordion_panel(
-          title = shiny$tags$span(
+        kmo_title <- if (
+          !is.null(kmo_res) && isTRUE(kmo_res$success)
+        ) {
+          overall <- kmo_res$result$overall
+          shiny$tags$span(
+            bsicons$bs_icon(
+              "speedometer2", class = "me-1"
+            ),
+            "KMO Measure",
+            shiny$tags$span(class = "mx-1", "\u2014"),
+            shiny$tags$span(
+              class = paste(
+                "badge", kmo_badge_class(overall)
+              ),
+              sprintf("%.3f", overall)
+            ),
+            shiny$tags$small(
+              class = "text-muted ms-1",
+              kmo_interpretation(overall)
+            )
+          )
+        } else {
+          shiny$tags$span(
             bsicons$bs_icon(
               "speedometer2", class = "me-1"
             ),
             "KMO Measure"
-          ),
+          )
+        }
+        bslib$accordion_panel(
+          title = kmo_title,
           value = "kmo_panel",
           kmo_content
         )
@@ -363,13 +387,31 @@ server <- function(id, input_data, data_version) {
       }
 
       opt_panel <- if (!is.null(opt_content)) {
-        bslib$accordion_panel(
-          title = shiny$tags$span(
+        opt_title <- if (
+          !is.null(opt_res) && isTRUE(opt_res$success) &&
+          !is.null(opt_res$result$summary$median_ncp)
+        ) {
+          shiny$tags$span(
+            bsicons$bs_icon(
+              "sliders", class = "me-1"
+            ),
+            "Optimal Number of Components",
+            shiny$tags$span(class = "mx-1", "\u2014"),
+            shiny$tags$span(
+              class = "badge bg-primary",
+              opt_res$result$summary$median_ncp
+            )
+          )
+        } else {
+          shiny$tags$span(
             bsicons$bs_icon(
               "sliders", class = "me-1"
             ),
             "Optimal Number of Components"
-          ),
+          )
+        }
+        bslib$accordion_panel(
+          title = opt_title,
           value = "optimal_panel",
           opt_content
         )
