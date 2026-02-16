@@ -131,9 +131,227 @@ var_contrib_error_parser <- function(error_msg,
 }
 
 
+#' Create a variable contribution overview plot across dimensions
+#'
+#' Point plot with repelled text labels showing each variable's
+#' contribution (%) across the first `display_ncp` dimensions.
+#' A horizontal dashed line marks the expected average (100/p %).
+#'
+#' @param pca_result PCA result list (the $result field from run_pca)
+#' @param display_ncp Integer, number of dimensions to show
+#' @param show_title Logical, whether to show the plot title
+#' @return List with $success, $result (ggplot) or $error
+#' @export
+create_var_contrib_overview_plot <- function(pca_result,
+                                             display_ncp = 5L,
+                                             show_title = TRUE) {
+  error_context <- list(display_ncp = display_ncp)
+
+  error_handling$safe_execute(
+    expr = {
+      if (is.null(pca_result)) stop("pca_result is NULL")
+
+      contrib <- pca_result$var$contrib
+      n_dims <- min(display_ncp, ncol(contrib))
+      dims <- colnames(contrib)[seq_len(n_dims)]
+
+      plot_data <- build_overview_data(
+        contrib, dims, pca_result$eig
+      )
+      threshold <- expected_average(pca_result)
+
+      # X-axis tick labels
+      dim_labels <- levels(plot_data$dim_label)
+      dim_breaks <- seq_along(dim_labels)
+
+      p <- ggplot2$ggplot(
+        plot_data,
+        ggplot2$aes(
+          x = x_pos, y = contrib
+        )
+      ) +
+        ggplot2$geom_point(
+          size = 4,
+          alpha = 0.7,
+          color = "#2166AC"
+        ) +
+        ggiraph$geom_label_repel_interactive(
+          ggplot2$aes(
+            label = variable,
+            tooltip = tooltip,
+            data_id = data_id
+          ),
+          size = 2.2,
+          fill = "white",
+          color = "#333333",
+          max.overlaps = 30,
+          point.size = 4,
+          segment.color = "grey60",
+          segment.size = 0.3,
+          min.segment.length = 0.2,
+          box.padding = 0.35,
+          point.padding = 0.3,
+          force = 2,
+          label.size = 0.15,
+          label.padding = ggplot2$unit(0.12, "lines"),
+          seed = 42
+        ) +
+        ggplot2$geom_hline(
+          yintercept = threshold,
+          linetype = "dashed",
+          color = "grey40",
+          linewidth = 0.5
+        ) +
+        ggplot2$annotate(
+          "text",
+          x = Inf,
+          y = threshold,
+          label = sprintf("Expected avg = %.1f%%", threshold),
+          hjust = 1.05,
+          vjust = -0.5,
+          size = 2.8,
+          color = "grey40"
+        ) +
+        ggplot2$scale_x_continuous(
+          breaks = dim_breaks,
+          labels = dim_labels,
+          expand = ggplot2$expansion(mult = 0.1)
+        ) +
+        ggplot2$geom_vline(
+          xintercept = dim_breaks,
+          color = "grey85",
+          linewidth = 0.3
+        ) +
+        var_contrib_theme() +
+        ggplot2$theme(
+          legend.position = "none",
+          panel.grid.major.y = ggplot2$element_line(),
+          panel.grid.major.x = ggplot2$element_blank()
+        ) +
+        ggplot2$labs(
+          x = NULL,
+          y = "Contribution (%)"
+        )
+
+      if (show_title) {
+        p <- p + ggplot2$ggtitle(
+          "Variable Contributions Across Dimensions"
+        )
+      }
+
+      p
+    },
+    operation_name = "Variable Contribution Overview Plot",
+    context = error_context,
+    error_parser = var_contrib_error_parser
+  )
+}
+
+
 # =============================================================================
 # Internal helpers (not exported)
 # =============================================================================
+
+#' Build long-format data for the overview plot
+build_overview_data <- function(contrib, dims, eig) {
+  rows <- lapply(seq_along(dims), function(i) {
+    dim <- dims[i]
+    vals <- contrib[, dim]
+    dim_idx <- which(rownames(eig) == dim)
+    var_pct <- if (length(dim_idx) == 1) {
+      eig[dim_idx, "variance.percent"]
+    } else {
+      NA_real_
+    }
+    label <- if (!is.na(var_pct)) {
+      sprintf("%s (%.1f%%)", dim, var_pct)
+    } else {
+      dim
+    }
+    data.frame(
+      variable = rownames(contrib),
+      dim = dim,
+      dim_idx = i,
+      dim_label = label,
+      contrib = vals,
+      stringsAsFactors = FALSE
+    )
+  })
+  df <- do.call(rbind, rows)
+
+  df$tooltip <- sprintf(
+    "<b>%s</b><br/>%s<br/>Contribution: %.2f%%",
+    df$variable, df$dim_label, df$contrib
+  )
+  df$data_id <- paste0(
+    "vco_", df$variable, "_", df$dim
+  )
+
+  # Preserve dimension order
+  df$dim_label <- factor(
+    df$dim_label,
+    levels = unique(df$dim_label)
+  )
+
+  # Compute x offsets to dodge overlapping points
+  df$x_pos <- dodge_x_positions(df)
+
+  df
+}
+
+#' Dodge x positions for points with similar y values
+#'
+#' Within each dimension, groups points whose contribution
+#' values are within `threshold_pct` of each other and only
+#' nudges those clusters. Isolated points stay centered.
+dodge_x_positions <- function(df, threshold_pct = 5,
+                              max_offset = 0.3) {
+  x_pos <- numeric(nrow(df))
+
+  for (dim_i in unique(df$dim_idx)) {
+    idx <- which(df$dim_idx == dim_i)
+    n <- length(idx)
+    if (n <= 1) {
+      x_pos[idx] <- dim_i
+      next
+    }
+
+    # Sort by contrib within this dimension
+    ord <- order(df$contrib[idx])
+    sorted_idx <- idx[ord]
+    sorted_vals <- df$contrib[sorted_idx]
+
+    # Group consecutive sorted points within threshold
+    groups <- list()
+    current_group <- sorted_idx[1]
+    for (k in seq_along(sorted_idx)[-1]) {
+      if (sorted_vals[k] - sorted_vals[k - 1] <=
+          threshold_pct) {
+        current_group <- c(current_group, sorted_idx[k])
+      } else {
+        groups <- c(groups, list(current_group))
+        current_group <- sorted_idx[k]
+      }
+    }
+    groups <- c(groups, list(current_group))
+
+    # Assign offsets per group
+    for (grp in groups) {
+      g_n <- length(grp)
+      if (g_n == 1) {
+        x_pos[grp] <- dim_i
+      } else {
+        offsets <- seq(
+          -max_offset, max_offset,
+          length.out = g_n
+        )
+        x_pos[grp] <- dim_i + offsets
+      }
+    }
+  }
+
+  x_pos
+}
 
 #' Validate inputs for variable contribution plot
 validate_var_contrib_inputs <- function(pca_result, dim) {
