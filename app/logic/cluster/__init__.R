@@ -1,3 +1,4 @@
+#' @export
 box::use(
-  cluster[validate_inputs, run_clustering],
+  app/logic/cluster/cluster[validate_inputs, run_clustering],
 )
