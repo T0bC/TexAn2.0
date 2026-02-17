@@ -55,6 +55,7 @@ server <- function(id, input_data, data_version) {
     last_error <- shiny$reactiveVal(NULL)
     result <- shiny$reactiveVal(NULL)
     membership_data <- shiny$reactiveVal(NULL)
+    cluster_summary <- shiny$reactiveVal(NULL)
     hopkins_result <- shiny$reactiveVal(NULL)
     optimal_result <- shiny$reactiveVal(NULL)
     last_optimal_plot <- shiny$reactiveVal(NULL)
@@ -66,6 +67,7 @@ server <- function(id, input_data, data_version) {
     shiny$observeEvent(data_version(), {
       result(NULL)
       membership_data(NULL)
+      cluster_summary(NULL)
       last_error(NULL)
       hopkins_result(NULL)
       optimal_result(NULL)
@@ -249,6 +251,17 @@ server <- function(id, input_data, data_version) {
         md$Cluster <- clustering_result$result$clusters
         membership_data(md)
 
+        # Compute cluster profile from RAW data
+        raw_numeric <- as.matrix(
+          cleaned_data[, measure_cols, drop = FALSE]
+        )
+        cluster_summary(
+          cluster$compute_cluster_summary(
+            raw_numeric,
+            clustering_result$result$clusters
+          )
+        )
+
         rhino$log$info(
           "Cluster: clustering completed successfully"
         )
@@ -412,7 +425,10 @@ server <- function(id, input_data, data_version) {
         bslib$accordion_panel(
           title = results_title,
           value = "cluster_results",
-          cluster_results$render_cluster_results(res, ns)
+          cluster_results$render_cluster_results(
+            res, ns,
+            cluster_summary = cluster_summary()
+          )
         )
       }
 
@@ -467,12 +483,11 @@ server <- function(id, input_data, data_version) {
         )
       },
       content = function(file) {
-        res <- result()
         md <- membership_data()
-        shiny$req(res, md)
+        cs <- cluster_summary()
+        shiny$req(md, cs)
 
         # Build profile sheet
-        cs <- res$cluster_summary
         profile_df <- as.data.frame(
           round(cs$means, 4)
         )
