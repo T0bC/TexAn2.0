@@ -17,6 +17,7 @@ box::use(
   app/view/cluster/cluster_results,
   app/view/cluster/clustering_settings,
   app/view/cluster/data_selection,
+  app/view/cluster/dendrogram,
   app/view/cluster/display_options,
   app/view/cluster/hopkins,
   app/view/cluster/optimal_clusters,
@@ -59,6 +60,7 @@ server <- function(id, input_data, data_version) {
     hopkins_result <- shiny$reactiveVal(NULL)
     optimal_result <- shiny$reactiveVal(NULL)
     last_optimal_plot <- shiny$reactiveVal(NULL)
+    last_dendrogram_plot <- shiny$reactiveVal(NULL)
     na_info <- shiny$reactiveVal(NULL)
     user_modified_k <- shiny$reactiveVal(FALSE)
     updating_k_programmatically <- shiny$reactiveVal(FALSE)
@@ -72,6 +74,7 @@ server <- function(id, input_data, data_version) {
       hopkins_result(NULL)
       optimal_result(NULL)
       last_optimal_plot(NULL)
+      last_dendrogram_plot(NULL)
       na_info(NULL)
       user_modified_k(FALSE)
       updating_k_programmatically(TRUE)
@@ -432,6 +435,29 @@ server <- function(id, input_data, data_version) {
         )
       }
 
+      # Dendrogram visualization panel
+      dendro_panel <- if (!is.null(res)) {
+        is_hclust <- res$details$variant == "hclust"
+        dendro_title <- shiny$tags$span(
+          bsicons$bs_icon(
+            "diagram-3", class = "me-1"
+          ),
+          "Cluster Dendrogram"
+        )
+        dendro_content <- dendrogram$render_dendrogram_content(
+          res, ns
+        )
+        dendro_downloads <- if (is_hclust) {
+          download_buttons(ns, "dendrogram")
+        }
+        bslib$accordion_panel(
+          title = dendro_title,
+          value = "dendrogram_panel",
+          dendro_content,
+          dendro_downloads
+        )
+      }
+
       shiny$tagList(
         na_banner,
         bslib$accordion(
@@ -440,7 +466,8 @@ server <- function(id, input_data, data_version) {
           multiple = TRUE,
           hopkins_panel,
           opt_panel,
-          cluster_results_panel
+          cluster_results_panel,
+          dendro_panel
         )
       )
     })
@@ -464,6 +491,19 @@ server <- function(id, input_data, data_version) {
     register_plot_downloads(
       output, input, "optimal",
       last_optimal_plot, "Optimal_Clusters"
+    )
+
+    # Delegate dendrogram rendering
+    dendrogram$render_output(
+      input, output, session,
+      cluster_result_rv = result,
+      last_plot_rv = last_dendrogram_plot
+    )
+
+    # Register dendrogram download handlers
+    register_plot_downloads(
+      output, input, "dendrogram",
+      last_dendrogram_plot, "Dendrogram"
     )
 
     # Render membership DT table with colored cluster badges
