@@ -146,29 +146,27 @@ create_ind_contrib_plot <- function(pca_result,
       # Build ggplot
       has_group <- "group" %in% names(df)
 
-      base_aes <- if (has_group) {
-        ggplot2$aes(
-          x = dim_label,
-          y = contrib,
-          color = group,
-          tooltip = tooltip,
-          data_id = data_id
-        )
-      } else {
-        ggplot2$aes(
-          x = dim_label,
-          y = contrib,
-          tooltip = tooltip,
-          data_id = data_id
-        )
+      # Always provide a fill column so shape 21 renders
+      if (!has_group) {
+        df$group <- factor("All")
       }
+
+      base_aes <- ggplot2$aes(
+        x = dim_label,
+        y = contrib,
+        fill = group,
+        tooltip = tooltip,
+        data_id = data_id
+      )
 
       p <- ggplot2$ggplot(df, base_aes) +
         ggiraph$geom_jitter_interactive(
           width = 0.25,
           height = 0,
-          size = 2,
-          alpha = 0.6
+          size = 5,
+          shape = 21,
+          color = "white",
+          stroke = 0.6
         ) +
         ggplot2$geom_hline(
           yintercept = threshold,
@@ -205,7 +203,13 @@ create_ind_contrib_plot <- function(pca_result,
       }
 
       if (has_group) {
-        p <- p + ggplot2$labs(color = "Group")
+        p <- p + ggplot2$labs(fill = "Group")
+      } else {
+        p <- p +
+          ggplot2$scale_fill_manual(
+            values = "steelblue"
+          ) +
+          ggplot2$guides(fill = "none")
       }
 
       rhino$log$info(
