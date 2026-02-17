@@ -37,7 +37,8 @@ describe("compute_correlation_data", {
     expect_true("correlation" %in% names(cor_long))
     expect_true("tooltip" %in% names(cor_long))
     expect_true("data_id" %in% names(cor_long))
-    expect_equal(nrow(cor_long), 4)
+    # Lower triangle including diagonal: n*(n+1)/2 = 3
+    expect_equal(nrow(cor_long), 3)
   })
 
   it("returns error for fewer than 2 columns", {
@@ -216,7 +217,8 @@ describe("cor_matrix_to_long", {
       dimnames = list(c("a", "b"), c("a", "b"))
     )
     result <- impl$cor_matrix_to_long(mat, c("a", "b"))
-    expect_equal(nrow(result), 4)
+    # Lower triangle including diagonal: n*(n+1)/2 = 3
+    expect_equal(nrow(result), 3)
     expect_true(is.factor(result$Var1))
     expect_true(is.factor(result$Var2))
   })
