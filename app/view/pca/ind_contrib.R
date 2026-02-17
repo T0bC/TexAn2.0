@@ -28,6 +28,8 @@ render_output <- function(input, output, session,
                           display_ncp = NULL) {
   ns <- session$ns
 
+  last_plot <- shiny$reactiveVal(NULL)
+
   # Unified debounced params
   cached_params <- shiny$reactiveVal(NULL)
 
@@ -90,6 +92,8 @@ render_output <- function(input, output, session,
 
     if (!plot_res$success) return(NULL)
 
+    last_plot(plot_res$result)
+
     # SVG sizing: width scales with dims,
     # height is fixed for jitter readability
     n_dims_vis <- min(
@@ -122,4 +126,6 @@ render_output <- function(input, output, session,
       )
     )
   })
+
+  list(plot = last_plot)
 }
