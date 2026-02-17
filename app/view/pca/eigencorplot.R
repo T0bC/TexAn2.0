@@ -27,6 +27,8 @@ render_output <- function(input, output, session,
                           pca_result, display_ncp = NULL) {
   ns <- session$ns
 
+  last_plot <- shiny$reactiveVal(NULL)
+
   output$eigencorplot <- ggiraph$renderGirafe({
     pca_res <- pca_result()
     if (is.null(pca_res)) return(NULL)
@@ -54,6 +56,8 @@ render_output <- function(input, output, session,
     # Create the plot
     plot_res <- create_eigencor_plot(eigencor_res$result)
     if (!plot_res$success) return(NULL)
+
+    last_plot(plot_res$result)
 
     # Adaptive SVG sizing
     n_dims <- nrow(eigencor_res$result$cor_matrix)
@@ -85,4 +89,6 @@ render_output <- function(input, output, session,
       )
     )
   })
+
+  list(plot = last_plot)
 }
