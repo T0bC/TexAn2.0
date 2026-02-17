@@ -52,23 +52,18 @@ compute_correlation_data <- function(data, measurement_cols) {
   )
 }
 
-#' Render correlation plot as ggiraph
+#' Create the ggplot object for the correlation heatmap
 #'
-#' Takes pre-computed correlation data and renders it as an
-#' interactive ggiraph heatmap. Should not fail if
-#' compute_correlation_data() succeeded. Text sizes, axis
-#' label sizes, and SVG dimensions adapt to the number of
-#' variables.
+#' Builds the ggplot (without girafe wrapping) so it can
+#' be reused for both interactive display and static export.
 #'
 #' @param cor_data List with $cor_long, $ordered_cols, $n_cols
-#' @return ggiraph interactive plot object
+#' @return ggplot object
 #' @export
-render_correlation_girafe <- function(cor_data) {
+create_correlation_ggplot <- function(cor_data) {
   cor_long <- cor_data$cor_long
   n_cols <- cor_data$n_cols
 
-  # Adaptive text size for cell labels
-  # Hide labels when grid is extremely dense
   show_labels <- n_cols <= 35
   cell_text_size <- if (n_cols <= 6) {
     5
@@ -84,7 +79,6 @@ render_correlation_girafe <- function(cor_data) {
     3
   }
 
-  # Adaptive axis label size
   axis_text_size <- if (n_cols <= 10) {
     13
   } else if (n_cols <= 15) {
@@ -97,7 +91,7 @@ render_correlation_girafe <- function(cor_data) {
     9
   }
 
-  p <- ggplot2$ggplot(
+  ggplot2$ggplot(
     cor_long,
     ggplot2$aes(x = Var1, y = Var2, fill = correlation)
   ) +
@@ -138,6 +132,23 @@ render_correlation_girafe <- function(cor_data) {
       legend.title = ggplot2$element_text(size = 12),
       legend.text = ggplot2$element_text(size = 10)
     )
+}
+
+#' Render correlation plot as ggiraph
+#'
+#' Takes pre-computed correlation data and renders it as an
+#' interactive ggiraph heatmap. Should not fail if
+#' compute_correlation_data() succeeded. Text sizes, axis
+#' label sizes, and SVG dimensions adapt to the number of
+#' variables.
+#'
+#' @param cor_data List with $cor_long, $ordered_cols, $n_cols
+#' @return ggiraph interactive plot object
+#' @export
+render_correlation_girafe <- function(cor_data) {
+  n_cols <- cor_data$n_cols
+
+  p <- create_correlation_ggplot(cor_data)
 
   # Adaptive SVG dimensions — smaller SVG = larger text
   # after browser scales it to fit the panel
