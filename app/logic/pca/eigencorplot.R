@@ -197,13 +197,13 @@ create_eigencor_plot <- function(eigencor_data) {
       # Adaptive text size
       total_cells <- n_dims * n_meta
       text_size <- if (total_cells <= 20) {
-        4.5
+        5
       } else if (total_cells <= 50) {
-        3.8
+        4.6
       } else if (total_cells <= 100) {
-        3.2
+        4
       } else {
-        2.8
+        3.8
       }
 
       # Symmetric colour limits
