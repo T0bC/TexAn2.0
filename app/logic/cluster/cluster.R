@@ -117,7 +117,16 @@ run_clustering <- function(data, columns, n_clusters,
         ))
       )
 
-      actual_k <- length(unique(res$clusters))
+      actual_k <- length(unique(
+        res$clusters[res$clusters > 0]
+      ))
+
+      # Compute shared quality metrics for all algorithms
+      shared_stats <- compute_cluster_stats(
+        num_data, res$clusters, metric
+      )
+      res$details <- c(res$details, shared_stats)
+
       rhino$log$info(
         "Cluster: {algorithm} complete ",
         "({length(columns)} cols, ",
@@ -246,6 +255,60 @@ validate_clustering_inputs <- function(num_data,
   invisible(TRUE)
 }
 
+compute_cluster_stats <- function(num_data, clusters,
+                                   metric) {
+  # Only use non-noise points for silhouette
+  valid_mask <- clusters > 0
+  valid_clusters <- clusters[valid_mask]
+  valid_data <- num_data[valid_mask, , drop = FALSE]
+  n <- nrow(valid_data)
+  unique_k <- length(unique(valid_clusters))
+
+  # Silhouette (needs >= 2 clusters and >= 2 points)
+  sil_avg <- NA_real_
+  if (unique_k >= 2 && n >= 2) {
+    dist_mat <- stats$dist(valid_data, method = metric)
+    sil <- cluster$silhouette(valid_clusters, dist_mat)
+    sil_avg <- mean(sil[, "sil_width"])
+  }
+
+  # BSS / TSS and within-SS from data + assignments
+  grand_center <- colMeans(valid_data)
+  totss <- sum(
+    sweep(valid_data, 2, grand_center)^2
+  )
+  withinss <- 0
+  cluster_sizes <- integer(0)
+  for (k in sort(unique(valid_clusters))) {
+    members <- valid_data[
+      valid_clusters == k, , drop = FALSE
+    ]
+    center_k <- colMeans(members)
+    withinss <- withinss + sum(
+      sweep(members, 2, center_k)^2
+    )
+    cluster_sizes <- c(
+      cluster_sizes,
+      stats$setNames(nrow(members), k)
+    )
+  }
+  betweenss <- totss - withinss
+  bss_tss <- if (totss > 0) {
+    betweenss / totss
+  } else {
+    NA_real_
+  }
+
+  list(
+    silhouette_avg = sil_avg,
+    tot_withinss = withinss,
+    betweenss = betweenss,
+    totss = totss,
+    bss_tss = bss_tss,
+    size = as.integer(cluster_sizes)
+  )
+}
+
 run_kmeans <- function(num_data, n_clusters, metric) {
   if (metric == "manhattan") {
     # PAM (partitioning around medoids) supports manhattan
@@ -260,7 +323,6 @@ run_kmeans <- function(num_data, n_clusters, metric) {
       details = list(
         variant = "pam",
         medoids = pam_res$medoids,
-        silhouette_avg = pam_res$silinfo$avg.width,
         objective = pam_res$objective
       )
     )
@@ -274,11 +336,7 @@ run_kmeans <- function(num_data, n_clusters, metric) {
       clusters = km_res$cluster,
       details = list(
         variant = "kmeans",
-        centers = km_res$centers,
-        tot_withinss = km_res$tot.withinss,
-        betweenss = km_res$betweenss,
-        totss = km_res$totss,
-        size = km_res$size
+        centers = km_res$centers
       )
     )
   }
