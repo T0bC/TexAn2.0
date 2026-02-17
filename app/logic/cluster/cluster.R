@@ -127,6 +127,11 @@ run_clustering <- function(data, columns, n_clusters,
       )
       res$details <- c(res$details, shared_stats)
 
+      # Cluster profile: per-cluster variable means
+      cluster_summary <- compute_cluster_summary(
+        num_data, res$clusters
+      )
+
       rhino$log$info(
         "Cluster: {algorithm} complete ",
         "({length(columns)} cols, ",
@@ -134,13 +139,14 @@ run_clustering <- function(data, columns, n_clusters,
       )
 
       list(
-        data = data,
         clusters = res$clusters,
         n_clusters = actual_k,
         algorithm = algorithm,
         metric = metric,
         method = method,
-        details = res$details
+        columns = columns,
+        details = res$details,
+        cluster_summary = cluster_summary
       )
     },
     operation_name = "Cluster Analysis",
@@ -253,6 +259,38 @@ validate_clustering_inputs <- function(num_data,
   }
 
   invisible(TRUE)
+}
+
+compute_cluster_summary <- function(num_data, clusters) {
+  valid_mask <- clusters > 0
+  valid_clusters <- clusters[valid_mask]
+  valid_data <- num_data[valid_mask, , drop = FALSE]
+  col_names <- colnames(valid_data)
+
+  cluster_ids <- sort(unique(valid_clusters))
+  means_list <- lapply(cluster_ids, function(k) {
+    members <- valid_data[
+      valid_clusters == k, , drop = FALSE
+    ]
+    colMeans(members)
+  })
+  means_mat <- do.call(rbind, means_list)
+  rownames(means_mat) <- paste("Cluster", cluster_ids)
+  colnames(means_mat) <- col_names
+
+  # Also compute overall mean for comparison
+  overall <- colMeans(valid_data)
+
+  list(
+    means = means_mat,
+    overall_mean = overall,
+    cluster_ids = cluster_ids,
+    n_per_cluster = vapply(
+      cluster_ids,
+      function(k) sum(valid_clusters == k),
+      integer(1)
+    )
+  )
 }
 
 compute_cluster_stats <- function(num_data, clusters,
