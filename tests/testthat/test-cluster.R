@@ -271,41 +271,43 @@ describe("shared quality metrics", {
 })
 
 # =============================================================================
-# Cluster summary and result structure (all algorithms)
+# compute_cluster_summary (exported helper)
 # =============================================================================
 
-describe("cluster_summary and result structure", {
-  it("kmeans returns cluster_summary with means", {
+describe("compute_cluster_summary", {
+  it("returns correct structure with means", {
     data <- make_cluster_data()
-    r <- cluster$run_clustering(
-      data, c("a", "b"), 2,
-      algorithm = "kmeans", metric = "euclidean"
+    clusters <- rep(1:2, each = 15)
+    cs <- cluster$compute_cluster_summary(
+      as.matrix(data[, c("a", "b")]), clusters
     )
-    expect_true(r$success)
-    cs <- r$result$cluster_summary
     expect_true(!is.null(cs))
     expect_equal(nrow(cs$means), 2)
     expect_equal(ncol(cs$means), 2)
     expect_equal(length(cs$cluster_ids), 2)
     expect_equal(length(cs$n_per_cluster), 2)
-    expect_equal(
-      sum(cs$n_per_cluster), nrow(data)
-    )
+    expect_equal(sum(cs$n_per_cluster), 30)
     expect_true(!is.null(cs$overall_mean))
   })
 
-  it("hierarchical returns cluster_summary", {
+  it("overall_mean matches colMeans of data", {
     data <- make_cluster_data()
-    r <- cluster$run_clustering(
-      data, c("a", "b"), 2,
-      algorithm = "hierarchical",
-      metric = "euclidean", method = "ward"
+    mat <- as.matrix(data[, c("a", "b")])
+    clusters <- rep(1:2, each = 15)
+    cs <- cluster$compute_cluster_summary(mat, clusters)
+    expect_equal(
+      cs$overall_mean,
+      colMeans(mat),
+      tolerance = 1e-10
     )
-    cs <- r$result$cluster_summary
-    expect_true(!is.null(cs))
-    expect_equal(nrow(cs$means), 2)
   })
+})
 
+# =============================================================================
+# Result structure
+# =============================================================================
+
+describe("run_clustering result structure", {
   it("columns field is returned", {
     data <- make_cluster_data()
     r <- cluster$run_clustering(
@@ -315,7 +317,7 @@ describe("cluster_summary and result structure", {
     expect_equal(r$result$columns, c("a", "b"))
   })
 
-  it("result does not contain raw data", {
+  it("result does not contain raw data or membership", {
     data <- make_cluster_data()
     r <- cluster$run_clustering(
       data, c("a", "b"), 2,
@@ -323,6 +325,7 @@ describe("cluster_summary and result structure", {
     )
     expect_null(r$result$data)
     expect_null(r$result$membership_data)
+    expect_null(r$result$cluster_summary)
   })
 })
 
