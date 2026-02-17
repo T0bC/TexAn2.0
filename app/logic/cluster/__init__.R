@@ -6,6 +6,9 @@ box::use(
     run_clustering,
     validate_inputs,
   ],
+  app/logic/cluster/dendrogram[
+    create_dendrogram_plot,
+  ],
   app/logic/cluster/hopkins[compute_hopkins],
   app/logic/cluster/optimal_clusters[
     compute_optimal_clusters,
