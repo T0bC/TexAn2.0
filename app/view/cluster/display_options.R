@@ -453,6 +453,74 @@ tab_server <- function(input, output, session,
     )
   })
 
+  # Update Dim.X/Dim.Y choices when reduction method
+  # or measurement columns change
+  shiny$observe({
+    method <- input$reductionMethod
+    if (is.null(method)) return()
+
+    if (method == "raw") {
+      # Use measurement column names as choices
+      measure_cols <- input$measureVar
+      if (is.null(measure_cols) ||
+          length(measure_cols) == 0) {
+        return()
+      }
+      cur_x <- shiny$isolate(
+        input$clusterBiplotDimX
+      )
+      cur_y <- shiny$isolate(
+        input$clusterBiplotDimY
+      )
+      sel_x <- if (!is.null(cur_x) &&
+                    cur_x %in% measure_cols) {
+        cur_x
+      } else {
+        measure_cols[1]
+      }
+      sel_y <- if (!is.null(cur_y) &&
+                    cur_y %in% measure_cols) {
+        cur_y
+      } else {
+        measure_cols[min(2, length(measure_cols))]
+      }
+      shiny$updateSelectizeInput(
+        session, "clusterBiplotDimX",
+        choices = measure_cols,
+        selected = sel_x
+      )
+      shiny$updateSelectizeInput(
+        session, "clusterBiplotDimY",
+        choices = measure_cols,
+        selected = sel_y
+      )
+    } else if (method == "pca") {
+      # Restore PCA dimension choices; the actual
+      # number of dims is updated after clustering
+      # runs in cluster.R. Here we just ensure the
+      # choices are PCA-style if they aren't already.
+      cur_x <- shiny$isolate(
+        input$clusterBiplotDimX
+      )
+      if (!is.null(cur_x) &&
+          !grepl("^Dim\\.", cur_x)) {
+        dim_choices <- paste0(
+          "Dim.", seq_len(3)
+        )
+        shiny$updateSelectizeInput(
+          session, "clusterBiplotDimX",
+          choices = dim_choices,
+          selected = "Dim.1"
+        )
+        shiny$updateSelectizeInput(
+          session, "clusterBiplotDimY",
+          choices = dim_choices,
+          selected = "Dim.2"
+        )
+      }
+    }
+  })
+
   # Guard: reset reduction method if not-implemented
   # option is selected
   shiny$observeEvent(input$reductionMethod, {
