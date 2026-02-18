@@ -128,6 +128,17 @@ render_output <- function(input, output, session,
       reduction_method <- "pca"
     }
 
+    # Guard: validate dims match the reduction method
+    # to avoid transient errors during method switching
+    if (reduction_method == "pca" &&
+        !grepl("^Dim\\.", dim_x)) {
+      return(NULL)
+    }
+    if (reduction_method == "raw" &&
+        grepl("^Dim\\.", dim_x)) {
+      return(NULL)
+    }
+
     group_cols <- params$group_cols
     if (is.null(group_cols) ||
         length(group_cols) == 0) {
