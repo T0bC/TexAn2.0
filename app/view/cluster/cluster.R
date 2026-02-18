@@ -70,6 +70,13 @@ server <- function(id, input_data, data_version) {
     user_modified_k <- shiny$reactiveVal(FALSE)
     updating_k_programmatically <- shiny$reactiveVal(FALSE)
 
+    # Session-scoped cache for expensive computations
+    # that only depend on data + scaling, not on
+    # n_clusters or algorithm.
+    cached_fingerprint <- shiny$reactiveVal(NULL)
+    cached_hopkins <- shiny$reactiveVal(NULL)
+    cached_optimal <- shiny$reactiveVal(NULL)
+
     # Reset state when new data is loaded
     shiny$observeEvent(data_version(), {
       result(NULL)
@@ -85,6 +92,9 @@ server <- function(id, input_data, data_version) {
       na_info(NULL)
       user_modified_k(FALSE)
       updating_k_programmatically(TRUE)
+      cached_fingerprint(NULL)
+      cached_hopkins(NULL)
+      cached_optimal(NULL)
       rhino$log$info("Cluster: state reset for new data")
     }, ignoreInit = TRUE)
 
@@ -212,19 +222,46 @@ server <- function(id, input_data, data_version) {
           analysis_data <- scale_res$result
         }
 
+        # Build fingerprint for data + scaling config
+        # to enable session-scoped caching of Hopkins
+        # and optimal clusters computations.
+        fp <- paste(
+          paste(sort(measure_cols), collapse = ","),
+          nrow(analysis_data),
+          ncol(analysis_data),
+          scale_method %||% "none",
+          sep = "|"
+        )
+        use_cache <- identical(fp, cached_fingerprint())
+
         # Step 3: Hopkins statistic
-        shiny$incProgress(
-          0.10,
-          detail = "Computing Hopkins statistic..."
-        )
-        rhino$log$info(
-          "Cluster: computing Hopkins statistic",
-          " ({length(measure_cols)} columns,",
-          " {nrow(analysis_data)} samples)"
-        )
-        h_res <- cluster$compute_hopkins(
-          analysis_data, measure_cols
-        )
+        if (use_cache && !is.null(cached_hopkins())) {
+          shiny$incProgress(
+            0.10,
+            detail = paste(
+              "Hopkins statistic",
+              "(cached)..."
+            )
+          )
+          rhino$log$info(
+            "Cluster: Hopkins statistic (cached)"
+          )
+          h_res <- cached_hopkins()
+        } else {
+          shiny$incProgress(
+            0.10,
+            detail = "Computing Hopkins statistic..."
+          )
+          rhino$log$info(
+            "Cluster: computing Hopkins statistic",
+            " ({length(measure_cols)} columns,",
+            " {nrow(analysis_data)} samples)"
+          )
+          h_res <- cluster$compute_hopkins(
+            analysis_data, measure_cols
+          )
+          cached_hopkins(h_res)
+        }
         hopkins_result(h_res)
 
         if (!h_res$success) {
@@ -233,57 +270,74 @@ server <- function(id, input_data, data_version) {
         }
 
         # Step 4: Optimal number of clusters
-        # This step involves bootstrapping and can
-        # take a long time. Show a persistent
-        # notification so the user sees activity
-        # even while the progress bar is frozen.
-        shiny$incProgress(
-          0.15,
-          detail = paste(
-            "Computing optimal number",
-            "of clusters (bootstrapping,",
-            "this may take a moment)..."
+        if (use_cache && !is.null(cached_optimal())) {
+          shiny$incProgress(
+            0.15,
+            detail = paste(
+              "Optimal clusters (cached)..."
+            )
           )
-        )
-        opt_note_id <- shiny$showNotification(
-          shiny$tagList(
-            shiny$tags$div(
-              class = paste(
-                "d-flex align-items-center",
-                "gap-2"
-              ),
+          rhino$log$info(
+            "Cluster: optimal clusters (cached)"
+          )
+          opt_res <- cached_optimal()
+        } else {
+          # This step involves bootstrapping and can
+          # take a long time. Show a persistent
+          # notification so the user sees activity
+          # even while the progress bar is frozen.
+          shiny$incProgress(
+            0.15,
+            detail = paste(
+              "Computing optimal number",
+              "of clusters (bootstrapping,",
+              "this may take a moment)..."
+            )
+          )
+          opt_note_id <- shiny$showNotification(
+            shiny$tagList(
               shiny$tags$div(
                 class = paste(
-                  "spinner-border",
-                  "spinner-border-sm",
-                  "text-primary"
+                  "d-flex align-items-center",
+                  "gap-2"
                 ),
-                role = "status"
-              ),
-              shiny$tags$span(
-                paste(
-                  "Computing optimal clusters",
-                  "(bootstrapping",
-                  nrow(analysis_data),
-                  "samples)...",
-                  "This may take a moment."
+                shiny$tags$div(
+                  class = paste(
+                    "spinner-border",
+                    "spinner-border-sm",
+                    "text-primary"
+                  ),
+                  role = "status"
+                ),
+                shiny$tags$span(
+                  paste(
+                    "Computing optimal clusters",
+                    "(bootstrapping",
+                    nrow(analysis_data),
+                    "samples)...",
+                    "This may take a moment."
+                  )
                 )
               )
-            )
-          ),
-          duration = NULL,
-          closeButton = FALSE,
-          type = "message"
-        )
-        rhino$log$info(
-          "Cluster: computing optimal clusters",
-          " ({length(measure_cols)} columns,",
-          " {nrow(analysis_data)} samples)"
-        )
-        opt_res <- cluster$compute_optimal_clusters(
-          analysis_data, measure_cols
-        )
-        shiny$removeNotification(opt_note_id)
+            ),
+            duration = NULL,
+            closeButton = FALSE,
+            type = "message"
+          )
+          rhino$log$info(
+            "Cluster: computing optimal clusters",
+            " ({length(measure_cols)} columns,",
+            " {nrow(analysis_data)} samples)"
+          )
+          opt_res <- cluster$compute_optimal_clusters(
+            analysis_data, measure_cols
+          )
+          shiny$removeNotification(opt_note_id)
+          cached_optimal(opt_res)
+        }
+
+        # Store fingerprint after both computations
+        cached_fingerprint(fp)
         optimal_result(opt_res)
 
         if (
