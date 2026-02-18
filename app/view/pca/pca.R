@@ -657,7 +657,7 @@ server <- function(id, input_data, data_version) {
         na_banner,
         bslib$accordion(
           id = ns("results_accordion"),
-          open = "correlation_panel",
+          open = "biplot_panel",
           multiple = TRUE,
           bslib$accordion_panel(
             title = shiny$tags$span(
