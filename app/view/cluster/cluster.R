@@ -4,12 +4,10 @@ box::use(
   DT,
   ggiraph,
   ggplot2,
-  htmlwidgets,
   openxlsx,
   plotly,
   rhino,
   shiny,
-  webshot,
 )
 
 box::use(
@@ -564,40 +562,7 @@ server <- function(id, input_data, data_version) {
       )
     }
 
-    # Helper: save heatmap widget to a temp HTML file
-    save_heatmap_html <- function(hm_result) {
-      tmp_html <- tempfile(fileext = ".html")
-      htmlwidgets$saveWidget(
-        hm_result$result, tmp_html,
-        selfcontained = TRUE
-      )
-      tmp_html
-    }
-
-    # Heatmap HTML download handler
-    output$heatmap_dl_html <- shiny$downloadHandler(
-      filename = function() {
-        paste0(
-          "Cluster_Heatmap_",
-          format(Sys.time(), "%Y%m%d_%H%M%S"),
-          ".html"
-        )
-      },
-      content = function(file) {
-        hm_result <- build_heatmap_for_download()
-        if (isTRUE(hm_result$success)) {
-          htmlwidgets$saveWidget(
-            hm_result$result, file,
-            selfcontained = TRUE
-          )
-          rhino$log$info(
-            "Download: Cluster Heatmap HTML"
-          )
-        }
-      }
-    )
-
-    # Heatmap PNG download handler
+    # Heatmap PNG download handler (via kaleido)
     output$heatmap_dl_png <- shiny$downloadHandler(
       filename = function() {
         paste0(
@@ -608,18 +573,112 @@ server <- function(id, input_data, data_version) {
       },
       content = function(file) {
         hm_result <- build_heatmap_for_download()
-        if (isTRUE(hm_result$success)) {
-          tmp_html <- save_heatmap_html(hm_result)
-          on.exit(unlink(tmp_html), add = TRUE)
-          webshot$webshot(
-            tmp_html, file,
-            vwidth = 1200, vheight = 900,
-            delay = 2
+        shiny$req(isTRUE(hm_result$success))
+        # Bypass plotly$save_image because its
+        # newKaleidoScope passes tempfile paths with
+        # Windows backslashes into a Python string,
+        # causing a SyntaxError (\U unicode escape).
+        # We replicate the kaleido v1 logic here with
+        # forward-slash normalised paths.
+        kaleido <- reticulate::import("kaleido")
+        fig_data <- plotly$plotly_build(
+          hm_result$result
+        )$x[c("data", "layout", "config")]
+        fig_json <- jsonlite::toJSON(
+          fig_data, auto_unbox = TRUE, force = TRUE
+        )
+        tmp_json <- tempfile(fileext = ".json")
+        on.exit(unlink(tmp_json), add = TRUE)
+        writeLines(fig_json, tmp_json)
+        json_path <- gsub("\\\\", "/", tmp_json)
+        load_json <- sprintf(
+          "import json; fig = json.load(open('%s'))",
+          json_path
+        )
+        reticulate::py_run_string(load_json)
+        tmp_png <- tempfile(fileext = ".png")
+        on.exit(unlink(tmp_png), add = TRUE)
+        png_path <- gsub("\\\\", "/", tmp_png)
+        opts <- list(
+          format = "png",
+          width = reticulate::r_to_py(1200L),
+          height = reticulate::r_to_py(1200L),
+          scale = reticulate::r_to_py(2L)
+        )
+        plotlyjs <- gsub(
+          "\\\\", "/",
+          system.file(
+            "htmlwidgets/lib/plotlyjs",
+            "plotly-latest.min.js",
+            package = "plotly"
           )
-          rhino$log$info(
-            "Download: Cluster Heatmap PNG"
+        )
+        kopts <- list(plotlyjs = plotlyjs)
+        kaleido$write_fig_sync(
+          reticulate::py$fig, png_path,
+          opts = opts, kopts = kopts
+        )
+        file.copy(tmp_png, file, overwrite = TRUE)
+        rhino$log$info(
+          "Download: Cluster Heatmap PNG"
+        )
+      }
+    )
+
+    # Heatmap SVG download handler (via kaleido)
+    output$heatmap_dl_svg <- shiny$downloadHandler(
+      filename = function() {
+        paste0(
+          "Cluster_Heatmap_",
+          format(Sys.time(), "%Y%m%d_%H%M%S"),
+          ".svg"
+        )
+      },
+      content = function(file) {
+        hm_result <- build_heatmap_for_download()
+        shiny$req(isTRUE(hm_result$success))
+        kaleido <- reticulate::import("kaleido")
+        fig_data <- plotly$plotly_build(
+          hm_result$result
+        )$x[c("data", "layout", "config")]
+        fig_json <- jsonlite::toJSON(
+          fig_data, auto_unbox = TRUE, force = TRUE
+        )
+        tmp_json <- tempfile(fileext = ".json")
+        on.exit(unlink(tmp_json), add = TRUE)
+        writeLines(fig_json, tmp_json)
+        json_path <- gsub("\\\\", "/", tmp_json)
+        load_json <- sprintf(
+          "import json; fig = json.load(open('%s'))",
+          json_path
+        )
+        reticulate::py_run_string(load_json)
+        tmp_svg <- tempfile(fileext = ".svg")
+        on.exit(unlink(tmp_svg), add = TRUE)
+        svg_path <- gsub("\\\\", "/", tmp_svg)
+        opts <- list(
+          format = "svg",
+          width = reticulate::r_to_py(1200L),
+          height = reticulate::r_to_py(1200L),
+          scale = reticulate::r_to_py(2L)
+        )
+        plotlyjs <- gsub(
+          "\\\\", "/",
+          system.file(
+            "htmlwidgets/lib/plotlyjs",
+            "plotly-latest.min.js",
+            package = "plotly"
           )
-        }
+        )
+        kopts <- list(plotlyjs = plotlyjs)
+        kaleido$write_fig_sync(
+          reticulate::py$fig, svg_path,
+          opts = opts, kopts = kopts
+        )
+        file.copy(tmp_svg, file, overwrite = TRUE)
+        rhino$log$info(
+          "Download: Cluster Heatmap SVG"
+        )
       }
     )
 
@@ -703,10 +762,20 @@ download_buttons <- function(ns, id_prefix) {
 #' Create download buttons for the heatmap panel
 #'
 #' @param ns Namespace function
-#' @return tagList with PNG, PDF, and HTML download buttons
+#' @return tagList with a PNG download button
 heatmap_download_button <- function(ns) {
   shiny$tags$div(
     class = "d-flex gap-2 mt-2",
+    shiny$downloadButton(
+      ns("heatmap_dl_svg"),
+      label = shiny$tags$span(
+        bsicons$bs_icon(
+          "filetype-svg", class = "me-1"
+        ),
+        "SVG"
+      ),
+      class = "btn btn-outline-secondary btn-sm"
+    ),
     shiny$downloadButton(
       ns("heatmap_dl_png"),
       label = shiny$tags$span(
@@ -714,16 +783,6 @@ heatmap_download_button <- function(ns) {
           "filetype-png", class = "me-1"
         ),
         "PNG"
-      ),
-      class = "btn btn-outline-secondary btn-sm"
-    ),
-    shiny$downloadButton(
-      ns("heatmap_dl_html"),
-      label = shiny$tags$span(
-        bsicons$bs_icon(
-          "filetype-html", class = "me-1"
-        ),
-        "HTML"
       ),
       class = "btn btn-outline-secondary btn-sm"
     )
