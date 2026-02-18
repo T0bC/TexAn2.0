@@ -29,6 +29,8 @@ box::use(
 #'   NULL for no grouping.
 #' @param show_convex_hull Logical, use convex hull instead of
 #'   95% confidence ellipse
+#' @param show_group_shapes Logical, whether to draw
+#'   ellipses or hulls around groups at all. Default TRUE.
 #' @param point_alpha Character or numeric, "Contribution" or fixed value
 #' @param point_size Character or numeric, "Contribution" or fixed value
 #' @param show_title Logical, whether to show the plot title
@@ -39,6 +41,7 @@ create_biplot <- function(pca_result, dim_x = "Dim.1",
                           layer = "combined",
                           group_cols = NULL,
                           show_convex_hull = FALSE,
+                          show_group_shapes = TRUE,
                           point_alpha = "Contribution",
                           point_size = "Contribution",
                           show_title = TRUE) {
@@ -195,8 +198,9 @@ create_biplot <- function(pca_result, dim_x = "Dim.1",
           )
         }
 
-        # Ellipses or convex hulls (only when grouped)
-        if (has_group) {
+        # Ellipses or convex hulls (only when grouped
+        # and show_group_shapes is enabled)
+        if (has_group && show_group_shapes) {
           if (show_convex_hull) {
             hull_data <- build_hull_data(ind_data)
             if (!is.null(hull_data) && nrow(hull_data) > 0) {
@@ -470,6 +474,11 @@ build_hull_data <- function(ind_data) {
   groups <- levels(ind_data$group)
   hull_list <- lapply(groups, function(g) {
     sub <- ind_data[ind_data$group == g, , drop = FALSE]
+    # Remove non-finite coordinates
+    sub <- sub[
+      is.finite(sub$x) & is.finite(sub$y), ,
+      drop = FALSE
+    ]
     if (nrow(sub) < 3) return(NULL)
     hull_idx <- grDevices$chull(sub$x, sub$y)
     # Close the polygon
