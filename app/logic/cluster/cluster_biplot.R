@@ -44,6 +44,7 @@ create_cluster_biplot <- function(data, measure_cols,
                                    dim_y = "Dim.2",
                                    group_cols = NULL,
                                    show_convex_hull = FALSE,
+                                   show_group_shapes = FALSE,
                                    point_alpha = 1,
                                    point_size = 3,
                                    reduction_method = "pca",
@@ -78,6 +79,7 @@ create_cluster_biplot <- function(data, measure_cols,
           data, measure_cols, meta_cols,
           clusters, dim_x, dim_y,
           group_cols, show_convex_hull,
+          show_group_shapes,
           point_alpha, point_size, show_title
         )
       } else {
@@ -85,6 +87,7 @@ create_cluster_biplot <- function(data, measure_cols,
           data, measure_cols, meta_cols,
           clusters, dim_x, dim_y,
           group_cols, show_convex_hull,
+          show_group_shapes,
           point_alpha, point_size, show_title
         )
       }
@@ -156,6 +159,7 @@ build_pca_biplot <- function(data, measure_cols,
                               dim_x, dim_y,
                               group_cols,
                               show_convex_hull,
+                              show_group_shapes,
                               point_alpha, point_size,
                               show_title) {
   pca_res <- run_pca(
@@ -174,6 +178,7 @@ build_pca_biplot <- function(data, measure_cols,
     layer = "individuals",
     group_cols = group_cols,
     show_convex_hull = show_convex_hull,
+    show_group_shapes = show_group_shapes,
     point_alpha = point_alpha,
     point_size = point_size,
     show_title = show_title
@@ -201,6 +206,7 @@ build_raw_biplot <- function(data, measure_cols,
                               dim_x, dim_y,
                               group_cols,
                               show_convex_hull,
+                              show_group_shapes,
                               point_alpha, point_size,
                               show_title) {
   # Validate that dim_x and dim_y are actual columns
@@ -295,21 +301,44 @@ build_raw_biplot <- function(data, measure_cols,
       ggplot2$labs(fill = "Group")
 
     # Add ellipses or convex hulls for groups
-    if (show_convex_hull) {
-      hull_grp <- build_group_hull_data(
-        plot_df, "group"
-      )
-      if (!is.null(hull_grp) &&
-          nrow(hull_grp) > 0) {
-        p <- p + ggplot2$geom_polygon(
-          data = hull_grp,
-          ggplot2$aes(
-            x = x, y = y,
-            fill = group_label
-          ),
-          alpha = 0.1,
-          show.legend = FALSE
+    if (show_group_shapes) {
+      if (show_convex_hull) {
+        hull_grp <- build_group_hull_data(
+          plot_df, "group"
         )
+        if (!is.null(hull_grp) &&
+            nrow(hull_grp) > 0) {
+          p <- p + ggplot2$geom_polygon(
+            data = hull_grp,
+            ggplot2$aes(
+              x = x, y = y,
+              fill = group_label
+            ),
+            alpha = 0.1,
+            show.legend = FALSE
+          )
+        }
+      } else {
+        # stat_ellipse needs >= 4 points per group
+        group_counts <- table(plot_df$group)
+        valid_groups <- names(
+          group_counts[group_counts >= 4]
+        )
+        if (length(valid_groups) > 0) {
+          ellipse_data <- plot_df[
+            plot_df$group %in% valid_groups, ,
+            drop = FALSE
+          ]
+          p <- p + ggplot2$stat_ellipse(
+            data = ellipse_data,
+            ggplot2$aes(
+              x = x, y = y,
+              colour = group
+            ),
+            level = 0.95,
+            show.legend = FALSE
+          )
+        }
       }
     }
   } else {
@@ -420,6 +449,10 @@ build_group_hull_data <- function(plot_df,
   groups <- unique(plot_df[[group_col]])
   hull_list <- lapply(groups, function(g) {
     sub <- plot_df[plot_df[[group_col]] == g, ]
+    sub <- sub[
+      is.finite(sub$x) & is.finite(sub$y), ,
+      drop = FALSE
+    ]
     if (nrow(sub) < 3) return(NULL)
     hull_idx <- grDevices$chull(sub$x, sub$y)
     hull_idx <- c(hull_idx, hull_idx[1])
@@ -461,7 +494,12 @@ build_cluster_hull_data <- function(ind_coord, clusters,
     idx <- valid_clusters == k
     sub_x <- valid_coord[idx, dim_x]
     sub_y <- valid_coord[idx, dim_y]
-    if (sum(idx) < 3) return(NULL)
+    # Remove non-finite coordinates
+    finite_mask <- is.finite(sub_x) &
+      is.finite(sub_y)
+    sub_x <- sub_x[finite_mask]
+    sub_y <- sub_y[finite_mask]
+    if (length(sub_x) < 3) return(NULL)
 
     hull_idx <- grDevices$chull(sub_x, sub_y)
     # Close the polygon
