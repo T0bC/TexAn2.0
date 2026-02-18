@@ -7,6 +7,7 @@ box::use(
   openxlsx,
   plotly,
   rhino,
+  shinycssloaders,
   shiny,
 )
 
@@ -142,177 +143,216 @@ server <- function(id, input_data, data_version) {
         return()
       }
 
-      # Clean NAs in measurement columns (following PCA pattern)
-      meta_cols <- input$metaData
-      if (is.null(meta_cols)) meta_cols <- character(0)
-      
-      rhino$log$info(
-        "Cluster: cleaning NA rows",
-        " ({length(measure_cols)} measurement columns)"
-      )
-      na_result <- clean_na_rows(
-        data, measure_cols, meta_cols
-      )
-      na_info(na_result)
-      cleaned_data <- na_result$data
-      cleaned_data_store(cleaned_data)
+      shiny$withProgress(
+        message = "Running Cluster Analysis",
+        value = 0, {
 
-      if (nrow(cleaned_data) < 2) {
-        last_error(error_handling$simple_error(
-          message = paste(
-            "After removing rows with missing values,",
-            "fewer than 2 rows remain.",
-            "Consider deselecting columns with many NAs."
-          ),
-          operation_name = "Cluster Data Preparation",
-          context = list(
-            rows_before = na_result$rows_before,
-            rows_removed = na_result$rows_removed,
-            rows_after = na_result$rows_after
-          )
-        ))
-        return()
-      }
+        # Step 1: Clean NAs
+        shiny$incProgress(
+          0.05,
+          detail = "Cleaning missing values..."
+        )
+        meta_cols <- input$metaData
+        if (is.null(meta_cols)) meta_cols <- character(0)
 
-      # Scale data based on user selection (following PCA pattern)
-      analysis_data <- cleaned_data
-      if (!is.null(scale_method) && scale_method != "none") {
-        do_center <- scale_method %in%
-          c("scale_center", "center_only")
-        do_scale <- scale_method == "scale_center"
-        
         rhino$log$info(
-          "Cluster: scaling data",
-          " (center={do_center}, scale={do_scale})"
+          "Cluster: cleaning NA rows",
+          " ({length(measure_cols)} measurement columns)"
         )
-        scale_res <- scale_data(
-          cleaned_data, measure_cols,
-          center = do_center, scale = do_scale
+        na_result <- clean_na_rows(
+          data, measure_cols, meta_cols
         )
-        if (!scale_res$success) {
-          last_error(scale_res$error)
+        na_info(na_result)
+        cleaned_data <- na_result$data
+        cleaned_data_store(cleaned_data)
+
+        if (nrow(cleaned_data) < 2) {
+          last_error(error_handling$simple_error(
+            message = paste(
+              "After removing rows with missing",
+              "values, fewer than 2 rows remain.",
+              "Consider deselecting columns",
+              "with many NAs."
+            ),
+            operation_name = "Cluster Data Preparation",
+            context = list(
+              rows_before = na_result$rows_before,
+              rows_removed = na_result$rows_removed,
+              rows_after = na_result$rows_after
+            )
+          ))
           return()
         }
-        analysis_data <- scale_res$result
-      }
 
-      # Compute Hopkins statistic on prepared data
-      rhino$log$info(
-        "Cluster: computing Hopkins statistic",
-        " ({length(measure_cols)} columns,",
-        " {nrow(analysis_data)} samples)"
-      )
-      h_res <- cluster$compute_hopkins(
-        analysis_data, measure_cols
-      )
-      hopkins_result(h_res)
-
-      if (!h_res$success) {
-        last_error(h_res$error)
-        return()
-      }
-
-      # Compute optimal number of clusters
-      rhino$log$info(
-        "Cluster: computing optimal clusters",
-        " ({length(measure_cols)} columns,",
-        " {nrow(analysis_data)} samples)"
-      )
-      opt_res <- cluster$compute_optimal_clusters(
-        analysis_data, measure_cols
-      )
-      optimal_result(opt_res)
-
-      # Auto-fill n_clusters from optimal median if user
-      # hasn't manually changed the value
-      if (
-        isTRUE(opt_res$success) &&
-        !user_modified_k()
-      ) {
-        median_k <- opt_res$result$summary$median_k
-        updating_k_programmatically(TRUE)
-        shiny$updateNumericInput(
-          session, "n_clusters",
-          value = median_k
+        # Step 2: Scale data
+        shiny$incProgress(
+          0.10,
+          detail = "Scaling data..."
         )
-        n_clusters <- median_k
+        analysis_data <- cleaned_data
+        if (!is.null(scale_method) &&
+            scale_method != "none") {
+          do_center <- scale_method %in%
+            c("scale_center", "center_only")
+          do_scale <- scale_method == "scale_center"
+
+          rhino$log$info(
+            "Cluster: scaling data",
+            " (center={do_center},",
+            " scale={do_scale})"
+          )
+          scale_res <- scale_data(
+            cleaned_data, measure_cols,
+            center = do_center, scale = do_scale
+          )
+          if (!scale_res$success) {
+            last_error(scale_res$error)
+            return()
+          }
+          analysis_data <- scale_res$result
+        }
+
+        # Step 3: Hopkins statistic
+        shiny$incProgress(
+          0.10,
+          detail = "Computing Hopkins statistic..."
+        )
         rhino$log$info(
-          "Cluster: auto-set n_clusters={median_k}",
-          " from optimal median"
+          "Cluster: computing Hopkins statistic",
+          " ({length(measure_cols)} columns,",
+          " {nrow(analysis_data)} samples)"
         )
-      }
-
-      # Run clustering analysis on prepared data
-      cluster_method <- input$cluster_method
-      clustering_result <- cluster$run_clustering(
-        analysis_data, measure_cols, n_clusters,
-        algorithm = algorithm,
-        metric = cluster_metric,
-        method = cluster_method
-      )
-
-      if (clustering_result$success) {
-        result(clustering_result$result)
-        analysis_data_store(analysis_data)
-        measure_cols_store(measure_cols)
-
-        # Build membership data from RAW cleaned data
-        # Only include user-selected metadata + measure cols
-        keep_cols <- c(meta_cols, measure_cols)
-        md <- cleaned_data[, keep_cols, drop = FALSE]
-        md$Cluster <- clustering_result$result$clusters
-        membership_data(md)
-
-        # Compute cluster profile from RAW data
-        raw_numeric <- as.matrix(
-          cleaned_data[, measure_cols, drop = FALSE]
+        h_res <- cluster$compute_hopkins(
+          analysis_data, measure_cols
         )
-        cluster_summary(
-          cluster$compute_cluster_summary(
-            raw_numeric,
-            clustering_result$result$clusters
+        hopkins_result(h_res)
+
+        if (!h_res$success) {
+          last_error(h_res$error)
+          return()
+        }
+
+        # Step 4: Optimal number of clusters
+        shiny$incProgress(
+          0.15,
+          detail = paste(
+            "Computing optimal number",
+            "of clusters..."
           )
         )
+        rhino$log$info(
+          "Cluster: computing optimal clusters",
+          " ({length(measure_cols)} columns,",
+          " {nrow(analysis_data)} samples)"
+        )
+        opt_res <- cluster$compute_optimal_clusters(
+          analysis_data, measure_cols
+        )
+        optimal_result(opt_res)
 
-        # Update biplot dimension choices based on
-        # the number of measurement columns (PCA dims)
-        n_dims <- min(
-          length(measure_cols),
-          nrow(analysis_data) - 1
-        )
-        dim_choices <- paste0(
-          "Dim.", seq_len(n_dims)
-        )
-        for (dim_id in c(
-          "clusterBiplotDimX",
-          "clusterBiplotDimY"
-        )) {
-          current <- input[[dim_id]]
-          sel <- if (!is.null(current) &&
-                     current %in% dim_choices) {
-            current
-          } else {
-            dim_choices[min(
-              which(dim_id == c(
-                "clusterBiplotDimX",
-                "clusterBiplotDimY"
-              )),
-              length(dim_choices)
-            )]
-          }
-          shiny$updateSelectizeInput(
-            session, dim_id,
-            choices = dim_choices,
-            selected = sel
+        if (
+          isTRUE(opt_res$success) &&
+          !user_modified_k()
+        ) {
+          median_k <- opt_res$result$summary$median_k
+          updating_k_programmatically(TRUE)
+          shiny$updateNumericInput(
+            session, "n_clusters",
+            value = median_k
+          )
+          n_clusters <- median_k
+          rhino$log$info(
+            "Cluster: auto-set",
+            " n_clusters={median_k}",
+            " from optimal median"
           )
         }
 
-        rhino$log$info(
-          "Cluster: clustering completed successfully"
+        # Step 5: Run clustering
+        shiny$incProgress(
+          0.30,
+          detail = "Running clustering algorithm..."
         )
-      } else {
-        last_error(clustering_result$error)
-      }
+        cluster_method <- input$cluster_method
+        clustering_result <- cluster$run_clustering(
+          analysis_data, measure_cols, n_clusters,
+          algorithm = algorithm,
+          metric = cluster_metric,
+          method = cluster_method
+        )
+
+        if (clustering_result$success) {
+          # Step 6: Build results
+          shiny$incProgress(
+            0.20,
+            detail = "Building results..."
+          )
+          result(clustering_result$result)
+          analysis_data_store(analysis_data)
+          measure_cols_store(measure_cols)
+
+          keep_cols <- c(meta_cols, measure_cols)
+          md <- cleaned_data[
+            , keep_cols, drop = FALSE
+          ]
+          md$Cluster <- clustering_result$result$clusters
+          membership_data(md)
+
+          raw_numeric <- as.matrix(
+            cleaned_data[
+              , measure_cols, drop = FALSE
+            ]
+          )
+          cluster_summary(
+            cluster$compute_cluster_summary(
+              raw_numeric,
+              clustering_result$result$clusters
+            )
+          )
+
+          # Update biplot dimension choices
+          n_dims <- min(
+            length(measure_cols),
+            nrow(analysis_data) - 1
+          )
+          dim_choices <- paste0(
+            "Dim.", seq_len(n_dims)
+          )
+          for (dim_id in c(
+            "clusterBiplotDimX",
+            "clusterBiplotDimY"
+          )) {
+            current <- input[[dim_id]]
+            sel <- if (!is.null(current) &&
+                       current %in% dim_choices) {
+              current
+            } else {
+              dim_choices[min(
+                which(dim_id == c(
+                  "clusterBiplotDimX",
+                  "clusterBiplotDimY"
+                )),
+                length(dim_choices)
+              )]
+            }
+            shiny$updateSelectizeInput(
+              session, dim_id,
+              choices = dim_choices,
+              selected = sel
+            )
+          }
+
+          shiny$incProgress(
+            0.10,
+            detail = "Done!"
+          )
+          rhino$log$info(
+            "Cluster: completed successfully"
+          )
+        } else {
+          last_error(clustering_result$error)
+        }
+      }) # end withProgress
     })
 
     # Main content: placeholder, error, or results
