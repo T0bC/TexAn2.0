@@ -67,6 +67,9 @@ render_output <- function(input, output, session,
       params$dim_y,
       paste(params$group_cols, collapse = ","),
       params$reduction_method,
+      params$show_hull,
+      params$point_alpha,
+      params$point_size,
       sep = "|"
     )
   }
@@ -76,7 +79,10 @@ render_output <- function(input, output, session,
       dim_x = input$clusterBiplotDimX,
       dim_y = input$clusterBiplotDimY,
       group_cols = input$groupBiplot,
-      reduction_method = input$reductionMethod
+      reduction_method = input$reductionMethod,
+      show_hull = input$showConvexHull,
+      point_alpha = input$pointAlpha,
+      point_size = input$pointSize
     )
 
     current <- cached_params()
@@ -124,6 +130,10 @@ render_output <- function(input, output, session,
       group_cols <- NULL
     }
 
+    show_hull <- isTRUE(params$show_hull)
+    point_alpha <- params$point_alpha %||% 1
+    point_size <- params$point_size %||% 3
+
     # Resolve "CLUSTER" pseudo-column: inject cluster
     # assignments as a real column in the data
     meta_cols <- character(0)
@@ -160,6 +170,9 @@ render_output <- function(input, output, session,
       dim_x = dim_x,
       dim_y = dim_y,
       group_cols = group_cols,
+      show_convex_hull = show_hull,
+      point_alpha = point_alpha,
+      point_size = point_size,
       reduction_method = reduction_method,
       show_title = TRUE
     )
