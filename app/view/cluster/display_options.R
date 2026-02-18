@@ -105,6 +105,81 @@ tab_ui <- function(ns) {
       )
     ),
     shiny$tags$hr(),
+    # Cluster Biplot settings
+    shiny$h6(
+      class = "text-muted mb-2 mt-1",
+      "Cluster Biplot"
+    ),
+    shiny$selectInput(
+      inputId = ns("reductionMethod"),
+      label = shiny$tags$span(
+        "Reduction Method ",
+        bslib$tooltip(
+          bsicons$bs_icon(
+            "info-circle", class = "text-muted"
+          ),
+          paste(
+            "Dimensionality reduction method",
+            "used to project the data for the",
+            "cluster biplot."
+          )
+        )
+      ),
+      choices = c(
+        "PCA" = "pca",
+        "t-SNE (not implemented)" = "tsne",
+        "UMAP (not implemented)" = "umap"
+      ),
+      selected = "pca"
+    ),
+    shiny$fluidRow(
+      shiny$column(
+        6,
+        shiny$selectizeInput(
+          inputId = ns("clusterBiplotDimX"),
+          label = shiny$tags$span(
+            "Dim.X ",
+            bslib$tooltip(
+              bsicons$bs_icon(
+                "info-circle",
+                class = "text-muted"
+              ),
+              paste(
+                "Select the dimension for the",
+                "x-axis of the cluster biplot."
+              )
+            )
+          ),
+          choices = c(
+            "Dim.1", "Dim.2", "Dim.3"
+          ),
+          selected = "Dim.1"
+        )
+      ),
+      shiny$column(
+        6,
+        shiny$selectizeInput(
+          inputId = ns("clusterBiplotDimY"),
+          label = shiny$tags$span(
+            "Dim.Y ",
+            bslib$tooltip(
+              bsicons$bs_icon(
+                "info-circle",
+                class = "text-muted"
+              ),
+              paste(
+                "Select the dimension for the",
+                "y-axis of the cluster biplot."
+              )
+            )
+          ),
+          choices = c(
+            "Dim.1", "Dim.2", "Dim.3"
+          ),
+          selected = "Dim.2"
+        )
+      )
+    ),
     # Group Biplot
     shiny$selectizeInput(
       inputId = ns("groupBiplot"),
@@ -220,6 +295,20 @@ tab_server <- function(input, output, session,
       session, "height",
       value = 8
     )
+    shiny$updateSelectInput(
+      session, "reductionMethod",
+      selected = "pca"
+    )
+    shiny$updateSelectizeInput(
+      session, "clusterBiplotDimX",
+      choices = c("Dim.1", "Dim.2", "Dim.3"),
+      selected = "Dim.1"
+    )
+    shiny$updateSelectizeInput(
+      session, "clusterBiplotDimY",
+      choices = c("Dim.1", "Dim.2", "Dim.3"),
+      selected = "Dim.2"
+    )
   }, ignoreInit = TRUE)
 
   # Update labelColumn choices from selected metaData
@@ -253,4 +342,31 @@ tab_server <- function(input, output, session,
       choices = meta, selected = sel
     )
   })
+
+  # Guard: reset reduction method if not-implemented
+  # option is selected
+  shiny$observeEvent(input$reductionMethod, {
+    method <- input$reductionMethod
+    if (!is.null(method) &&
+        method %in% c("tsne", "umap")) {
+      label <- switch(
+        method,
+        tsne = "t-SNE",
+        umap = "UMAP"
+      )
+      shiny$showNotification(
+        paste0(
+          label,
+          " is not implemented yet. ",
+          "Reverting to PCA."
+        ),
+        type = "warning",
+        duration = 4
+      )
+      shiny$updateSelectInput(
+        session, "reductionMethod",
+        selected = "pca"
+      )
+    }
+  }, ignoreInit = TRUE)
 }
