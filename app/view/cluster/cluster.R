@@ -525,13 +525,13 @@ server <- function(id, input_data, data_version) {
         na_banner,
         bslib$accordion(
           id = ns("results_accordion"),
-          open = "hopkins_panel",
+          open = "cluster_biplot_panel",
           multiple = TRUE,
           hopkins_panel,
           opt_panel,
+          biplot_panel,
           cluster_results_panel,
-          heatmap_panel,
-          biplot_panel
+          heatmap_panel
         )
       )
     })
