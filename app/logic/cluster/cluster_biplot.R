@@ -6,6 +6,10 @@ box::use(
 )
 
 box::use(
+  app/logic/cluster/cluster[
+    CLUSTER_PALETTE,
+    cluster_color,
+  ],
   app/logic/error_handling,
   app/logic/pca/biplot[create_biplot],
   app/logic/pca/pca[run_pca],
@@ -399,6 +403,19 @@ add_cluster_overlays <- function(p, ind_coord,
   )
 
   if (!is.null(hull_data) && nrow(hull_data) > 0) {
+    # Build named color vector from shared palette
+    cluster_levels <- levels(hull_data$cluster_label)
+    n_cl <- length(cluster_levels)
+    cl_colors <- CLUSTER_PALETTE[
+      seq_len(min(n_cl, length(CLUSTER_PALETTE)))
+    ]
+    if (n_cl > length(CLUSTER_PALETTE)) {
+      cl_colors <- rep_len(
+        CLUSTER_PALETTE, n_cl
+      )
+    }
+    names(cl_colors) <- cluster_levels
+
     p <- p + ggplot2$geom_polygon(
       data = hull_data,
       ggplot2$aes(
@@ -436,7 +453,12 @@ add_cluster_overlays <- function(p, ind_coord,
       )
     }
 
-    p <- p + ggplot2$labs(colour = "Cluster")
+    p <- p +
+      ggplot2$scale_colour_manual(
+        values = cl_colors,
+        name = "Cluster"
+      ) +
+      ggplot2$labs(colour = "Cluster")
   }
 
   p
