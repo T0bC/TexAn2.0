@@ -275,12 +275,6 @@ tab_ui <- function(ns) {
           max = 50
         )
       )
-    ),
-    # Show title checkbox
-    shiny$checkboxInput(
-      inputId = ns("title"),
-      label = "Show Title",
-      value = TRUE
     )
   )
 }
