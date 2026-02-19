@@ -212,6 +212,18 @@
 }
 
 // =============================================================================
+// Global: DT Filter Dropdowns
+// =============================================================================
+
+// Prevent filter dropdowns from collapsing to the column width on narrow
+// columns (e.g. "ID"). The select element gets a min-width so the options
+// remain readable even when the column itself is very narrow.
+.dataTables_wrapper thead select {
+  min-width: 120px;
+  width: auto !important;
+}
+
+// =============================================================================
 // Global: Recalculating State
 // =============================================================================
 
