@@ -26,6 +26,7 @@ box::use(
   app/view/pca/eigencorplot,
   app/view/pca/ind_contrib,
   app/view/pca/var_contrib,
+  app/view/pca/var_contrib_jitter,
   app/view/pca/data_selection,
   app/view/pca/kmo_results,
   app/view/pca/na_summary,
@@ -117,6 +118,13 @@ server <- function(id, input_data, data_version) {
 
     # Delegate variable contribution chart rendering
     var_contrib_state <- var_contrib$render_output(
+      input, output, session,
+      pca_result = pca_result,
+      display_ncp = display_ncp
+    )
+
+    # Delegate variable contribution jitter plot rendering
+    var_contrib_jitter_state <- var_contrib_jitter$render_output(
       input, output, session,
       pca_result = pca_result,
       display_ncp = display_ncp
@@ -591,6 +599,30 @@ server <- function(id, input_data, data_version) {
         )
       }
 
+      # Variable contribution jitter plot panel (TEST)
+      var_contrib_jitter_content <- if (
+        !is.null(pca_res) && isTRUE(pca_res$success)
+      ) {
+        ggiraph$girafeOutput(
+          ns("var_contrib_jitter"), height = "auto"
+        )
+      }
+
+      var_contrib_jitter_panel <- if (
+        !is.null(var_contrib_jitter_content)
+      ) {
+        bslib$accordion_panel(
+          title = shiny$tags$span(
+            bsicons$bs_icon(
+              "people-fill", class = "me-1"
+            ),
+            "Variable Contributions TEST"
+          ),
+          value = "var_contrib_jitter_panel",
+          var_contrib_jitter_content
+        )
+      }
+
       # Individual contribution jitter plot panel
       ind_contrib_content <- if (
         !is.null(pca_res) && isTRUE(pca_res$success)
@@ -676,6 +708,7 @@ server <- function(id, input_data, data_version) {
           biplot_panel,
           biplot3d_panel,
           var_contrib_panel,
+          var_contrib_jitter_panel,
           ind_contrib_panel,
           eigencor_panel
         )
