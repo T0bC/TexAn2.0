@@ -143,62 +143,39 @@ render_eigenvalues_table <- function(eig) {
     "Variance (%)", "Cumulative (%)"
   )
 
-  shiny$tags$div(
-    class = "table-responsive",
-    shiny$tags$table(
-      class = "table table-sm table-striped",
-      shiny$tags$thead(
-        shiny$tags$tr(
-          lapply(names(eig_df), function(col) {
-            cls <- if (col != "Component") {
-              "text-end"
-            } else {
-              ""
-            }
-            shiny$tags$th(class = cls, col)
-          })
+  n_rows <- nrow(eig_df)
+  dom_string <- if (n_rows <= 10) "t" else "tip"
+
+  DT$datatable(
+    eig_df,
+    options = list(
+      pageLength = 10,
+      scrollX = TRUE,
+      dom = dom_string,
+      order = list(),
+      columnDefs = list(
+        list(
+          className = "dt-right",
+          targets = seq(1, ncol(eig_df) - 1)
         )
-      ),
-      shiny$tags$tbody(
-        lapply(seq_len(nrow(eig_df)), function(i) {
-          row <- eig_df[i, ]
-          shiny$tags$tr(
-            shiny$tags$td(row$Component),
-            shiny$tags$td(
-              class = "text-end",
-              sprintf("%.3f", row$Eigenvalue)
-            ),
-            shiny$tags$td(
-              class = "text-end",
-              sprintf(
-                "%.2f%%", row$`Variance (%)`
-              )
-            ),
-            shiny$tags$td(
-              class = "text-end",
-              shiny$tags$span(
-                class = variance_badge_class(
-                  row$`Cumulative (%)`
-                ),
-                sprintf(
-                  "%.2f%%",
-                  row$`Cumulative (%)`
-                )
-              )
-            )
-          )
-        })
       )
+    ),
+    rownames = FALSE,
+    class = paste(
+      "table table-sm table-striped",
+      "table-hover compact"
     )
-  )
+  ) |>
+    DT$formatStyle(
+      "Cumulative (%)",
+      backgroundColor = DT$styleInterval(
+        c(60, 80),
+        c("#6c757d40", "#ffc10740", "#19875440")
+      ),
+      fontWeight = "bold"
+    )
 }
 
-
-variance_badge_class <- function(cum_var) {
-  if (cum_var >= 80) "badge bg-success"
-  else if (cum_var >= 60) "badge bg-warning text-dark"
-  else "badge bg-secondary"
-}
 
 
 render_variable_results <- function(var) {
