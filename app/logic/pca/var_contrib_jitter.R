@@ -196,7 +196,7 @@ create_var_contrib_jitter_plot <- function(pca_result,
       label_df <- df[df$show_label, , drop = FALSE]
 
       # Adaptive point size
-      point_size <- if (n_vars_filtered <= 15) 9 else 8
+      point_size <- if (n_vars_filtered <= 15) 10 else 9
 
       p <- ggplot2$ggplot(
         df,
