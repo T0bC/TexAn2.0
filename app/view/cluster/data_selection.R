@@ -13,7 +13,7 @@ box::use(
 #' @export
 tab_ui <- function(ns) {
   sidebar_tabs$create_tab(
-    icon = "sliders",
+    icon = "table",
     tooltip_text = "Data Selection",
     value = "data_tab",
     shiny$h6(class = "text-muted mb-3", "Data Selection"),
