@@ -43,6 +43,7 @@ create_var_contrib_jitter_plot <- function(pca_result,
 
       contrib <- pca_result$var$contrib
       cos2 <- pca_result$var$cos2
+      coord <- pca_result$var$coord
       n_dims <- min(display_ncp, ncol(contrib))
       n_vars <- nrow(contrib)
       dims <- colnames(contrib)[seq_len(n_dims)]
@@ -53,12 +54,17 @@ create_var_contrib_jitter_plot <- function(pca_result,
       rows <- list()
       for (i in seq_along(dims)) {
         d <- dims[i]
+        loading <- as.numeric(coord[, d])
         rows[[i]] <- data.frame(
           variable = rownames(contrib),
           dim = d,
           dim_idx = i,
           contrib = as.numeric(contrib[, d]),
           cos2 = as.numeric(cos2[, d]),
+          loading = loading,
+          loading_sign = ifelse(
+            loading >= 0, "positive", "negative"
+          ),
           stringsAsFactors = FALSE,
           row.names = NULL
         )
@@ -135,8 +141,11 @@ create_var_contrib_jitter_plot <- function(pca_result,
         df$dim_label, levels = dim_labels
       )
 
-      # Dummy x position for strip layout
-      df$x <- 0
+      # Pre-compute jittered x position (fixed seed)
+      set.seed(42)
+      df$x <- stats::runif(
+        nrow(df), min = -0.25, max = 0.25
+      )
 
       # Smart filtering: decide which points get labels
       n_vars_filtered <- if (high_dim) {
@@ -152,18 +161,32 @@ create_var_contrib_jitter_plot <- function(pca_result,
         df, n_vars_filtered, length(dims)
       )
 
+      # Label text with direction prefix
+      df$label_text <- ifelse(
+        df$loading_sign == "positive",
+        paste0("\u25B2 ", df$variable),
+        paste0("\u25BC ", df$variable)
+      )
+
       # Tooltips
+      sign_txt <- ifelse(
+        df$loading_sign == "positive",
+        "positive", "negative"
+      )
       df$tooltip <- sprintf(
         paste0(
           "<b>%s</b>",
           "<br/>%s",
           "<br/>Contribution: %.2f%%",
-          "<br/>cos\u00b2: %.4f"
+          "<br/>cos\u00b2: %.4f",
+          "<br/>Loading: %s (%.4f)"
         ),
         df$variable,
         df$dim_label,
         df$contrib,
-        df$cos2
+        df$cos2,
+        sign_txt,
+        df$loading
       )
       df$data_id <- paste0(
         "vcj_", df$variable, "_", df$dim
@@ -189,38 +212,43 @@ create_var_contrib_jitter_plot <- function(pca_result,
           color = "white",
           stroke = 0.6,
           size = point_size,
-          position = ggplot2$position_jitter(
-            width = 0.25, height = 0, seed = 42
-          )
+          position = "identity"
         ) +
         ggiraph$geom_text_repel_interactive(
           data = label_df,
           ggplot2$aes(
-            label = variable,
+            label = label_text,
+            color = loading_sign,
             tooltip = tooltip,
             data_id = data_id
           ),
           size = 3.8,
           fontface = "bold",
-          color = "grey20",
-          max.overlaps = 20,
-          segment.color = "grey50",
+          max.overlaps = Inf,
+          segment.color = "grey30",
           segment.size = 0.4,
           min.segment.length = 0.2,
+          #segment.curvature = 0.1,
+          #segment.ncp = 2,
+          #segment.angle = 130,
           box.padding = 0.5,
           point.padding = 0.3,
           direction = "y",
           hjust = 0,
           xlim = c(0.4, NA),
-          position = ggplot2$position_jitter(
-            width = 0.25, height = 0, seed = 42
-          ),
           show.legend = FALSE
         ) +
         ggplot2$facet_wrap(
           ~ dim_label,
           nrow = 1,
           scales = "free_y"
+        ) +
+        ggplot2$scale_color_manual(
+          values = c(
+            "positive" = "#2166AC",
+            "negative" = "#B2182B"
+          ),
+          guide = "none"
         ) +
         ggplot2$scale_fill_viridis_c(
           option = "viridis",
