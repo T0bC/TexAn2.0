@@ -118,9 +118,10 @@ render_output <- function(input, output, session,
 
     ggiraph$girafe(
       ggobj = plot_res$result,
-      width_svg = 7,
-      height_svg = 6,
+      width_svg = 10,
+      height_svg = 7,
       options = list(
+        ggiraph$opts_sizing(rescale = TRUE, width = 1),
         ggiraph$opts_hover(
           css = paste0(
             "fill-opacity:0.8;",
