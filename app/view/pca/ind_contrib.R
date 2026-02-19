@@ -44,7 +44,7 @@ render_output <- function(input, output, session,
   shiny$observe({
     new_params <- list(
       group_cols = input$GroupBiplot,
-      show_title = input$title
+      show_title = TRUE
     )
 
     current <- cached_params()
