@@ -108,29 +108,40 @@ tab_ui <- function(ns) {
       ),
       selected = "scale_center"
     ),
-    shiny$tags$small(
-      class = "text-muted",
-      shiny$tags$dl(
-        class = "mb-0",
-        shiny$tags$dt("Scale & Center"),
-        shiny$tags$dd(
-          class = "ms-2 mb-1",
-          "Z-score standardization (mean=0, SD=1).",
-          " Best when variables have different",
-          " units or magnitudes."
+    bslib$accordion(
+      id = ns("scaling_help_accordion"),
+      open = FALSE,
+      bslib$accordion_panel(
+        title = shiny$tags$small(
+          class = "text-muted",
+          "Scaling method details"
         ),
-        shiny$tags$dt("Center only"),
-        shiny$tags$dd(
-          class = "ms-2 mb-1",
-          "Subtract mean, keep original variance.",
-          " Use when all variables share the same",
-          " unit and variance differences matter."
-        ),
-        shiny$tags$dt("No scaling"),
-        shiny$tags$dd(
-          class = "ms-2 mb-0",
-          "Use raw data. Only if data is already",
-          " preprocessed or on the same scale."
+        value = "scaling_details",
+        shiny$tags$small(
+          class = "text-muted",
+          shiny$tags$dl(
+            class = "mb-0",
+            shiny$tags$dt("Scale & Center"),
+            shiny$tags$dd(
+              class = "ms-2 mb-1",
+              "Z-score standardization (mean=0, SD=1).",
+              " Best when variables have different",
+              " units or magnitudes."
+            ),
+            shiny$tags$dt("Center only"),
+            shiny$tags$dd(
+              class = "ms-2 mb-1",
+              "Subtract mean, keep original variance.",
+              " Use when all variables share the same",
+              " unit and variance differences matter."
+            ),
+            shiny$tags$dt("No scaling"),
+            shiny$tags$dd(
+              class = "ms-2 mb-0",
+              "Use raw data. Only if data is already",
+              " preprocessed or on the same scale."
+            )
+          )
         )
       )
     )
