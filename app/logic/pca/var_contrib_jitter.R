@@ -14,22 +14,27 @@ box::use(
 # No Shiny dependencies allowed in this file.
 # =============================================================================
 
-#' Create a jitter/strip plot of variable contributions per dimension
+#' Create a faceted strip plot of variable contributions per dimension
 #'
-#' Dimensions on X-axis, contribution % on Y-axis.
+#' Each dimension is a facet with independent Y-axis (contribution %).
 #' Points colored by cos2 (viridis), labeled with ggrepel.
-#' Smart filtering: shows all variables when <= 10, otherwise
-#' shows top contributors per dimension above a contribution
-#' threshold and minimum cos2.
+#'
+#' For high-dimensional data (20+ variables):
+#' - Variables with cos2 < 0.2 are filtered out per dimension
+#' - Dimensions where no variable survives the filter are dropped
+#' - Facet strips annotated with surviving variable count
+#' - Y-axis starts from data minimum (not 0) to maximize spread
 #'
 #' @param pca_result PCA result list (the $result field from run_pca)
 #' @param display_ncp Integer, number of dimensions to show
 #' @param show_title Logical, whether to show the plot title
+#' @param cos2_threshold Numeric, cos2 cutoff for high-dim filtering
 #' @return List with $success, $result (ggplot) or $error
 #' @export
 create_var_contrib_jitter_plot <- function(pca_result,
                                            display_ncp = 5L,
-                                           show_title = TRUE) {
+                                           show_title = TRUE,
+                                           cos2_threshold = 0.2) {
   error_context <- list(display_ncp = display_ncp)
 
   error_handling$safe_execute(
@@ -42,6 +47,74 @@ create_var_contrib_jitter_plot <- function(pca_result,
       n_vars <- nrow(contrib)
       dims <- colnames(contrib)[seq_len(n_dims)]
       eig <- pca_result$eig
+      high_dim <- n_vars >= 20
+
+      # Build long-format data frame (all variables)
+      rows <- list()
+      for (i in seq_along(dims)) {
+        d <- dims[i]
+        rows[[i]] <- data.frame(
+          variable = rownames(contrib),
+          dim = d,
+          dim_idx = i,
+          contrib = as.numeric(contrib[, d]),
+          cos2 = as.numeric(cos2[, d]),
+          stringsAsFactors = FALSE,
+          row.names = NULL
+        )
+      }
+      df <- do.call(rbind, rows)
+
+      # --- High-dimensional filtering (soft threshold) ---
+      dropped_dims <- character(0)
+      dropped_max_cos2 <- numeric(0)
+
+      if (high_dim) {
+        min_vars_per_dim <- 4L
+        keep <- logical(nrow(df))
+
+        for (d in dims) {
+          idx <- which(df$dim == d)
+          sub_cos2 <- df$cos2[idx]
+          above <- sub_cos2 >= cos2_threshold
+
+          if (sum(above) == 0) {
+            # No variable passes threshold -> drop dim
+            dropped_dims <- c(dropped_dims, d)
+            dropped_max_cos2 <- c(
+              dropped_max_cos2, max(sub_cos2)
+            )
+            next
+          }
+
+          if (sum(above) <= 2) {
+            # Soft pad: include next-best by cos2
+            rank_order <- order(
+              sub_cos2, decreasing = TRUE
+            )
+            n_keep <- min(
+              min_vars_per_dim, length(rank_order)
+            )
+            above[rank_order[seq_len(n_keep)]] <- TRUE
+          }
+
+          keep[idx] <- above
+        }
+
+        df <- df[keep, , drop = FALSE]
+
+        if (nrow(df) == 0) {
+          stop(
+            "No variables with cos\u00b2 >= ",
+            cos2_threshold,
+            " in any dimension."
+          )
+        }
+
+        # Drop dimensions with no surviving variables
+        surviving_dims <- unique(df$dim)
+        dims <- dims[dims %in% surviving_dims]
+      }
 
       # Build dimension labels with variance %
       dim_labels <- vapply(dims, function(d) {
@@ -53,23 +126,11 @@ create_var_contrib_jitter_plot <- function(pca_result,
         }
       }, character(1))
 
-      # Build long-format data frame
-      rows <- list()
-      for (i in seq_along(dims)) {
-        d <- dims[i]
-        rows[[i]] <- data.frame(
-          variable = rownames(contrib),
-          dim = d,
-          dim_label = dim_labels[i],
-          contrib = as.numeric(contrib[, d]),
-          cos2 = as.numeric(cos2[, d]),
-          stringsAsFactors = FALSE,
-          row.names = NULL
-        )
-      }
-      df <- do.call(rbind, rows)
-
-      # Preserve dimension order
+      # Map dim -> label and set factor levels
+      dim_label_map <- stats::setNames(
+        dim_labels, dims
+      )
+      df$dim_label <- dim_label_map[df$dim]
       df$dim_label <- factor(
         df$dim_label, levels = dim_labels
       )
@@ -78,11 +139,20 @@ create_var_contrib_jitter_plot <- function(pca_result,
       df$x <- 0
 
       # Smart filtering: decide which points get labels
+      n_vars_filtered <- if (high_dim) {
+        max(vapply(
+          dims,
+          function(d) sum(df$dim == d),
+          integer(1)
+        ))
+      } else {
+        n_vars
+      }
       df$show_label <- select_label_vars(
-        df, n_vars, n_dims
+        df, n_vars_filtered, length(dims)
       )
 
-      # Tooltips (always on all points)
+      # Tooltips
       df$tooltip <- sprintf(
         paste0(
           "<b>%s</b>",
@@ -103,7 +173,7 @@ create_var_contrib_jitter_plot <- function(pca_result,
       label_df <- df[df$show_label, , drop = FALSE]
 
       # Adaptive point size
-      point_size <- if (n_vars <= 15) 9 else 8
+      point_size <- if (n_vars_filtered <= 15) 9 else 8
 
       p <- ggplot2$ggplot(
         df,
@@ -161,6 +231,9 @@ create_var_contrib_jitter_plot <- function(pca_result,
           limits = c(-0.6, 1.2),
           expand = ggplot2$expansion(0)
         ) +
+        ggplot2$scale_y_continuous(
+          expand = ggplot2$expansion(mult = c(0.08, 0.08))
+        ) +
         ggplot2$labs(x = NULL, y = NULL) +
         jitter_theme()
 
@@ -170,7 +243,17 @@ create_var_contrib_jitter_plot <- function(pca_result,
         )
       }
 
-      p
+      # Return plot + filtering metadata
+      list(
+        plot = p,
+        filter_applied = high_dim,
+        cos2_threshold = cos2_threshold,
+        n_vars_total = n_vars,
+        dropped_dims = dropped_dims,
+        dropped_max_cos2 = dropped_max_cos2,
+        n_dims_shown = length(dims),
+        n_dims_requested = n_dims
+      )
     },
     operation_name = "Variable Contribution Jitter Plot",
     context = error_context,
