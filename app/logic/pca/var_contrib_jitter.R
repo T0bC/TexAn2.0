@@ -103,7 +103,7 @@ create_var_contrib_jitter_plot <- function(pca_result,
       label_df <- df[df$show_label, , drop = FALSE]
 
       # Adaptive point size
-      point_size <- if (n_vars <= 15) 5 else 4
+      point_size <- if (n_vars <= 15) 9 else 8
 
       p <- ggplot2$ggplot(
         df,
@@ -298,8 +298,6 @@ jitter_theme <- function() {
       # Grid: only horizontal lines for contribution reference
       panel.grid.major.x = ggplot2$element_blank(),
       panel.grid.minor = ggplot2$element_blank(),
-      panel.grid.major.y = ggplot2$element_line(
-        color = "grey90", linewidth = 0.3
-      )
+      panel.grid.major.y = ggplot2$element_blank()
     )
 }
