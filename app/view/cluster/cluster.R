@@ -55,7 +55,9 @@ ui <- function(id) {
 }
 
 #' @export
-server <- function(id, input_data, data_version) {
+server <- function(id, input_data, data_version,
+                   pca_result = NULL,
+                   lda_result = NULL) {
   shiny$moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -103,11 +105,68 @@ server <- function(id, input_data, data_version) {
       rhino$log$info("Cluster: state reset for new data")
     }, ignoreInit = TRUE)
 
+    # Reactive: PCA scores as a flat data frame
+    # (metadata cols + Dim.1, Dim.2, … columns)
+    pca_scores_data <- shiny$reactive({
+      if (is.null(pca_result)) return(NULL)
+      pca_res <- pca_result()
+      if (
+        is.null(pca_res) ||
+        !isTRUE(pca_res$success)
+      ) {
+        return(NULL)
+      }
+      res <- pca_res$result
+      coord <- as.data.frame(res$ind$coord)
+      meta <- res$ind$meta
+      if (
+        !is.null(meta) &&
+        nrow(meta) == nrow(coord) &&
+        !("Row" %in% names(meta) &&
+          ncol(meta) == 1)
+      ) {
+        cbind(meta, coord)
+      } else {
+        coord
+      }
+    })
+
+    # Reactive: LDA scores as a flat data frame
+    # (metadata cols + ld1, ld2, … columns)
+    # Column names are lowercased so column_utils
+    # detects them as measurement columns (uppercase-
+    # only names are classified as descriptive).
+    lda_scores_data <- shiny$reactive({
+      if (is.null(lda_result)) return(NULL)
+      lda_res <- lda_result()
+      if (
+        is.null(lda_res) ||
+        is.null(lda_res$scores)
+      ) {
+        return(NULL)
+      }
+      scores <- as.data.frame(lda_res$scores)
+      colnames(scores) <- tolower(colnames(scores))
+      meta <- lda_res$meta
+      if (
+        !is.null(meta) &&
+        nrow(meta) == nrow(scores) &&
+        !("Row" %in% names(meta) &&
+          ncol(meta) == 1)
+      ) {
+        cbind(meta, scores)
+      } else {
+        scores
+      }
+    })
+
     # Delegate to sub-module servers
     data_selection$tab_server(
       input, output, session,
       input_data = input_data,
-      data_version = data_version
+      data_version = data_version,
+      pca_scores_data = pca_scores_data,
+      lda_scores_data = lda_scores_data
     )
 
     clustering_settings$tab_server(
@@ -145,12 +204,46 @@ server <- function(id, input_data, data_version) {
       optimal_result(NULL)
       transform_info(NULL)
 
-      data <- input_data()
+      data_source <- input$data_source
       measure_cols <- input$measureVar
       n_clusters <- input$n_clusters
       algorithm <- input$algorithm
       cluster_metric <- input$cluster_metric
       scale_method <- input$scale_method
+
+      # Select source data
+      is_reduced <- data_source %in%
+        c("pca_scores", "lda_scores")
+      data <- if (data_source == "pca_scores") {
+        pca_scores_data()
+      } else if (data_source == "lda_scores") {
+        lda_scores_data()
+      } else {
+        input_data()
+      }
+
+      if (is.null(data)) {
+        last_error(error_handling$simple_error(
+          message = if (data_source == "pca_scores") {
+            paste(
+              "No PCA results available.",
+              "Run PCA first in the PCA tab,",
+              "then return here."
+            )
+          } else if (data_source == "lda_scores") {
+            paste(
+              "No LDA scores available.",
+              "Run LDA (not QDA) in model-fitting",
+              "mode (not LOO-CV) in the LDA tab,",
+              "then return here."
+            )
+          } else {
+            "No data available."
+          },
+          operation_name = "Cluster Data Preparation"
+        ))
+        return()
+      }
 
       # Validate inputs
       validation <- cluster$validate_inputs(measure_cols, data)
@@ -163,98 +256,120 @@ server <- function(id, input_data, data_version) {
         message = "Running Cluster Analysis",
         value = 0, {
 
-        # Step 1: Clean NAs
-        shiny$incProgress(
-          0.05,
-          detail = "Cleaning missing values..."
-        )
         meta_cols <- input$metaData
         if (is.null(meta_cols)) meta_cols <- character(0)
 
-        rhino$log$info(
-          "Cluster: cleaning NA rows",
-          " ({length(measure_cols)} measurement columns)"
-        )
-        na_result <- clean_na_rows(
-          data, measure_cols, meta_cols
-        )
-        na_info(na_result)
-        cleaned_data <- na_result$data
-        cleaned_data_store(cleaned_data)
-
-        if (nrow(cleaned_data) < 2) {
-          last_error(error_handling$simple_error(
-            message = paste(
-              "After removing rows with missing",
-              "values, fewer than 2 rows remain.",
-              "Consider deselecting columns",
-              "with many NAs."
-            ),
-            operation_name = "Cluster Data Preparation",
-            context = list(
-              rows_before = na_result$rows_before,
-              rows_removed = na_result$rows_removed,
-              rows_after = na_result$rows_after
-            )
-          ))
-          return()
-        }
-
-        # Step 1b: Skewness correction (if enabled)
-        if (isTRUE(input$correct_skewness)) {
-          skew_result <- detect_skewness(
-            cleaned_data, measure_cols
+        if (is_reduced) {
+          # PCA/LDA scores: skip NA cleaning, skewness,
+          # and scaling — data is already preprocessed
+          shiny$incProgress(
+            0.15,
+            detail = "Using preprocessed scores..."
           )
-          if (any(skew_result$is_skewed)) {
-            transform_res <- transform_skewed(
-              cleaned_data, measure_cols,
-              skew_result
-            )
-            if (transform_res$success) {
-              cleaned_data <- transform_res$result$data
-              transform_info(transform_res$result)
-            } else {
-              rhino$log$warn(
-                "Cluster: skewness correction",
-                " failed, proceeding with",
-                " untransformed data"
-              )
-            }
-          }
-        }
-
-        # Step 2: Scale data
-        shiny$incProgress(
-          0.10,
-          detail = "Scaling data..."
-        )
-        analysis_data <- cleaned_data
-        if (!is.null(scale_method) &&
-            scale_method != "none") {
-          do_center <- scale_method %in%
-            c("scale_center", "center_only")
-          do_scale <- scale_method == "scale_center"
+          rhino$log$info(
+            "Cluster: using {data_source} ",
+            "({length(measure_cols)} dimensions,",
+            " {nrow(data)} observations)"
+          )
+          cleaned_data <- data
+          cleaned_data_store(cleaned_data)
+          na_info(NULL)
+          analysis_data <- data
+        } else {
+          # Raw data: full preprocessing pipeline
+          # Step 1: Clean NAs
+          shiny$incProgress(
+            0.05,
+            detail = "Cleaning missing values..."
+          )
 
           rhino$log$info(
-            "Cluster: scaling data",
-            " (center={do_center},",
-            " scale={do_scale})"
+            "Cluster: cleaning NA rows",
+            " ({length(measure_cols)}",
+            " measurement columns)"
           )
-          scale_res <- scale_data(
-            cleaned_data, measure_cols,
-            center = do_center, scale = do_scale
+          na_result <- clean_na_rows(
+            data, measure_cols, meta_cols
           )
-          if (!scale_res$success) {
-            last_error(scale_res$error)
+          na_info(na_result)
+          cleaned_data <- na_result$data
+          cleaned_data_store(cleaned_data)
+
+          if (nrow(cleaned_data) < 2) {
+            last_error(error_handling$simple_error(
+              message = paste(
+                "After removing rows with missing",
+                "values, fewer than 2 rows remain.",
+                "Consider deselecting columns",
+                "with many NAs."
+              ),
+              operation_name = "Cluster Data Preparation",
+              context = list(
+                rows_before = na_result$rows_before,
+                rows_removed = na_result$rows_removed,
+                rows_after = na_result$rows_after
+              )
+            ))
             return()
           }
-          analysis_data <- scale_res$result
-        }
+
+          # Step 1b: Skewness correction (if enabled)
+          if (isTRUE(input$correct_skewness)) {
+            skew_result <- detect_skewness(
+              cleaned_data, measure_cols
+            )
+            if (any(skew_result$is_skewed)) {
+              transform_res <- transform_skewed(
+                cleaned_data, measure_cols,
+                skew_result
+              )
+              if (transform_res$success) {
+                cleaned_data <- transform_res$result$data
+                transform_info(transform_res$result)
+              } else {
+                rhino$log$warn(
+                  "Cluster: skewness correction",
+                  " failed, proceeding with",
+                  " untransformed data"
+                )
+              }
+            }
+          }
+
+          # Step 2: Scale data
+          shiny$incProgress(
+            0.10,
+            detail = "Scaling data..."
+          )
+          analysis_data <- cleaned_data
+          if (!is.null(scale_method) &&
+              scale_method != "none") {
+            do_center <- scale_method %in%
+              c("scale_center", "center_only")
+            do_scale <- scale_method == "scale_center"
+
+            rhino$log$info(
+              "Cluster: scaling data",
+              " (center={do_center},",
+              " scale={do_scale})"
+            )
+            scale_res <- scale_data(
+              cleaned_data, measure_cols,
+              center = do_center, scale = do_scale
+            )
+            if (!scale_res$success) {
+              last_error(scale_res$error)
+              return()
+            }
+            analysis_data <- scale_res$result
+          }
+        } # end raw data preprocessing
 
         # Build fingerprint for data + scaling config
         # to enable session-scoped caching of Hopkins
         # and optimal clusters computations.
         fp <- paste(
+          data_source %||% "raw",
           paste(sort(measure_cols), collapse = ","),
           nrow(analysis_data),
           ncol(analysis_data),
