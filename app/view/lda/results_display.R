@@ -405,7 +405,7 @@ render_scaling_table <- function(scaling) {
     as.data.frame(round(scaling, 6))
   )
   rownames(df) <- NULL
-  make_dt(df, page_length = 20)
+  make_dt(df, page_length = 10)
 }
 
 
