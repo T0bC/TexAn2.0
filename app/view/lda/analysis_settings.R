@@ -135,25 +135,86 @@ tab_ui <- function(ns) {
       ),
       selected = "proportional"
     ),
-    # Cross-validation
-    shiny$checkboxInput(
-      inputId = ns("cv"),
+    # Validation method
+    shiny$radioButtons(
+      inputId = ns("validation_method"),
       label = shiny$tags$span(
-        "Leave-one-out Cross-Validation ",
+        "Validation ",
         bslib$tooltip(
           bsicons$bs_icon(
             "info-circle", class = "text-muted"
           ),
           paste(
-            "If enabled, returns classification",
-            "results and posterior probabilities",
-            "from leave-one-out cross-validation.",
-            "Useful for assessing classification",
-            "accuracy without a separate test set."
+            "None: fit model on all data",
+            "(resubstitution accuracy only).",
+            "LOO-CV: leave-one-out",
+            "cross-validation — each observation",
+            "is predicted using a model trained",
+            "on all other observations.",
+            "Train/Test Split: stratified random",
+            "split for predictive evaluation."
           )
         )
       ),
-      value = FALSE
+      choices = list(
+        "None (fit only)" = "none",
+        "Leave-one-out CV" = "loo_cv",
+        "Train / Test Split" = "split"
+      ),
+      selected = "none"
+    ),
+    # Train/test split settings
+    shiny$conditionalPanel(
+      condition = paste0(
+        "input['", ns("validation_method"),
+        "'] == 'split'"
+      ),
+      shiny$tags$div(
+        class = "ms-2 ps-2 border-start",
+        shiny$sliderInput(
+          inputId = ns("train_fraction"),
+          label = shiny$tags$span(
+            "Training set size ",
+            bslib$tooltip(
+              bsicons$bs_icon(
+                "info-circle",
+                class = "text-muted"
+              ),
+              paste(
+                "Fraction of data used for training.",
+                "The rest is held out for testing.",
+                "Split is stratified by the grouping",
+                "variable to preserve class proportions."
+              )
+            )
+          ),
+          min = 0.5,
+          max = 0.9,
+          value = 0.7,
+          step = 0.05,
+          post = ""
+        ),
+        shiny$numericInput(
+          inputId = ns("split_seed"),
+          label = shiny$tags$span(
+            "Random seed ",
+            bslib$tooltip(
+              bsicons$bs_icon(
+                "info-circle",
+                class = "text-muted"
+              ),
+              paste(
+                "Set a seed for reproducible splits.",
+                "Use the same seed to get the same",
+                "train/test partition each time."
+              )
+            )
+          ),
+          value = 42,
+          min = 1,
+          step = 1
+        )
+      )
     ),
     shiny$tags$hr(),
     # Advanced settings (collapsed)
@@ -254,8 +315,14 @@ tab_server <- function(input, output, session,
     shiny$updateRadioButtons(
       session, "prior", selected = "proportional"
     )
-    shiny$updateCheckboxInput(
-      session, "cv", value = FALSE
+    shiny$updateRadioButtons(
+      session, "validation_method", selected = "none"
+    )
+    shiny$updateSliderInput(
+      session, "train_fraction", value = 0.7
+    )
+    shiny$updateNumericInput(
+      session, "split_seed", value = 42
     )
     shiny$updateNumericInput(
       session, "tol", value = 1.0e-4
