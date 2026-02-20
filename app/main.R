@@ -121,22 +121,31 @@ server <- function(id) {
     plotting_data <- shiny$reactive({
       median_result() %||% load_data_result$data()
     })
+    # Version counter that increments on ANY data change
+    # (file upload OR median filtering/grouping change)
+    plotting_data_version <- shiny$reactiveVal(0L)
+    shiny$observe({
+      plotting_data()
+      shiny$isolate(
+        plotting_data_version(plotting_data_version() + 1L)
+      )
+    })
     plotting_result <- plotting$server(
       "plotting",
       input_data = plotting_data,
-      data_version = load_data_result$version
+      data_version = shiny$reactive(plotting_data_version())
     )
     summary$server(
       "summary",
       input_data = plotting_data,
-      data_version = load_data_result$version,
+      data_version = shiny$reactive(plotting_data_version()),
       plotting_x_axis = plotting_result$x_axis,
       plotting_measures = plotting_result$measure_cols
     )
     statistics$server(
       "statistics",
       input_data = plotting_data,
-      data_version = load_data_result$version,
+      data_version = shiny$reactive(plotting_data_version()),
       plotting_x_axis = plotting_result$x_axis,
       plotting_measures = plotting_result$measure_cols,
       plotting_trim_percent = plotting_result$trim_percent,
@@ -145,17 +154,17 @@ server <- function(id) {
     pca_result <- pca$server(
       "pca",
       input_data = plotting_data,
-      data_version = load_data_result$version
+      data_version = shiny$reactive(plotting_data_version())
     )
     cluster$server(
       "cluster",
       input_data = plotting_data,
-      data_version = load_data_result$version
+      data_version = shiny$reactive(plotting_data_version())
     )
     lda$server(
       "lda",
       input_data = plotting_data,
-      data_version = load_data_result$version,
+      data_version = shiny$reactive(plotting_data_version()),
       pca_result = pca_result
     )
     help_modal$server("help", active_page = shiny$reactive(input$active_page))
