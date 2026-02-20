@@ -142,7 +142,7 @@ server <- function(id) {
       plotting_trim_percent = plotting_result$trim_percent,
       plotting_plot_objects = plotting_result$plot_objects
     )
-    pca$server(
+    pca_result <- pca$server(
       "pca",
       input_data = plotting_data,
       data_version = load_data_result$version
@@ -155,7 +155,8 @@ server <- function(id) {
     lda$server(
       "lda",
       input_data = plotting_data,
-      data_version = load_data_result$version
+      data_version = load_data_result$version,
+      pca_result = pca_result
     )
     help_modal$server("help", active_page = shiny$reactive(input$active_page))
     settings_modal$server("settings")
