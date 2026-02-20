@@ -398,7 +398,7 @@ server <- function(id, input_data, data_version) {
         warn_banner,
         bslib$accordion(
           id = ns("results_accordion"),
-          open = "lda_panel",
+          open = FALSE,
           multiple = TRUE,
           lda_panel
         )
