@@ -316,7 +316,7 @@ run_predict <- function(lda_result, test_data, columns,
         result$scores <- as.data.frame(pred$x)
       }
 
-      # Confusion matrix if true labels available
+      # True labels and confusion matrix if available
       if (
         !is.null(grouping_col) &&
         grouping_col %in% names(test_data)
@@ -324,6 +324,7 @@ run_predict <- function(lda_result, test_data, columns,
         true_labels <- as.factor(
           test_data[[grouping_col]]
         )
+        result$true_group <- true_labels
         result$confusion <- build_confusion_stats(
           true_labels, pred$class
         )
@@ -380,7 +381,8 @@ build_lda_result <- function(obj, data, columns,
     group_levels = levels(grouping),
     prior = obj$prior,
     means = as.data.frame(obj$means),
-    meta = meta
+    meta = meta,
+    true_group = grouping
   )
 
   if (cv) {
