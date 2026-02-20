@@ -7,7 +7,10 @@ box::use(
 
 box::use(
   app/logic/error_handling,
-  app/logic/lda/lda[validate_inputs, run_lda, run_qda],
+  app/logic/lda/data_splitting[create_stratified_split],
+  app/logic/lda/lda[
+    run_lda, run_predict, run_qda, validate_inputs
+  ],
   app/logic/pca/na_handling[clean_na_rows],
   app/logic/pca/scaling[scale_data],
   app/logic/skewness_transform[
@@ -17,6 +20,7 @@ box::use(
   app/view/error_display,
   app/view/lda/analysis_settings,
   app/view/lda/data_selection,
+  app/view/lda/results_display,
   app/view/pca/na_summary,
 )
 
@@ -50,6 +54,7 @@ server <- function(id, input_data, data_version) {
 
     last_error <- shiny$reactiveVal(NULL)
     result <- shiny$reactiveVal(NULL)
+    test_result <- shiny$reactiveVal(NULL)
     na_info <- shiny$reactiveVal(NULL)
     transform_info <- shiny$reactiveVal(NULL)
     validation_warnings <- shiny$reactiveVal(character(0))
@@ -57,6 +62,7 @@ server <- function(id, input_data, data_version) {
     # Reset state when new data is loaded
     shiny$observeEvent(data_version(), {
       result(NULL)
+      test_result(NULL)
       last_error(NULL)
       na_info(NULL)
       transform_info(NULL)
@@ -79,6 +85,7 @@ server <- function(id, input_data, data_version) {
     shiny$observeEvent(input$compute_lda_button, {
       last_error(NULL)
       result(NULL)
+      test_result(NULL)
       na_info(NULL)
       transform_info(NULL)
       validation_warnings(character(0))
@@ -87,6 +94,7 @@ server <- function(id, input_data, data_version) {
       measure_cols <- input$measureVar
       grouping_col <- input$groupingCol
       analysis_type <- input$analysis_type
+      validation_method <- input$validation_method
 
       # Validate inputs
       validation <- validate_inputs(
@@ -181,46 +189,60 @@ server <- function(id, input_data, data_version) {
         input$qda_method
       }
 
-      # Build prior
+      # Build prior and params
       prior_choice <- input$prior
       tol <- input$tol %||% 1.0e-4
-      cv <- input$cv %||% FALSE
+      cv <- validation_method == "loo_cv"
       nu_val <- if (method == "t") input$nu else NULL
+
+      # Handle train/test split if requested
+      train_data <- analysis_data
+      held_out_data <- NULL
+      split_info <- NULL
+
+      if (validation_method == "split") {
+        train_frac <- input$train_fraction %||% 0.7
+        seed <- input$split_seed %||% 42
+        split_res <- create_stratified_split(
+          analysis_data, grouping_col,
+          train_fraction = train_frac,
+          seed = seed
+        )
+        if (!split_res$success) {
+          last_error(split_res$error)
+          return()
+        }
+        train_data <- split_res$result$train_data
+        held_out_data <- split_res$result$test_data
+        split_info <- split_res$result$split_summary
+      }
 
       rhino$log$info(
         "LDA: computing {toupper(analysis_type)}",
         " ({length(measure_cols)} columns,",
-        " {nrow(analysis_data)} rows,",
+        " {nrow(train_data)} rows,",
         " grouping='{grouping_col}',",
-        " method='{method}')"
+        " method='{method}',",
+        " validation='{validation_method}')"
       )
 
       # Run LDA or QDA
-      lda_res <- if (analysis_type == "lda") {
-        run_lda(
-          data = analysis_data,
-          columns = measure_cols,
-          grouping_col = grouping_col,
-          prior = prior_choice,
-          tol = tol,
-          method = method,
-          cv = cv,
-          nu = nu_val,
-          meta_cols = meta_cols
-        )
+      run_fn <- if (analysis_type == "lda") {
+        run_lda
       } else {
-        run_qda(
-          data = analysis_data,
-          columns = measure_cols,
-          grouping_col = grouping_col,
-          prior = prior_choice,
-          tol = tol,
-          method = method,
-          cv = cv,
-          nu = nu_val,
-          meta_cols = meta_cols
-        )
+        run_qda
       }
+      lda_res <- run_fn(
+        data = train_data,
+        columns = measure_cols,
+        grouping_col = grouping_col,
+        prior = prior_choice,
+        tol = tol,
+        method = method,
+        cv = cv,
+        nu = nu_val,
+        meta_cols = meta_cols
+      )
 
       if (!lda_res$success) {
         last_error(lda_res$error)
@@ -228,6 +250,35 @@ server <- function(id, input_data, data_version) {
       }
 
       result(lda_res$result)
+
+      # Predict on test set if split mode
+      if (
+        validation_method == "split" &&
+        !is.null(held_out_data)
+      ) {
+        pred_res <- run_predict(
+          lda_res$result, held_out_data,
+          measure_cols,
+          grouping_col = grouping_col,
+          meta_cols = meta_cols
+        )
+        if (pred_res$success) {
+          pred_res$result$split_summary <- split_info
+          test_result(pred_res$result)
+        } else {
+          rhino$log$warn(
+            "LDA: test prediction failed: ",
+            pred_res$error$message
+          )
+          validation_warnings(c(
+            validation_warnings(),
+            paste(
+              "Test set prediction failed:",
+              pred_res$error$message
+            )
+          ))
+        }
+      }
     })
 
     # Main content: placeholder, error, or results
@@ -327,28 +378,9 @@ server <- function(id, input_data, data_version) {
       shiny$tagList(
         preprocess_banner,
         warn_banner,
-        bslib$accordion(
-          id = ns("results_accordion"),
-          open = "results_panel",
-          multiple = TRUE,
-          bslib$accordion_panel(
-            title = shiny$tags$span(
-              bsicons$bs_icon(
-                "arrows-expand-vertical",
-                class = "me-1"
-              ),
-              "LDA / QDA Results"
-            ),
-            value = "results_panel",
-            shiny$tags$p(
-              class = "text-muted",
-              paste(
-                "Result panels will be added here",
-                "once the LDA/QDA computation is",
-                "implemented."
-              )
-            )
-          )
+        results_display$render_lda_results(
+          result(), ns,
+          test_result = test_result()
         )
       )
     })
