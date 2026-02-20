@@ -28,7 +28,6 @@ box::use(
   app/view/cluster/hopkins,
   app/view/cluster/optimal_clusters,
   app/view/components/sidebar_tabs,
-  app/view/components/transform_summary,
   app/view/error_display,
   app/view/pca/na_summary,
 )
@@ -498,20 +497,14 @@ server <- function(id, input_data, data_version) {
         )
       }
 
-      # NA summary banner
+      # Preprocessing summary banner (NA + skewness)
       na_res <- na_info()
-      na_banner <- if (!is.null(na_res)) {
-        na_summary$render_na_summary(na_res)
-      }
-
-      # Skewness transformation banner
       tf_res <- transform_info()
-      transform_banner <- if (!is.null(tf_res)) {
-        transform_summary$render_transform_summary(
-          tf_res,
-          n_total = length(input$measureVar)
-        )
-      }
+      preprocess_banner <- na_summary$render_na_summary(
+        na_res,
+        transform_result = tf_res,
+        n_measure_cols = length(input$measureVar)
+      )
 
       # Hopkins clusterability panel
       h_res <- hopkins_result()
@@ -694,8 +687,7 @@ server <- function(id, input_data, data_version) {
       }
 
       shiny$tagList(
-        na_banner,
-        transform_banner,
+        preprocess_banner,
         bslib$accordion(
           id = ns("results_accordion"),
           open = "cluster_biplot_panel",
