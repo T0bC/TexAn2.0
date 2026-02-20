@@ -142,9 +142,10 @@ validate_inputs <- function(columns, data, grouping_col) {
   list(valid = TRUE, error = NULL, warnings = warnings)
 }
 
-#' Run Linear Discriminant Analysis (stub)
+#' Run Linear Discriminant Analysis
 #'
-#' Placeholder that will call MASS::lda() once implemented.
+#' Calls MASS::lda() on the supplied data. Supports both
+#' standard model fitting and leave-one-out CV.
 #'
 #' @param data Data frame (cleaned, optionally scaled)
 #' @param columns Character vector of measurement column names
@@ -161,25 +162,46 @@ run_lda <- function(data, columns, grouping_col,
                     prior = "proportional", tol = 1.0e-4,
                     method = "moment", cv = FALSE,
                     nu = NULL, meta_cols = character(0)) {
-  rhino$log$info(
-    "LDA: run_lda called (stub) — ",
-    "{length(columns)} columns, grouping='{grouping_col}'"
-  )
-  list(
-    success = FALSE,
-    error = error_handling$simple_error(
-      message = paste(
-        "LDA computation is not yet implemented.",
-        "The UI scaffold is in place."
-      ),
-      operation_name = "LDA"
-    )
+  error_handling$safe_execute(
+    {
+      grouping <- as.factor(data[[grouping_col]])
+      numeric_data <- data[, columns, drop = FALSE]
+      prior_vec <- build_prior(prior, grouping)
+
+      args <- list(
+        x = numeric_data,
+        grouping = grouping,
+        prior = prior_vec,
+        tol = tol,
+        method = method,
+        CV = cv
+      )
+      if (method == "t" && !is.null(nu)) {
+        args$nu <- nu
+      }
+
+      rhino$log$info(
+        "LDA: running MASS::lda() — ",
+        "{length(columns)} vars, {nlevels(grouping)}",
+        " groups, method='{method}', CV={cv}"
+      )
+
+      lda_obj <- do.call(MASS::lda, args)
+
+      build_lda_result(
+        lda_obj, data, columns, grouping_col,
+        meta_cols, cv, "lda"
+      )
+    },
+    operation_name = "LDA",
+    error_parser = lda_error_parser
   )
 }
 
-#' Run Quadratic Discriminant Analysis (stub)
+#' Run Quadratic Discriminant Analysis
 #'
-#' Placeholder that will call MASS::qda() once implemented.
+#' Calls MASS::qda() on the supplied data. Supports both
+#' standard model fitting and leave-one-out CV.
 #'
 #' @param data Data frame (cleaned, optionally scaled)
 #' @param columns Character vector of measurement column names
@@ -196,21 +218,314 @@ run_qda <- function(data, columns, grouping_col,
                     prior = "proportional", tol = 1.0e-4,
                     method = "moment", cv = FALSE,
                     nu = NULL, meta_cols = character(0)) {
-  rhino$log$info(
-    "LDA: run_qda called (stub) — ",
-    "{length(columns)} columns, grouping='{grouping_col}'"
-  )
-  list(
-    success = FALSE,
-    error = error_handling$simple_error(
-      message = paste(
-        "QDA computation is not yet implemented.",
-        "The UI scaffold is in place."
-      ),
-      operation_name = "QDA"
-    )
+  error_handling$safe_execute(
+    {
+      grouping <- as.factor(data[[grouping_col]])
+      numeric_data <- data[, columns, drop = FALSE]
+      prior_vec <- build_prior(prior, grouping)
+
+      args <- list(
+        x = numeric_data,
+        grouping = grouping,
+        prior = prior_vec,
+        tol = tol,
+        method = method,
+        CV = cv
+      )
+      if (method == "t" && !is.null(nu)) {
+        args$nu <- nu
+      }
+
+      rhino$log$info(
+        "LDA: running MASS::qda() — ",
+        "{length(columns)} vars, {nlevels(grouping)}",
+        " groups, method='{method}', CV={cv}"
+      )
+
+      qda_obj <- do.call(MASS::qda, args)
+
+      build_lda_result(
+        qda_obj, data, columns, grouping_col,
+        meta_cols, cv, "qda"
+      )
+    },
+    operation_name = "QDA",
+    error_parser = lda_error_parser
   )
 }
+
+#' Predict on new data using a fitted LDA/QDA model
+#'
+#' Takes the result from run_lda()/run_qda() (with cv=FALSE)
+#' and predicts classes for a test set. Returns classification,
+#' posterior probabilities, LD scores (LDA only), and
+#' confusion matrix if true labels are available.
+#'
+#' @param lda_result The $result from run_lda()/run_qda()
+#' @param test_data Data frame with the same columns
+#' @param columns Character vector of measurement column names
+#' @param grouping_col Character, name of the grouping column
+#'   (used to extract true labels for confusion matrix;
+#'   NULL if no true labels available)
+#' @param meta_cols Character vector of metadata column names
+#' @return List with $success, $result or $error
+#' @export
+run_predict <- function(lda_result, test_data, columns,
+                        grouping_col = NULL,
+                        meta_cols = character(0)) {
+  error_handling$safe_execute(
+    {
+      model <- lda_result$model
+      if (is.null(model)) {
+        stop(paste(
+          "No model object available.",
+          "Prediction requires a fitted model",
+          "(run without cross-validation)."
+        ))
+      }
+
+      numeric_test <- test_data[
+        , columns, drop = FALSE
+      ]
+
+      rhino$log$info(
+        "LDA: predicting on {nrow(numeric_test)}",
+        " test observations"
+      )
+
+      pred <- stats::predict(model, numeric_test)
+
+      # Build meta for test set
+      meta <- if (length(meta_cols) > 0) {
+        test_data[, meta_cols, drop = FALSE]
+      } else {
+        data.frame(
+          Row = seq_len(nrow(test_data))
+        )
+      }
+
+      result <- list(
+        analysis_type = lda_result$analysis_type,
+        predicted_class = pred$class,
+        posterior = as.data.frame(pred$posterior),
+        meta = meta
+      )
+
+      # LD scores (LDA only, not QDA)
+      if (!is.null(pred$x)) {
+        result$scores <- as.data.frame(pred$x)
+      }
+
+      # Confusion matrix if true labels available
+      if (
+        !is.null(grouping_col) &&
+        grouping_col %in% names(test_data)
+      ) {
+        true_labels <- as.factor(
+          test_data[[grouping_col]]
+        )
+        result$confusion <- build_confusion_stats(
+          true_labels, pred$class
+        )
+      }
+
+      result
+    },
+    operation_name = "LDA Prediction",
+    error_parser = lda_error_parser
+  )
+}
+
+
+# =============================================================================
+# Internal helpers (not exported)
+# =============================================================================
+
+build_prior <- function(prior_choice, grouping) {
+  n_groups <- nlevels(grouping)
+  if (prior_choice == "equal") {
+    prior_vec <- rep(1 / n_groups, n_groups)
+    names(prior_vec) <- levels(grouping)
+    prior_vec
+  } else {
+    # "proportional" — let MASS compute from data
+    props <- table(grouping) / length(grouping)
+    as.numeric(props)
+  }
+}
+
+
+build_lda_result <- function(obj, data, columns,
+                             grouping_col, meta_cols,
+                             cv, analysis_type) {
+  grouping <- as.factor(data[[grouping_col]])
+  n <- nrow(data)
+  p <- length(columns)
+  n_groups <- nlevels(grouping)
+
+  # Build metadata
+  meta <- if (length(meta_cols) > 0) {
+    data[, meta_cols, drop = FALSE]
+  } else {
+    data.frame(Row = seq_len(n))
+  }
+
+  result <- list(
+    analysis_type = analysis_type,
+    grouping_col = grouping_col,
+    columns = columns,
+    n = n,
+    p = p,
+    n_groups = n_groups,
+    group_levels = levels(grouping),
+    prior = obj$prior,
+    means = as.data.frame(obj$means),
+    meta = meta
+  )
+
+  if (cv) {
+    # CV mode: obj is a list with $class, $posterior
+    result$cv <- build_cv_classification(
+      obj, grouping
+    )
+    result$model <- NULL
+    rhino$log$info(
+      "LDA: LOO-CV complete — accuracy ",
+      "{round(result$cv$accuracy * 100, 1)}%"
+    )
+  } else {
+    # Model mode: obj is an lda/qda object
+    result$model <- obj
+
+    if (analysis_type == "lda") {
+      result$scaling <- as.data.frame(obj$scaling)
+      result$svd <- obj$svd
+      n_ld <- length(obj$svd)
+      prop_trace <- obj$svd^2 / sum(obj$svd^2)
+      result$proportion_of_trace <- data.frame(
+        LD = paste0("LD", seq_len(n_ld)),
+        `Singular Value` = round(obj$svd, 4),
+        `Proportion` = round(prop_trace, 4),
+        `Cumulative` = round(cumsum(prop_trace), 4),
+        check.names = FALSE
+      )
+
+      # Compute LD scores for all observations
+      numeric_data <- data[, columns, drop = FALSE]
+      pred_all <- stats::predict(obj, numeric_data)
+      result$scores <- as.data.frame(pred_all$x)
+      result$predicted_class <- pred_all$class
+      result$posterior <- as.data.frame(
+        pred_all$posterior
+      )
+
+      # Confusion on training data (resubstitution)
+      result$confusion <- build_confusion_stats(
+        grouping, pred_all$class
+      )
+    } else {
+      # QDA has no scaling/svd
+      numeric_data <- data[, columns, drop = FALSE]
+      pred_all <- stats::predict(obj, numeric_data)
+      result$predicted_class <- pred_all$class
+      result$posterior <- as.data.frame(
+        pred_all$posterior
+      )
+      result$confusion <- build_confusion_stats(
+        grouping, pred_all$class
+      )
+    }
+
+    rhino$log$info(
+      "LDA: model fit complete — ",
+      "resubstitution accuracy ",
+      "{round(result$confusion$accuracy * 100, 1)}%"
+    )
+  }
+
+  result
+}
+
+
+build_cv_classification <- function(obj, grouping) {
+  predicted <- obj$class
+  posterior <- as.data.frame(obj$posterior)
+
+  confusion <- build_confusion_stats(
+    grouping, predicted
+  )
+
+  list(
+    predicted_class = predicted,
+    posterior = posterior,
+    confusion = confusion,
+    accuracy = confusion$accuracy
+  )
+}
+
+
+build_confusion_stats <- function(true_labels,
+                                  predicted_labels) {
+  cm <- table(
+    True = true_labels,
+    Predicted = predicted_labels
+  )
+  correct <- sum(diag(cm))
+  total <- sum(cm)
+  accuracy <- correct / total
+
+  # Per-class metrics
+  levels_all <- union(
+    levels(true_labels),
+    levels(as.factor(predicted_labels))
+  )
+  per_class <- lapply(levels_all, function(cls) {
+    tp <- if (
+      cls %in% rownames(cm) && cls %in% colnames(cm)
+    ) cm[cls, cls] else 0
+    fn <- if (cls %in% rownames(cm)) {
+      sum(cm[cls, ]) - tp
+    } else {
+      0
+    }
+    fp <- if (cls %in% colnames(cm)) {
+      sum(cm[, cls]) - tp
+    } else {
+      0
+    }
+    precision <- if (tp + fp > 0) tp / (tp + fp) else NA
+    recall <- if (tp + fn > 0) tp / (tp + fn) else NA
+    f1 <- if (
+      !is.na(precision) && !is.na(recall) &&
+      (precision + recall) > 0
+    ) {
+      2 * precision * recall / (precision + recall)
+    } else {
+      NA
+    }
+    data.frame(
+      Class = cls,
+      N = if (cls %in% rownames(cm)) {
+        sum(cm[cls, ])
+      } else {
+        0
+      },
+      Correct = tp,
+      Precision = round(precision, 4),
+      Recall = round(recall, 4),
+      F1 = round(f1, 4),
+      stringsAsFactors = FALSE
+    )
+  })
+  per_class_df <- do.call(rbind, per_class)
+
+  list(
+    matrix = cm,
+    accuracy = accuracy,
+    per_class = per_class_df
+  )
+}
+
 
 #' Error parser for LDA/QDA-specific errors
 #'
