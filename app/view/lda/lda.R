@@ -583,8 +583,8 @@ server <- function(id, input_data, data_version,
       last_ld_plot, "LD_Scores_Plot"
     )
 
-    # Return for downstream modules
-    invisible(NULL)
+    # Return LDA result for downstream modules (e.g. Cluster)
+    result
   })
 }
 
