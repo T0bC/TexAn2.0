@@ -7,9 +7,11 @@ box::use(
 
 #' Render LDA/QDA results in accordion panels with DT tables
 #'
-#' Displays prior probabilities, group means, LD coefficients
-#' (LDA only), proportion of trace (LDA only), classification
-#' results, confusion matrix, and per-class metrics.
+#' Consolidates results into three top-level panels:
+#' 1. Summary & Model Details (prior, means, coefficients,
+#'    proportion of trace)
+#' 2. Classification Results (confusion, posterior, split)
+#' 3. Download Results (Excel, RDS)
 #'
 #' @param lda_result Result list from run_lda()/run_qda()
 #' @param ns Namespace function from parent module
@@ -25,101 +27,59 @@ render_lda_results <- function(lda_result, ns,
   is_cv <- !is.null(lda_result$cv)
   is_split <- !is.null(test_result)
 
-  # Summary badge
-  summary_badge <- build_summary_badge(
+  # --- Panel 1: Summary & Model Details ---
+  summary_content <- build_summary_badge(
     lda_result, type_label, is_cv, is_split,
     test_result
   )
 
-  # Build accordion panels
-  panels <- list()
-
-  # 1. Summary & Classification accuracy
-  panels[["summary"]] <- bslib$accordion_panel(
-    title = shiny$tags$span(
-      bsicons$bs_icon("speedometer2", class = "me-2"),
-      paste(type_label, "Summary")
+  model_sections <- shiny$tagList(
+    # Prior probabilities
+    shiny$tags$h6(
+      class = "mt-3 mb-2", "Prior Probabilities"
     ),
-    value = "summary_panel",
-    summary_badge
-  )
+    render_prior_table(lda_result$prior),
 
-  # 2. Prior probabilities
-  panels[["prior"]] <- bslib$accordion_panel(
-    title = shiny$tags$span(
-      bsicons$bs_icon("pie-chart", class = "me-2"),
-      "Prior Probabilities"
+    # Group means
+    shiny$tags$h6(
+      class = "mt-3 mb-2", "Group Means"
     ),
-    value = "prior_panel",
-    render_prior_table(lda_result$prior)
-  )
-
-  # 3. Group means
-  panels[["means"]] <- bslib$accordion_panel(
-    title = shiny$tags$span(
-      bsicons$bs_icon("table", class = "me-2"),
-      "Group Means"
-    ),
-    value = "means_panel",
     render_means_table(lda_result$means)
   )
 
-  # 4. LD Coefficients (LDA only, model mode)
-  if (
+  # LD Coefficients (LDA only, model mode)
+  ld_section <- if (
     lda_result$analysis_type == "lda" &&
     !is.null(lda_result$scaling)
   ) {
-    panels[["scaling"]] <- bslib$accordion_panel(
-      title = shiny$tags$span(
-        bsicons$bs_icon(
-          "arrows-expand-vertical", class = "me-2"
-        ),
+    shiny$tagList(
+      shiny$tags$h6(
+        class = "mt-3 mb-2",
         "Coefficients of Linear Discriminants"
       ),
-      value = "scaling_panel",
       render_scaling_table(lda_result$scaling)
     )
   }
 
-  # 5. Proportion of trace (LDA only, model mode)
-  if (!is.null(lda_result$proportion_of_trace)) {
-    panels[["trace"]] <- bslib$accordion_panel(
-      title = shiny$tags$span(
-        bsicons$bs_icon(
-          "bar-chart-line", class = "me-2"
-        ),
+  # Proportion of trace (LDA only, model mode)
+  trace_section <- if (
+    !is.null(lda_result$proportion_of_trace)
+  ) {
+    shiny$tagList(
+      shiny$tags$h6(
+        class = "mt-3 mb-2",
         "Proportion of Trace"
       ),
-      value = "trace_panel",
       render_trace_table(
         lda_result$proportion_of_trace
       )
     )
   }
 
-  # 6. Confusion matrix & per-class metrics
+  # --- Panel 2: Classification Results ---
   confusion <- get_confusion(
     lda_result, is_cv, test_result
   )
-  if (!is.null(confusion)) {
-    cm_label <- if (is_cv) {
-      "Classification (LOO-CV)"
-    } else if (is_split) {
-      "Classification (Test Set)"
-    } else {
-      "Classification (Resubstitution)"
-    }
-    panels[["confusion"]] <- bslib$accordion_panel(
-      title = shiny$tags$span(
-        bsicons$bs_icon("grid-3x3", class = "me-2"),
-        cm_label
-      ),
-      value = "confusion_panel",
-      render_confusion(confusion)
-    )
-  }
-
-  # 7. Posterior probabilities
   posterior <- get_posterior(
     lda_result, is_cv, test_result
   )
@@ -127,7 +87,12 @@ render_lda_results <- function(lda_result, ns,
     lda_result, is_cv, test_result
   )
   meta <- get_meta(lda_result, test_result)
-  if (!is.null(posterior)) {
+
+  confusion_section <- if (!is.null(confusion)) {
+    render_confusion(confusion)
+  }
+
+  posterior_section <- if (!is.null(posterior)) {
     post_label <- if (is_cv) {
       "Posterior Probabilities (LOO-CV)"
     } else if (is_split) {
@@ -135,40 +100,98 @@ render_lda_results <- function(lda_result, ns,
     } else {
       "Posterior Probabilities (All Data)"
     }
-    panels[["posterior"]] <- bslib$accordion_panel(
-      title = shiny$tags$span(
-        bsicons$bs_icon("percent", class = "me-2"),
-        post_label
+    shiny$tagList(
+      shiny$tags$h6(
+        class = "mt-3 mb-2", post_label
       ),
-      value = "posterior_panel",
       render_posterior_table(
         posterior, pred_class, meta
       )
     )
   }
 
-  # 8. Split summary (train/test mode only)
-  if (is_split && !is.null(test_result)) {
-    panels[["split"]] <- bslib$accordion_panel(
-      title = shiny$tags$span(
-        bsicons$bs_icon("scissors", class = "me-2"),
-        "Train / Test Split"
-      ),
-      value = "split_panel",
-      render_split_info(test_result)
+  split_section <- if (
+    is_split && !is.null(test_result)
+  ) {
+    render_split_info(test_result)
+  }
+
+  # Classification panel title with accuracy badge
+  cm_title_suffix <- if (is_cv) {
+    " (LOO-CV)"
+  } else if (is_split) {
+    " (Test Set)"
+  } else {
+    ""
+  }
+  acc_inline <- if (!is.null(confusion)) {
+    acc_pct <- round(confusion$accuracy * 100, 1)
+    acc_cls <- if (confusion$accuracy >= 0.9) {
+      "bg-success"
+    } else if (confusion$accuracy >= 0.7) {
+      "bg-warning text-dark"
+    } else {
+      "bg-danger"
+    }
+    shiny$tags$span(
+      class = "ms-2",
+      shiny$tags$span(
+        class = paste("badge", acc_cls),
+        paste0(acc_pct, "%")
+      )
     )
   }
 
   shiny$tagList(
-    do.call(
-      bslib$accordion,
-      c(
-        list(
-          id = ns("lda_results_accordion"),
-          open = "summary_panel",
-          multiple = TRUE
+    bslib$accordion(
+      id = ns("lda_results_accordion"),
+      open = "model_panel",
+      multiple = TRUE,
+
+      # Panel 1: Summary & Model Details
+      bslib$accordion_panel(
+        title = shiny$tags$span(
+          bsicons$bs_icon(
+            "arrows-expand-vertical",
+            class = "me-2"
+          ),
+          paste(type_label, "Summary & Model Details")
         ),
-        panels
+        value = "model_panel",
+        summary_content,
+        model_sections,
+        ld_section,
+        trace_section
+      ),
+
+      # Panel 2: Classification Results
+      bslib$accordion_panel(
+        title = shiny$tags$span(
+          bsicons$bs_icon(
+            "grid-3x3", class = "me-2"
+          ),
+          paste0(
+            "Classification Results",
+            cm_title_suffix
+          ),
+          acc_inline
+        ),
+        value = "classification_panel",
+        split_section,
+        confusion_section,
+        posterior_section
+      ),
+
+      # Panel 3: Download Results
+      bslib$accordion_panel(
+        title = shiny$tags$span(
+          bsicons$bs_icon(
+            "download", class = "me-2"
+          ),
+          "Download Results"
+        ),
+        value = "downloads_panel",
+        render_download_buttons(ns)
       )
     )
   )
@@ -268,6 +291,57 @@ build_summary_badge <- function(lda_result, type_label,
           "Discriminant axes"
         ),
         shiny$tags$dd(class = "col-sm-7", n_ld)
+      )
+    )
+  )
+}
+
+
+render_download_buttons <- function(ns) {
+  shiny$tags$div(
+    class = "d-flex flex-column gap-2",
+
+    # Excel download
+    shiny$tags$a(
+      id = ns("download_lda_excel"),
+      class = paste(
+        "btn btn-outline-primary",
+        "shiny-download-link"
+      ),
+      href = "",
+      target = "_blank",
+      download = NA,
+      bsicons$bs_icon(
+        "file-earmark-excel", class = "me-2"
+      ),
+      "Download Excel (All Results)"
+    ),
+
+    # RDS download
+    shiny$tags$a(
+      id = ns("download_lda_rds"),
+      class = paste(
+        "btn btn-outline-secondary",
+        "shiny-download-link"
+      ),
+      href = "",
+      target = "_blank",
+      download = NA,
+      bsicons$bs_icon(
+        "file-earmark-code", class = "me-2"
+      ),
+      "Download RDS (LDA/QDA Object)"
+    ),
+
+    shiny$tags$small(
+      class = "text-muted mt-2",
+      paste(
+        "Excel sheet 1 contains LD scores",
+        "(or posterior probabilities for QDA)",
+        "with metadata — ready for downstream",
+        "clustering. The RDS file contains the",
+        "full result for use in R",
+        "(load with readRDS())."
       )
     )
   )
