@@ -57,7 +57,8 @@ ui <- function(id) {
 }
 
 #' @export
-server <- function(id, input_data, data_version) {
+server <- function(id, input_data, data_version,
+                   pca_result = NULL) {
   shiny$moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -79,11 +80,34 @@ server <- function(id, input_data, data_version) {
       rhino$log$info("LDA: state reset for new data")
     }, ignoreInit = TRUE)
 
+    # Reactive: PCA scores as a flat data frame
+    # (metadata cols + Dim.1, Dim.2, … columns)
+    pca_scores_data <- shiny$reactive({
+      if (is.null(pca_result)) return(NULL)
+      pca_res <- pca_result()
+      if (is.null(pca_res) || !isTRUE(pca_res$success)) {
+        return(NULL)
+      }
+      res <- pca_res$result
+      coord <- as.data.frame(res$ind$coord)
+      meta <- res$ind$meta
+      if (
+        !is.null(meta) &&
+        nrow(meta) == nrow(coord) &&
+        !("Row" %in% names(meta) && ncol(meta) == 1)
+      ) {
+        cbind(meta, coord)
+      } else {
+        coord
+      }
+    })
+
     # Delegate to sub-module servers
     data_selection$tab_server(
       input, output, session,
       input_data = input_data,
-      data_version = data_version
+      data_version = data_version,
+      pca_scores_data = pca_scores_data
     )
     analysis_settings$tab_server(
       input, output, session,
@@ -106,11 +130,34 @@ server <- function(id, input_data, data_version) {
       transform_info(NULL)
       validation_warnings(character(0))
 
-      data <- input_data()
+      data_source <- input$data_source
       measure_cols <- input$measureVar
       grouping_col <- input$groupingCol
       analysis_type <- input$analysis_type
       validation_method <- input$validation_method
+
+      # Select source data
+      data <- if (data_source == "pca_scores") {
+        pca_scores_data()
+      } else {
+        input_data()
+      }
+
+      if (is.null(data)) {
+        last_error(error_handling$simple_error(
+          message = if (data_source == "pca_scores") {
+            paste(
+              "No PCA results available.",
+              "Run PCA first in the PCA tab,",
+              "then return here."
+            )
+          } else {
+            "No data available."
+          },
+          operation_name = "LDA Data Preparation"
+        ))
+        return()
+      }
 
       # Validate inputs
       validation <- validate_inputs(
@@ -151,8 +198,7 @@ server <- function(id, input_data, data_version) {
         return()
       }
 
-      # Skewness correction (if enabled, raw data only)
-      data_source <- input$data_source
+      # Skewness correction (raw data only, skip for PCA scores)
       if (
         data_source == "raw" &&
         isTRUE(input$correct_skewness)
@@ -176,7 +222,7 @@ server <- function(id, input_data, data_version) {
         }
       }
 
-      # Scale data based on user selection (raw data only)
+      # Scale data (raw data only, skip for PCA scores)
       analysis_data <- cleaned_data
       scale_method <- input$scale_method
       if (
