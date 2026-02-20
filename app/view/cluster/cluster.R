@@ -166,7 +166,8 @@ server <- function(id, input_data, data_version,
       input_data = input_data,
       data_version = data_version,
       pca_scores_data = pca_scores_data,
-      lda_scores_data = lda_scores_data
+      lda_scores_data = lda_scores_data,
+      pca_result = pca_result
     )
 
     clustering_settings$tab_server(
