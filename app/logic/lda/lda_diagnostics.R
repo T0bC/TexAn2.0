@@ -418,3 +418,162 @@ compute_1d_boundary <- function(lda_result) {
   boundary
 }
 
+
+#' Add QDA decision boundary overlay to a plot
+#'
+#' Works in either LD space (companion LDA projection)
+#' or original variable space. Builds a grid, predicts
+#' class via the QDA model, and renders tile regions
+#' plus boundary segments.
+#'
+#' @param p A ggplot object
+#' @param qda_result Result list from run_qda() (needs
+#'   $model, $columns; optionally $lda_model, $lda_scaling)
+#' @param dim_x Character, column name for x-axis
+#' @param dim_y Character, column name for y-axis
+#' @param plot_data Data frame with x, y columns used
+#'   in the scatter (to derive grid range)
+#' @param axis_type Character, "ld" or "original"
+#' @param grid_n Integer, resolution per axis (default 150)
+#' @return The ggplot with boundary layers added
+#' @export
+add_qda_boundaries_overlay <- function(
+    p, qda_result, dim_x, dim_y,
+    plot_data, axis_type = "ld",
+    grid_n = 150) {
+  qda_model <- qda_result$model
+
+  # Grid range with 5% padding
+  x_range <- range(plot_data$x)
+  y_range <- range(plot_data$y)
+  x_pad <- diff(x_range) * 0.05
+  y_pad <- diff(y_range) * 0.05
+
+  x_seq <- seq(
+    x_range[1] - x_pad, x_range[2] + x_pad,
+    length.out = grid_n
+  )
+  y_seq <- seq(
+    y_range[1] - y_pad, y_range[2] + y_pad,
+    length.out = grid_n
+  )
+  grid_df <- expand.grid(x = x_seq, y = y_seq)
+
+  columns <- qda_result$columns
+
+  if (axis_type == "ld") {
+    # Back-project from LD space to original space
+    lda_model <- qda_result$lda_model
+    scaling <- as.matrix(qda_result$lda_scaling)
+    lda_scores <- qda_result$lda_scores
+    ld_names <- colnames(lda_scores)
+    n_ld <- length(ld_names)
+
+    grid_ld <- matrix(
+      0, nrow = nrow(grid_df), ncol = n_ld
+    )
+    colnames(grid_ld) <- ld_names
+    grid_ld[, dim_x] <- grid_df$x
+    grid_ld[, dim_y] <- grid_df$y
+
+    col_means <- colMeans(lda_model$means)
+    scaling_inv <- MASS::ginv(scaling)
+    original_grid <- grid_ld %*% scaling_inv
+    original_grid <- sweep(
+      original_grid, 2, col_means, "+"
+    )
+    original_grid <- as.data.frame(original_grid)
+    colnames(original_grid) <- columns
+  } else {
+    # Original variable space — predict directly
+    # Fill all columns with their mean, override
+    # the two selected axes
+    col_means <- colMeans(
+      qda_result$numeric_data,
+      na.rm = TRUE
+    )
+    original_grid <- as.data.frame(
+      matrix(
+        rep(col_means, each = nrow(grid_df)),
+        nrow = nrow(grid_df)
+      )
+    )
+    colnames(original_grid) <- columns
+    original_grid[[dim_x]] <- grid_df$x
+    original_grid[[dim_y]] <- grid_df$y
+  }
+
+  # Predict class for each grid point using QDA
+  pred <- stats::predict(qda_model, original_grid)
+  grid_df$class <- pred$class
+  grid_df$class_num <- as.numeric(grid_df$class)
+
+  group_levels <- qda_result$group_levels
+  grid_df$class <- factor(
+    grid_df$class, levels = group_levels
+  )
+
+  # Tile layer (soft fill)
+  p <- p +
+    ggplot2$geom_tile(
+      data = grid_df,
+      ggplot2$aes(
+        x = x, y = y, fill = class
+      ),
+      alpha = 0.15,
+      inherit.aes = FALSE
+    )
+
+  # Boundary segments: find adjacent cells that differ
+  dx <- x_seq[2] - x_seq[1]
+  dy <- y_seq[2] - y_seq[1]
+  class_mat <- matrix(
+    grid_df$class_num,
+    nrow = grid_n, ncol = grid_n
+  )
+
+  seg_list <- vector("list", 2 * grid_n * grid_n)
+  k <- 0L
+  for (i in seq_len(grid_n)) {
+    for (j in seq_len(grid_n)) {
+      if (i < grid_n &&
+          class_mat[i, j] != class_mat[i + 1, j]) {
+        k <- k + 1L
+        mid_x <- x_seq[i] + dx / 2
+        seg_list[[k]] <- data.frame(
+          x = mid_x, xend = mid_x,
+          y = y_seq[j] - dy / 2,
+          yend = y_seq[j] + dy / 2
+        )
+      }
+      if (j < grid_n &&
+          class_mat[i, j] != class_mat[i, j + 1]) {
+        k <- k + 1L
+        mid_y <- y_seq[j] + dy / 2
+        seg_list[[k]] <- data.frame(
+          x = x_seq[i] - dx / 2,
+          xend = x_seq[i] + dx / 2,
+          y = mid_y, yend = mid_y
+        )
+      }
+    }
+  }
+
+  if (k > 0) {
+    seg_df <- do.call(rbind, seg_list[seq_len(k)])
+    p <- p +
+      ggplot2$geom_segment(
+        data = seg_df,
+        ggplot2$aes(
+          x = x, xend = xend,
+          y = y, yend = yend
+        ),
+        colour = "grey50",
+        linewidth = 0.45,
+        inherit.aes = FALSE
+      )
+  }
+
+  p
+}
+
