@@ -14,8 +14,7 @@ box::use(
   app/logic/lda/lda_diagnostics[
     compute_pooled_vc,
     generate_ellipse_points,
-    create_class_ellipses_plot,
-    create_pooled_vc_plot,
+    create_assumption_plot,
   ],
   app/logic/lda/lda[
     lda_error_parser,
