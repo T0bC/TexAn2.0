@@ -31,8 +31,7 @@ box::use(
 box::use(
   app/logic/lda/ld_plot[create_ld_plot],
   app/logic/lda/lda_diagnostics[
-    create_class_ellipses_plot,
-    create_pooled_vc_plot,
+    create_assumption_plot,
   ],
 )
 
@@ -125,8 +124,7 @@ server <- function(id, input_data, data_version,
 
     # Reactive: last plots for download
     last_ld_plot <- shiny$reactiveVal(NULL)
-    last_class_ell_plot <- shiny$reactiveVal(NULL)
-    last_pooled_vc_plot <- shiny$reactiveVal(NULL)
+    last_assumption_plot <- shiny$reactiveVal(NULL)
 
     # Handle Compute LDA/QDA button
     shiny$observeEvent(input$compute_lda_button, {
@@ -504,31 +502,20 @@ server <- function(id, input_data, data_version,
           shiny$tags$p(
             class = "text-muted small mb-3",
             paste(
-              "Visual checks for LDA assumptions:",
-              "elliptical cluster shapes and equal",
-              "variance-covariance across groups",
-              "(Cook & Laa, Ch. 14.2)."
+              "Visual checks for LDA assumptions",
+              "(Cook & Laa, Ch. 14.2).",
+              "Solid ellipses: per-group covariance.",
+              "Dashed ellipses: pooled",
+              "within-group covariance.",
+              "If both match, the equal-covariance",
+              "assumption holds."
             )
           ),
-          shiny$tags$h6(
-            class = "mt-2 mb-2",
-            "Per-Group Covariance Ellipses"
-          ),
           ggiraph$girafeOutput(
-            ns("class_ellipses_plot"),
-            height = "500px"
+            ns("assumption_plot"),
+            height = "550px"
           ),
-          download_buttons(ns, "class_ell"),
-          shiny$tags$hr(),
-          shiny$tags$h6(
-            class = "mt-2 mb-2",
-            "Pooled Covariance Ellipses vs Data"
-          ),
-          ggiraph$girafeOutput(
-            ns("pooled_vc_plot"),
-            height = "500px"
-          ),
-          download_buttons(ns, "pooled_vc")
+          download_buttons(ns, "assumption")
         )
       }
 
@@ -638,8 +625,8 @@ server <- function(id, input_data, data_version,
       last_ld_plot, "LD_Scores_Plot"
     )
 
-    # Class ellipses plot renderer
-    output$class_ellipses_plot <- ggiraph$renderGirafe({
+    # Assumption diagnostics plot renderer (combined)
+    output$assumption_plot <- ggiraph$renderGirafe({
       res <- result()
       if (is.null(res)) return(NULL)
       if (res$analysis_type != "lda") return(NULL)
@@ -649,7 +636,7 @@ server <- function(id, input_data, data_version,
       dim_x <- input$ldDimX %||% "LD1"
       dim_y <- input$ldDimY %||% "LD2"
 
-      plot_res <- create_class_ellipses_plot(
+      plot_res <- create_assumption_plot(
         lda_result = res,
         dim_x = dim_x,
         dim_y = dim_y
@@ -657,7 +644,7 @@ server <- function(id, input_data, data_version,
 
       if (!plot_res$success) return(NULL)
 
-      last_class_ell_plot(plot_res$result)
+      last_assumption_plot(plot_res$result)
 
       ggiraph$girafe(
         ggobj = plot_res$result,
@@ -688,68 +675,11 @@ server <- function(id, input_data, data_version,
       )
     })
 
-    # Register class ellipses download handlers
+    # Register assumption plot download handlers
     register_plot_downloads(
-      output, input, "class_ell",
-      last_class_ell_plot,
-      "Class_Ellipses_Plot"
-    )
-
-    # Pooled VC plot renderer
-    output$pooled_vc_plot <- ggiraph$renderGirafe({
-      res <- result()
-      if (is.null(res)) return(NULL)
-      if (res$analysis_type != "lda") return(NULL)
-      if (is.null(res$scores)) return(NULL)
-      if (ncol(res$scores) < 2) return(NULL)
-
-      dim_x <- input$ldDimX %||% "LD1"
-      dim_y <- input$ldDimY %||% "LD2"
-
-      plot_res <- create_pooled_vc_plot(
-        lda_result = res,
-        dim_x = dim_x,
-        dim_y = dim_y
-      )
-
-      if (!plot_res$success) return(NULL)
-
-      last_pooled_vc_plot(plot_res$result)
-
-      ggiraph$girafe(
-        ggobj = plot_res$result,
-        width_svg = 10,
-        height_svg = 7,
-        options = list(
-          ggiraph$opts_sizing(
-            rescale = TRUE, width = 1
-          ),
-          ggiraph$opts_hover(
-            css = paste0(
-              "fill-opacity:0.8;",
-              "stroke:black;stroke-width:2px;"
-            )
-          ),
-          ggiraph$opts_tooltip(
-            css = paste0(
-              "background-color:white;",
-              "padding:8px;",
-              "border-radius:4px;",
-              "border:1px solid #ccc;",
-              "font-family:sans-serif;"
-            ),
-            use_fill = FALSE
-          ),
-          ggiraph$opts_selection(type = "none")
-        )
-      )
-    })
-
-    # Register pooled VC download handlers
-    register_plot_downloads(
-      output, input, "pooled_vc",
-      last_pooled_vc_plot,
-      "Pooled_VC_Plot"
+      output, input, "assumption",
+      last_assumption_plot,
+      "Assumption_Diagnostics_Plot"
     )
 
     # Return LDA result for downstream modules (e.g. Cluster)
