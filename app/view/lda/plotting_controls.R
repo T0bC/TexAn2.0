@@ -240,6 +240,45 @@ tab_server <- function(input, output, session,
           ld_names[min(n_ld, 2)]
         }
       )
+    } else if (res$analysis_type == "mda") {
+      # MDA: use discriminant scores (like LDA)
+      if (
+        is.null(res$scores) ||
+        ncol(res$scores) == 0
+      ) {
+        return()
+      }
+      ld_names <- colnames(res$scores)
+      n_ld <- length(ld_names)
+
+      rhino$log$info(
+        "plotting_controls: MDA — ",
+        "{n_ld} discriminant axes available"
+      )
+
+      shiny$updateSelectizeInput(
+        session, "ldDimX",
+        choices = ld_names,
+        selected = ld_names[1]
+      )
+      shiny$updateSelectizeInput(
+        session, "ldDimY",
+        choices = ld_names,
+        selected = if (n_ld >= 2) {
+          ld_names[2]
+        } else {
+          ld_names[1]
+        }
+      )
+      shiny$updateSelectizeInput(
+        session, "ldDimZ",
+        choices = ld_names,
+        selected = if (n_ld >= 3) {
+          ld_names[3]
+        } else {
+          ld_names[min(n_ld, 2)]
+        }
+      )
     } else if (res$analysis_type == "qda") {
       # QDA: offer LD axes (companion) + original vars
       ld_names <- if (!is.null(res$lda_scores)) {
