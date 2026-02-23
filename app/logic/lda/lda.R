@@ -254,6 +254,82 @@ run_qda <- function(data, columns, grouping_col,
   )
 }
 
+#' Run Mixture Discriminant Analysis
+#'
+#' Calls mda::mda() on the supplied data. Supports both
+#' standard model fitting and manual leave-one-out CV
+#' (mda does not have a built-in CV parameter).
+#'
+#' @param data Data frame (cleaned, optionally scaled)
+#' @param columns Character vector of measurement column names
+#' @param grouping_col Character, name of the grouping column
+#' @param prior Character, "proportional" or "equal"
+#' @param cv Logical, leave-one-out cross-validation
+#' @param meta_cols Character vector of metadata column names
+#' @param subclasses Integer, number of subclasses per class
+#' @param iter Integer, maximum number of EM iterations
+#' @param dimension Integer or NULL, dimension of reduced model
+#' @param eps Numeric or NULL, threshold for truncating dimension
+#' @return List with $success, $result or $error
+#' @export
+run_mda <- function(data, columns, grouping_col,
+                    prior = "proportional",
+                    cv = FALSE,
+                    meta_cols = character(0),
+                    subclasses = 3, iter = 5,
+                    dimension = NULL, eps = NULL) {
+  error_handling$safe_execute(
+    {
+      grouping <- as.factor(data[[grouping_col]])
+      numeric_data <- data[, columns, drop = FALSE]
+      prior_vec <- build_prior(prior, grouping)
+
+      rhino$log$info(
+        "MDA: running mda::mda() — ",
+        "{length(columns)} vars, {nlevels(grouping)}",
+        " groups, subclasses={subclasses},",
+        " iter={iter}, CV={cv}"
+      )
+
+      if (cv) {
+        # Manual LOO-CV (mda has no built-in CV)
+        build_mda_cv_result(
+          data, numeric_data, grouping,
+          columns, grouping_col, meta_cols,
+          prior_vec, subclasses, iter,
+          dimension, eps
+        )
+      } else {
+        # Build formula: grouping ~ .
+        fit_data <- cbind(
+          numeric_data, .grouping. = grouping
+        )
+        args <- list(
+          formula = .grouping. ~ .,
+          data = fit_data,
+          subclasses = subclasses,
+          iter = iter
+        )
+        if (!is.null(dimension)) {
+          args$dimension <- dimension
+        }
+        if (!is.null(eps)) args$eps <- eps
+
+        mda_obj <- do.call(mda::mda, args)
+
+        build_mda_result(
+          mda_obj, data, numeric_data, columns,
+          grouping_col, grouping, meta_cols,
+          prior_vec
+        )
+      }
+    },
+    operation_name = "MDA",
+    error_parser = lda_error_parser
+  )
+}
+
+
 #' Predict on new data using a fitted LDA/QDA model
 #'
 #' Takes the result from run_lda()/run_qda() (with cv=FALSE)
@@ -293,7 +369,25 @@ run_predict <- function(lda_result, test_data, columns,
         " test observations"
       )
 
-      pred <- stats::predict(model, numeric_test)
+      is_mda <- lda_result$analysis_type == "mda"
+
+      if (is_mda) {
+        # MDA: predict returns factor directly
+        pred_class <- stats::predict(
+          model, numeric_test
+        )
+        pred_post <- stats::predict(
+          model, numeric_test, type = "posterior"
+        )
+        pred_scores <- stats::predict(
+          model, numeric_test, type = "variates"
+        )
+      } else {
+        pred <- stats::predict(model, numeric_test)
+        pred_class <- pred$class
+        pred_post <- pred$posterior
+        pred_scores <- pred$x
+      }
 
       # Build meta for test set
       meta <- if (length(meta_cols) > 0) {
@@ -306,14 +400,20 @@ run_predict <- function(lda_result, test_data, columns,
 
       result <- list(
         analysis_type = lda_result$analysis_type,
-        predicted_class = pred$class,
-        posterior = as.data.frame(pred$posterior),
+        predicted_class = pred_class,
+        posterior = as.data.frame(pred_post),
         meta = meta
       )
 
-      # LD scores (LDA only, not QDA)
-      if (!is.null(pred$x)) {
-        result$scores <- as.data.frame(pred$x)
+      # LD scores (LDA and MDA, not QDA)
+      if (!is.null(pred_scores)) {
+        scores_df <- as.data.frame(pred_scores)
+        if (is_mda && ncol(scores_df) > 0) {
+          colnames(scores_df) <- paste0(
+            "LD", seq_len(ncol(scores_df))
+          )
+        }
+        result$scores <- scores_df
       }
 
       # Confusion matrix if true labels available
@@ -325,7 +425,7 @@ run_predict <- function(lda_result, test_data, columns,
           test_data[[grouping_col]]
         )
         result$confusion <- build_confusion_stats(
-          true_labels, pred$class
+          true_labels, pred_class
         )
       }
 
@@ -504,6 +604,221 @@ build_cv_classification <- function(obj, grouping) {
 }
 
 
+build_mda_result <- function(mda_obj, data, numeric_data,
+                             columns, grouping_col,
+                             grouping, meta_cols,
+                             prior_vec) {
+  n <- nrow(data)
+  p <- length(columns)
+  n_groups <- nlevels(grouping)
+
+  # Build metadata
+  meta <- if (length(meta_cols) > 0) {
+    data[, meta_cols, drop = FALSE]
+  } else {
+    data.frame(Row = seq_len(n))
+  }
+
+  # Predict on training data for scores + posterior
+  pred_all <- stats::predict(
+    mda_obj, numeric_data
+  )
+  pred_post <- stats::predict(
+    mda_obj, numeric_data, type = "posterior"
+  )
+
+  # Discriminant scores from predict
+  scores_mat <- stats::predict(
+    mda_obj, numeric_data, type = "variates"
+  )
+  if (is.null(scores_mat)) {
+    # Fallback: use companion LDA for projection
+    scores_mat <- matrix(
+      nrow = n, ncol = 0
+    )
+  }
+  scores_df <- as.data.frame(scores_mat)
+  if (ncol(scores_df) > 0) {
+    colnames(scores_df) <- paste0(
+      "LD", seq_len(ncol(scores_df))
+    )
+  }
+
+  # Proportion of trace from percent.explained
+  pct_explained <- mda_obj$percent.explained
+  if (!is.null(pct_explained) && length(pct_explained) > 0) {
+    n_dim <- length(pct_explained)
+    prop_vals <- pct_explained / 100
+    cum_vals <- cumsum(prop_vals)
+    proportion_of_trace <- data.frame(
+      LD = paste0("LD", seq_len(n_dim)),
+      `Proportion` = round(prop_vals, 4),
+      `Cumulative` = round(cum_vals, 4),
+      check.names = FALSE
+    )
+  } else {
+    proportion_of_trace <- NULL
+  }
+
+  # Scaling coefficients from the fit component
+  scaling <- tryCatch(
+    {
+      coefs <- coef(mda_obj)
+      if (!is.null(coefs) && is.matrix(coefs)) {
+        as.data.frame(coefs)
+      } else {
+        NULL
+      }
+    },
+    error = function(e) NULL
+  )
+
+  # Group means from the mda object
+  means <- tryCatch(
+    as.data.frame(mda_obj$means),
+    error = function(e) NULL
+  )
+
+  # Subclass priors
+  sub_prior <- mda_obj$sub.prior
+
+  result <- list(
+    analysis_type = "mda",
+    grouping_col = grouping_col,
+    columns = columns,
+    n = n,
+    p = p,
+    n_groups = n_groups,
+    group_levels = levels(grouping),
+    prior = prior_vec,
+    means = means,
+    meta = meta,
+    model = mda_obj,
+    scores = scores_df,
+    scaling = scaling,
+    proportion_of_trace = proportion_of_trace,
+    sub_prior = sub_prior,
+    subclasses = mda_obj$subclasses,
+    dimension = mda_obj$dimension,
+    deviance = mda_obj$deviance,
+    predicted_class = pred_all,
+    posterior = as.data.frame(pred_post)
+  )
+
+  # SVD-like field for dimension count
+  if (!is.null(proportion_of_trace)) {
+    result$svd <- proportion_of_trace$Proportion
+  }
+
+  # Confusion on training data (resubstitution)
+  result$confusion <- build_confusion_stats(
+    grouping, pred_all
+  )
+
+  rhino$log$info(
+    "MDA: model fit complete — ",
+    "dimension={mda_obj$dimension}, ",
+    "resubstitution accuracy ",
+    "{round(result$confusion$accuracy * 100, 1)}%"
+  )
+
+  result
+}
+
+
+build_mda_cv_result <- function(data, numeric_data,
+                                grouping, columns,
+                                grouping_col, meta_cols,
+                                prior_vec, subclasses,
+                                iter, dimension, eps) {
+  n <- nrow(data)
+  n_groups <- nlevels(grouping)
+  lvls <- levels(grouping)
+
+  predicted <- factor(
+    rep(NA_character_, n), levels = lvls
+  )
+  posterior <- matrix(
+    NA_real_, nrow = n, ncol = n_groups
+  )
+  colnames(posterior) <- lvls
+
+  for (i in seq_len(n)) {
+    train_data <- numeric_data[-i, , drop = FALSE]
+    train_g <- grouping[-i]
+    test_obs <- numeric_data[i, , drop = FALSE]
+
+    fit_data <- cbind(
+      train_data, .grouping. = train_g
+    )
+    args <- list(
+      formula = .grouping. ~ .,
+      data = fit_data,
+      subclasses = subclasses,
+      iter = iter
+    )
+    if (!is.null(dimension)) {
+      args$dimension <- dimension
+    }
+    if (!is.null(eps)) args$eps <- eps
+
+    fold_fit <- tryCatch(
+      do.call(mda::mda, args),
+      error = function(e) NULL
+    )
+
+    if (!is.null(fold_fit)) {
+      fold_pred <- stats::predict(
+        fold_fit, test_obs
+      )
+      fold_post <- stats::predict(
+        fold_fit, test_obs, type = "posterior"
+      )
+      predicted[i] <- as.character(fold_pred)
+      posterior[i, ] <- as.numeric(fold_post)
+    }
+  }
+
+  posterior <- as.data.frame(posterior)
+
+  # Build metadata
+  meta <- if (length(meta_cols) > 0) {
+    data[, meta_cols, drop = FALSE]
+  } else {
+    data.frame(Row = seq_len(n))
+  }
+
+  confusion <- build_confusion_stats(
+    grouping, predicted
+  )
+
+  rhino$log$info(
+    "MDA: LOO-CV complete — accuracy ",
+    "{round(confusion$accuracy * 100, 1)}%"
+  )
+
+  list(
+    analysis_type = "mda",
+    grouping_col = grouping_col,
+    columns = columns,
+    n = n,
+    p = length(columns),
+    n_groups = n_groups,
+    group_levels = lvls,
+    prior = prior_vec,
+    means = NULL,
+    meta = meta,
+    model = NULL,
+    cv = list(
+      predicted_class = predicted,
+      posterior = posterior,
+      confusion = confusion,
+      accuracy = confusion$accuracy
+    )
+  )
+}
+
+
 build_confusion_stats <- function(true_labels,
                                   predicted_labels) {
   cm <- table(
@@ -604,6 +919,26 @@ lda_error_parser <- function(error_msg,
       ": Problem with grouping variable.",
       " Ensure it has at least 2 levels",
       " with sufficient observations each."
+    )
+  } else if (grepl(
+    "converg|iteration|EM",
+    error_msg, ignore.case = TRUE
+  )) {
+    paste0(
+      operation_name,
+      ": EM algorithm did not converge.",
+      " Try increasing the number of iterations",
+      " or reducing the number of subclasses."
+    )
+  } else if (grepl(
+    "subclass|mixture",
+    error_msg, ignore.case = TRUE
+  )) {
+    paste0(
+      operation_name,
+      ": Problem with subclass configuration.",
+      " Ensure each group has enough observations",
+      " for the requested number of subclasses."
     )
   } else if (grepl("numeric", error_msg, ignore.case = TRUE)) {
     paste0(
