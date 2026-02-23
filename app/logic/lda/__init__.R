@@ -5,6 +5,7 @@ box::use(
   ],
   app/logic/lda/ld_plot[
     create_ld_plot,
+    create_qda_plot,
     ld_plot_error_parser,
     get_group_values,
     build_tooltips,
@@ -16,6 +17,7 @@ box::use(
     generate_ellipse_points,
     add_diagnostics_overlay,
     add_boundaries_overlay,
+    add_qda_boundaries_overlay,
     compute_1d_boundary,
   ],
   app/logic/lda/lda[
