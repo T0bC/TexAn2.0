@@ -32,14 +32,16 @@ tab_ui <- function(ns) {
             "LDA assumes equal covariance matrices",
             "across groups. QDA allows each group",
             "to have its own covariance matrix.",
-            "QDA is more flexible but requires",
-            "more observations per group."
+            "MDA models each group as a mixture",
+            "of Gaussians for flexible boundaries.",
+            "QDA/MDA require more observations."
           )
         )
       ),
       choices = list(
         "LDA (Linear)" = "lda",
-        "QDA (Quadratic)" = "qda"
+        "QDA (Quadratic)" = "qda",
+        "MDA (Mixture)" = "mda"
       ),
       selected = "lda"
     ),
@@ -110,6 +112,54 @@ tab_ui <- function(ns) {
           "t-distribution (robust)" = "t"
         ),
         selected = "moment"
+      )
+    ),
+    # MDA settings (MDA only)
+    shiny$conditionalPanel(
+      condition = paste0(
+        "input['", ns("analysis_type"),
+        "'] == 'mda'"
+      ),
+      shiny$numericInput(
+        inputId = ns("mda_subclasses"),
+        label = shiny$tags$span(
+          "Subclasses per group ",
+          bslib$tooltip(
+            bsicons$bs_icon(
+              "info-circle", class = "text-muted"
+            ),
+            paste(
+              "Number of Gaussian subclasses per",
+              "group. More subclasses allow more",
+              "flexible within-group distributions",
+              "but require more observations."
+            )
+          )
+        ),
+        value = 3,
+        min = 1,
+        max = 20,
+        step = 1
+      ),
+      shiny$numericInput(
+        inputId = ns("mda_iter"),
+        label = shiny$tags$span(
+          "Max EM iterations ",
+          bslib$tooltip(
+            bsicons$bs_icon(
+              "info-circle", class = "text-muted"
+            ),
+            paste(
+              "Maximum number of EM algorithm",
+              "iterations. Increase if the model",
+              "has not converged."
+            )
+          )
+        ),
+        value = 5,
+        min = 1,
+        max = 100,
+        step = 1
       )
     ),
     # Prior probabilities
@@ -329,6 +379,12 @@ tab_server <- function(input, output, session,
     )
     shiny$updateNumericInput(
       session, "nu", value = 5
+    )
+    shiny$updateNumericInput(
+      session, "mda_subclasses", value = 3
+    )
+    shiny$updateNumericInput(
+      session, "mda_iter", value = 5
     )
   }, ignoreInit = TRUE)
 }
