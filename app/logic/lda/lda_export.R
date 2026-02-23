@@ -25,7 +25,7 @@ box::use(
 create_lda_excel <- function(lda_result, file,
                              test_result = NULL) {
   wb <- openxlsx$createWorkbook()
-  is_lda <- lda_result$analysis_type == "lda"
+  is_lda <- lda_result$analysis_type %in% c("lda", "mda")
   is_cv <- !is.null(lda_result$cv)
   sheet_count <- 0
 
@@ -77,7 +77,7 @@ create_lda_excel <- function(lda_result, file,
   }
 
   # ---------------------------------------------------------------
-  # Sheet 4: LD Coefficients (LDA only)
+  # Sheet 4: LD Coefficients (LDA and MDA)
   # ---------------------------------------------------------------
   if (is_lda && !is.null(lda_result$scaling)) {
     scaling_df <- cbind(
@@ -140,7 +140,25 @@ create_lda_excel <- function(lda_result, file,
   }
 
   # ---------------------------------------------------------------
-  # Sheet 8: Split Summary (train/test mode only)
+  # Sheet 8: MDA Subclass Info (MDA only)
+  # ---------------------------------------------------------------
+  if (
+    lda_result$analysis_type == "mda" &&
+    !is.null(lda_result$sub_prior)
+  ) {
+    sp_df <- data.frame(
+      Subclass = names(lda_result$sub_prior),
+      Prior = round(
+        as.numeric(lda_result$sub_prior), 6
+      ),
+      stringsAsFactors = FALSE
+    )
+    add_sheet(wb, "Subclass Priors", sp_df)
+    sheet_count <- sheet_count + 1
+  }
+
+  # ---------------------------------------------------------------
+  # Sheet 9: Split Summary (train/test mode only)
   # ---------------------------------------------------------------
   if (
     !is.null(test_result) &&
