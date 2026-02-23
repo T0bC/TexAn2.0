@@ -30,9 +30,6 @@ box::use(
 
 box::use(
   app/logic/lda/ld_plot[create_ld_plot],
-  app/logic/lda/lda_diagnostics[
-    create_assumption_plot,
-  ],
 )
 
 #' @export
@@ -122,9 +119,8 @@ server <- function(id, input_data, data_version,
       lda_result = result
     )
 
-    # Reactive: last plots for download
+    # Reactive: last plot for download
     last_ld_plot <- shiny$reactiveVal(NULL)
-    last_assumption_plot <- shiny$reactiveVal(NULL)
 
     # Handle Compute LDA/QDA button
     shiny$observeEvent(input$compute_lda_button, {
@@ -483,42 +479,6 @@ server <- function(id, input_data, data_version,
         )
       }
 
-      # Assumption diagnostics panel (LDA only, >= 2 LD axes)
-      diag_panel <- NULL
-      if (
-        !is.null(res) &&
-        res$analysis_type == "lda" &&
-        !is.null(res$scores) &&
-        ncol(res$scores) >= 2
-      ) {
-        diag_panel <- bslib$accordion_panel(
-          title = shiny$tags$span(
-            bsicons$bs_icon(
-              "clipboard2-check", class = "me-1"
-            ),
-            "Assumption Diagnostics"
-          ),
-          value = "diag_panel",
-          shiny$tags$p(
-            class = "text-muted small mb-3",
-            paste(
-              "Visual checks for LDA assumptions",
-              "(Cook & Laa, Ch. 14.2).",
-              "Solid ellipses: per-group covariance.",
-              "Dashed ellipses: pooled",
-              "within-group covariance.",
-              "If both match, the equal-covariance",
-              "assumption holds."
-            )
-          ),
-          ggiraph$girafeOutput(
-            ns("assumption_plot"),
-            height = "550px"
-          ),
-          download_buttons(ns, "assumption")
-        )
-      }
-
       shiny$tagList(
         preprocess_banner,
         warn_banner,
@@ -527,8 +487,7 @@ server <- function(id, input_data, data_version,
           open = "ld_plot_panel",
           multiple = TRUE,
           lda_panel,
-          ld_plot_panel,
-          diag_panel
+          ld_plot_panel
         )
       )
     })
@@ -579,11 +538,15 @@ server <- function(id, input_data, data_version,
 
       dim_x <- input$ldDimX %||% "LD1"
       dim_y <- input$ldDimY %||% "LD2"
+      show_diag <- isTRUE(input$show_diagnostics)
+      show_bound <- isTRUE(input$show_boundaries)
 
       plot_res <- create_ld_plot(
         lda_result = res,
         dim_x = dim_x,
-        dim_y = dim_y
+        dim_y = dim_y,
+        show_diagnostics = show_diag,
+        show_boundaries = show_bound
       )
 
       if (!plot_res$success) return(NULL)
@@ -623,63 +586,6 @@ server <- function(id, input_data, data_version,
     register_plot_downloads(
       output, input, "ld_plot",
       last_ld_plot, "LD_Scores_Plot"
-    )
-
-    # Assumption diagnostics plot renderer (combined)
-    output$assumption_plot <- ggiraph$renderGirafe({
-      res <- result()
-      if (is.null(res)) return(NULL)
-      if (res$analysis_type != "lda") return(NULL)
-      if (is.null(res$scores)) return(NULL)
-      if (ncol(res$scores) < 2) return(NULL)
-
-      dim_x <- input$ldDimX %||% "LD1"
-      dim_y <- input$ldDimY %||% "LD2"
-
-      plot_res <- create_assumption_plot(
-        lda_result = res,
-        dim_x = dim_x,
-        dim_y = dim_y
-      )
-
-      if (!plot_res$success) return(NULL)
-
-      last_assumption_plot(plot_res$result)
-
-      ggiraph$girafe(
-        ggobj = plot_res$result,
-        width_svg = 10,
-        height_svg = 7,
-        options = list(
-          ggiraph$opts_sizing(
-            rescale = TRUE, width = 1
-          ),
-          ggiraph$opts_hover(
-            css = paste0(
-              "fill-opacity:0.8;",
-              "stroke:black;stroke-width:2px;"
-            )
-          ),
-          ggiraph$opts_tooltip(
-            css = paste0(
-              "background-color:white;",
-              "padding:8px;",
-              "border-radius:4px;",
-              "border:1px solid #ccc;",
-              "font-family:sans-serif;"
-            ),
-            use_fill = FALSE
-          ),
-          ggiraph$opts_selection(type = "none")
-        )
-      )
-    })
-
-    # Register assumption plot download handlers
-    register_plot_downloads(
-      output, input, "assumption",
-      last_assumption_plot,
-      "Assumption_Diagnostics_Plot"
     )
 
     # Return LDA result for downstream modules (e.g. Cluster)
