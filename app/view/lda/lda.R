@@ -29,7 +29,7 @@ box::use(
 )
 
 box::use(
-  app/logic/lda/ld_plot[create_ld_plot],
+  app/logic/lda/ld_plot[create_ld_plot, create_qda_plot],
 )
 
 #' @export
@@ -455,21 +455,28 @@ server <- function(id, input_data, data_version,
         lda_content
       )
 
-      # LD scores plot panel (LDA only, model mode)
+      # Scores plot panel (LDA or QDA with companion LDA)
       res <- result()
       ld_plot_panel <- NULL
-      if (
-        !is.null(res) &&
+      has_lda_plot <- !is.null(res) &&
         res$analysis_type == "lda" &&
         !is.null(res$scores) &&
         ncol(res$scores) > 0
-      ) {
+      has_qda_plot <- !is.null(res) &&
+        res$analysis_type == "qda" &&
+        !is.null(res$model)
+      if (has_lda_plot || has_qda_plot) {
+        plot_title <- if (has_lda_plot) {
+          "LD Scores Plot"
+        } else {
+          "QDA Classification Plot"
+        }
         ld_plot_panel <- bslib$accordion_panel(
           title = shiny$tags$span(
             bsicons$bs_icon(
               "graph-up", class = "me-1"
             ),
-            "LD Scores Plot"
+            plot_title
           ),
           value = "ld_plot_panel",
           ggiraph$girafeOutput(
@@ -529,25 +536,36 @@ server <- function(id, input_data, data_version,
       }
     )
 
-    # LD scores plot renderer
+    # Scores plot renderer (LDA or QDA)
     output$ld_plot <- ggiraph$renderGirafe({
       res <- result()
       if (is.null(res)) return(NULL)
-      if (res$analysis_type != "lda") return(NULL)
-      if (is.null(res$scores)) return(NULL)
 
       dim_x <- input$ldDimX %||% "LD1"
       dim_y <- input$ldDimY %||% "LD2"
-      show_diag <- isTRUE(input$show_diagnostics)
       show_bound <- isTRUE(input$show_boundaries)
 
-      plot_res <- create_ld_plot(
-        lda_result = res,
-        dim_x = dim_x,
-        dim_y = dim_y,
-        show_diagnostics = show_diag,
-        show_boundaries = show_bound
-      )
+      plot_res <- if (res$analysis_type == "lda") {
+        if (is.null(res$scores)) return(NULL)
+        show_diag <- isTRUE(input$show_diagnostics)
+        create_ld_plot(
+          lda_result = res,
+          dim_x = dim_x,
+          dim_y = dim_y,
+          show_diagnostics = show_diag,
+          show_boundaries = show_bound
+        )
+      } else if (res$analysis_type == "qda") {
+        if (is.null(res$model)) return(NULL)
+        create_qda_plot(
+          qda_result = res,
+          dim_x = dim_x,
+          dim_y = dim_y,
+          show_boundaries = show_bound
+        )
+      } else {
+        return(NULL)
+      }
 
       if (!plot_res$success) return(NULL)
 
