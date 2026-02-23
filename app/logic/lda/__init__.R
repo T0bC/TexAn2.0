@@ -14,7 +14,9 @@ box::use(
   app/logic/lda/lda_diagnostics[
     compute_pooled_vc,
     generate_ellipse_points,
-    create_assumption_plot,
+    add_diagnostics_overlay,
+    add_boundaries_overlay,
+    compute_1d_boundary,
   ],
   app/logic/lda/lda[
     lda_error_parser,
