@@ -9,6 +9,7 @@ box::use(
   app/logic/lda/lda_diagnostics[
     add_diagnostics_overlay,
     add_boundaries_overlay,
+    add_qda_boundaries_overlay,
     compute_1d_boundary,
   ],
 )
@@ -117,6 +118,62 @@ ld_plot_error_parser <- function(error_msg,
   } else {
     paste0(operation_name, " failed: ", error_msg)
   }
+}
+
+
+#' Create an interactive QDA scatter plot
+#'
+#' Plots QDA results in either LD space (via companion
+#' LDA projection) or original variable space. Points
+#' are coloured by true group labels; optional decision
+#' boundary shading shows QDA-predicted regions.
+#'
+#' @param qda_result Result list from run_qda()
+#' @param dim_x Character, column for x-axis
+#' @param dim_y Character, column for y-axis
+#' @param show_boundaries Logical, overlay QDA decision
+#'   boundary regions
+#' @return List with $success, $result (ggplot) or $error
+#' @export
+create_qda_plot <- function(qda_result,
+                             dim_x, dim_y,
+                             show_boundaries = FALSE) {
+  error_handling$safe_execute(
+    expr = {
+      # Determine axis type: LD axes or original vars
+      ld_names <- if (!is.null(qda_result$lda_scores)) {
+        colnames(qda_result$lda_scores)
+      } else {
+        character(0)
+      }
+      is_ld_x <- dim_x %in% ld_names
+      is_ld_y <- dim_y %in% ld_names
+
+      if (is_ld_x && is_ld_y) {
+        axis_type <- "ld"
+        scores <- qda_result$lda_scores
+        prop_trace <- qda_result$lda_proportion_of_trace
+      } else if (!is_ld_x && !is_ld_y) {
+        axis_type <- "original"
+        scores <- NULL
+        prop_trace <- NULL
+      } else {
+        stop(
+          "Cannot mix LD axes and original variables.",
+          " Select either two LD axes or two",
+          " original variables."
+        )
+      }
+
+      build_qda_2d_plot(
+        qda_result, dim_x, dim_y,
+        axis_type, scores, prop_trace,
+        show_boundaries
+      )
+    },
+    operation_name = "QDA Plot",
+    error_parser = ld_plot_error_parser
+  )
 }
 
 
@@ -286,6 +343,101 @@ build_1d_plot <- function(scores, meta, grouping_col,
           round(boundary_x, 3)
         )
       )
+  }
+
+  p
+}
+
+
+build_qda_2d_plot <- function(qda_result, dim_x, dim_y,
+                               axis_type, scores,
+                               prop_trace,
+                               show_boundaries) {
+  meta <- qda_result$meta
+  grouping_col <- qda_result$grouping_col
+  group_vals <- get_group_values(meta, grouping_col)
+  columns <- qda_result$columns
+
+  if (axis_type == "ld") {
+    # Plot in LD space using companion LDA scores
+    df <- data.frame(
+      x = scores[[dim_x]],
+      y = scores[[dim_y]],
+      stringsAsFactors = FALSE
+    )
+    tooltip_scores <- scores
+    x_label <- axis_label(dim_x, prop_trace)
+    y_label <- axis_label(dim_y, prop_trace)
+    title_suffix <- paste0(
+      dim_x, " vs ", dim_y, " (LDA projection)"
+    )
+  } else {
+    # Plot in original variable space
+    numeric_data <- qda_result$numeric_data
+    df <- data.frame(
+      x = numeric_data[[dim_x]],
+      y = numeric_data[[dim_y]],
+      stringsAsFactors = FALSE
+    )
+    # Build a scores-like frame for tooltips
+    tooltip_scores <- numeric_data
+    x_label <- dim_x
+    y_label <- dim_y
+    title_suffix <- paste0(
+      dim_x, " vs ", dim_y, " (original variables)"
+    )
+  }
+
+  df$group <- as.factor(group_vals)
+
+  # Tooltip
+  df$tooltip <- build_tooltips(
+    tooltip_scores, meta, grouping_col,
+    dim_x, dim_y
+  )
+  df$data_id <- paste0("qda_", seq_len(nrow(df)))
+
+  p <- ggplot2$ggplot(
+    df,
+    ggplot2$aes(
+      x = x, y = y,
+      fill = group
+    )
+  ) +
+    ggiraph$geom_point_interactive(
+      ggplot2$aes(
+        tooltip = tooltip,
+        data_id = data_id
+      ),
+      shape = 21,
+      color = "white",
+      stroke = 0.6,
+      size = 3,
+      alpha = 0.85
+    ) +
+    ggplot2$labs(
+      x = x_label,
+      y = y_label,
+      fill = "Group",
+      title = paste0(
+        "QDA Classification \u2014 ", title_suffix
+      )
+    ) +
+    ld_theme()
+
+  # Overlay QDA decision boundaries when requested
+  if (isTRUE(show_boundaries) &&
+      !is.null(qda_result$model)) {
+    plot_data <- data.frame(
+      x = df$x, y = df$y
+    )
+    p <- add_qda_boundaries_overlay(
+      p, qda_result, dim_x, dim_y,
+      plot_data, axis_type
+    )
+    p <- p + ggplot2$labs(
+      subtitle = "shaded: QDA decision regions"
+    )
   }
 
   p
