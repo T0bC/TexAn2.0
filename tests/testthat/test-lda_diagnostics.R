@@ -133,13 +133,13 @@ describe("generate_ellipse_points", {
 })
 
 # =============================================================================
-# create_class_ellipses_plot
+# create_assumption_plot (combined)
 # =============================================================================
 
-describe("create_class_ellipses_plot", {
+describe("create_assumption_plot", {
   it("returns success with a ggplot for valid LDA result", {
     lda_res <- make_lda_result()
-    plot_res <- lda_diagnostics$create_class_ellipses_plot(
+    plot_res <- lda_diagnostics$create_assumption_plot(
       lda_res, dim_x = "LD1", dim_y = "LD2"
     )
     expect_true(plot_res$success)
@@ -148,30 +148,7 @@ describe("create_class_ellipses_plot", {
 
   it("fails for invalid dimension", {
     lda_res <- make_lda_result()
-    plot_res <- lda_diagnostics$create_class_ellipses_plot(
-      lda_res, dim_x = "LD1", dim_y = "LD99"
-    )
-    expect_true(!plot_res$success)
-  })
-})
-
-# =============================================================================
-# create_pooled_vc_plot
-# =============================================================================
-
-describe("create_pooled_vc_plot", {
-  it("returns success with a ggplot for valid LDA result", {
-    lda_res <- make_lda_result()
-    plot_res <- lda_diagnostics$create_pooled_vc_plot(
-      lda_res, dim_x = "LD1", dim_y = "LD2"
-    )
-    expect_true(plot_res$success)
-    expect_true(inherits(plot_res$result, "gg"))
-  })
-
-  it("fails for invalid dimension", {
-    lda_res <- make_lda_result()
-    plot_res <- lda_diagnostics$create_pooled_vc_plot(
+    plot_res <- lda_diagnostics$create_assumption_plot(
       lda_res, dim_x = "LD1", dim_y = "LD99"
     )
     expect_true(!plot_res$success)
