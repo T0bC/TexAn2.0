@@ -276,8 +276,8 @@ build_1d_plot <- function(scores, meta, grouping_col,
     p <- p +
       ggplot2$geom_vline(
         xintercept = boundary_x,
-        colour = "grey30",
-        linewidth = 0.8,
+        colour = "grey50",
+        linewidth = 0.45,
         linetype = "dashed"
       ) +
       ggplot2$labs(
