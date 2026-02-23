@@ -3870,6 +3870,31 @@
       "RoxygenNote": "7.3.2",
       "Repository": "CRAN"
     },
+    "mda": {
+      "Package": "mda",
+      "Version": "0.5-5",
+      "Source": "Local",
+      "Date": "2024-11-05",
+      "Authors@R": "c(person(given = \"Trevor\", family = \"Hastie\", role = c(\"aut\",\"cre\"), comment=\"Original co-author of the S package `mda`\", email = \"hastie@stanford.edu\"), person(given =  \"Robert\", family = \"Tibshirani\", role = \"aut\", comment=\"Original co-author of the S package `mda`\"), person(given =  \"Balasubramanian\", family = \"Narasimhan\", role = \"ctb\", comment=\"Contributed to the upgrading of code\"), person(given =  \"Friedrich\", family = \"Leisch\", role = \"ctb\", comment=\"Original R port from the S package\"), person(given = \"Kurt\", family = \"Hornik\", role = \"ctb\", comment=\"Original R port from the S package\"), person(given = \"Brian\",   family = \"Ripley\", role = \"ctb\", comment=\"Original R port from the S package\"))",
+      "Description": "Mixture and flexible discriminant analysis, multivariate adaptive regression splines (MARS), BRUTO, and vector-response smoothing splines. Hastie, Tibshirani and Friedman (2009) \"Elements of Statistical Learning (second edition, chap 12)\" Springer, New York.",
+      "Title": "Mixture and Flexible Discriminant Analysis",
+      "Depends": [
+        "R (>= 3.5.0)",
+        "stats",
+        "class"
+      ],
+      "Suggests": [
+        "earth",
+        "testthat"
+      ],
+      "License": "GPL-2",
+      "Repository": "CRAN",
+      "NeedsCompilation": "yes",
+      "Author": "Trevor Hastie [aut, cre] (Original co-author of the S package `mda`), Robert Tibshirani [aut] (Original co-author of the S package `mda`), Balasubramanian Narasimhan [ctb] (Contributed to the upgrading of code), Friedrich Leisch [ctb] (Original R port from the S package), Kurt Hornik [ctb] (Original R port from the S package), Brian Ripley [ctb] (Original R port from the S package)",
+      "Maintainer": "Trevor Hastie <hastie@stanford.edu>",
+      "RemoteType": "local",
+      "RemoteUrl": "C:/Users/meissnerto/Downloads/mda_0.5-5.zip"
+    },
     "memoise": {
       "Package": "memoise",
       "Version": "2.0.1",
