@@ -1,10 +1,12 @@
 box::use(
+  ggplot2,
   testthat[describe, expect_equal, expect_true, it],
 )
 
 box::use(
   app/logic/lda/lda,
   app/logic/lda/lda_diagnostics,
+  app/logic/lda/ld_plot[create_ld_plot],
 )
 
 # =============================================================================
@@ -133,24 +135,164 @@ describe("generate_ellipse_points", {
 })
 
 # =============================================================================
-# create_assumption_plot (combined)
+# add_diagnostics_overlay
 # =============================================================================
 
-describe("create_assumption_plot", {
-  it("returns success with a ggplot for valid LDA result", {
+describe("add_diagnostics_overlay", {
+  it("adds layers to an existing ggplot", {
     lda_res <- make_lda_result()
-    plot_res <- lda_diagnostics$create_assumption_plot(
-      lda_res, dim_x = "LD1", dim_y = "LD2"
+    base_res <- create_ld_plot(
+      lda_res, dim_x = "LD1", dim_y = "LD2",
+      show_diagnostics = FALSE
+    )
+    base_plot <- base_res$result
+    n_layers_before <- length(base_plot$layers)
+
+    groups <- as.factor(lda_res$meta[["species"]])
+    p <- lda_diagnostics$add_diagnostics_overlay(
+      base_plot, lda_res$scores, groups,
+      "LD1", "LD2"
+    )
+    expect_true(inherits(p, "gg"))
+    expect_true(length(p$layers) > n_layers_before)
+  })
+
+  it("works via create_ld_plot show_diagnostics flag", {
+    lda_res <- make_lda_result()
+    plot_res <- create_ld_plot(
+      lda_res, dim_x = "LD1", dim_y = "LD2",
+      show_diagnostics = TRUE
     )
     expect_true(plot_res$success)
     expect_true(inherits(plot_res$result, "gg"))
+    # Should have subtitle when diagnostics enabled
+    expect_true(
+      !is.null(plot_res$result$labels$subtitle)
+    )
   })
 
-  it("fails for invalid dimension", {
+  it("does not add subtitle when diagnostics disabled", {
     lda_res <- make_lda_result()
-    plot_res <- lda_diagnostics$create_assumption_plot(
-      lda_res, dim_x = "LD1", dim_y = "LD99"
+    plot_res <- create_ld_plot(
+      lda_res, dim_x = "LD1", dim_y = "LD2",
+      show_diagnostics = FALSE
     )
-    expect_true(!plot_res$success)
+    expect_true(plot_res$success)
+    expect_true(
+      is.null(plot_res$result$labels$subtitle)
+    )
+  })
+})
+
+# =============================================================================
+# Helper: 2-group LDA (produces 1 LD axis)
+# =============================================================================
+
+make_lda_result_2group <- function(seed = 42) {
+  set.seed(seed)
+  data <- data.frame(
+    species = rep(c("A", "B"), each = 20),
+    site = rep(c("X", "Y"), 20),
+    m1 = c(rnorm(20, mean = 0), rnorm(20, mean = 4)),
+    m2 = c(rnorm(20, mean = 0), rnorm(20, mean = 2)),
+    stringsAsFactors = FALSE
+  )
+  res <- lda$run_lda(
+    data, c("m1", "m2"), "species",
+    meta_cols = c("species", "site")
+  )
+  res$result
+}
+
+# =============================================================================
+# add_boundaries_overlay (2D)
+# =============================================================================
+
+describe("add_boundaries_overlay", {
+  it("adds tile and contour layers to a ggplot", {
+    lda_res <- make_lda_result()
+    base_res <- create_ld_plot(
+      lda_res, dim_x = "LD1", dim_y = "LD2",
+      show_boundaries = FALSE
+    )
+    base_plot <- base_res$result
+    n_layers_before <- length(base_plot$layers)
+
+    p <- lda_diagnostics$add_boundaries_overlay(
+      base_plot, lda_res, "LD1", "LD2",
+      grid_n = 20
+    )
+    expect_true(inherits(p, "gg"))
+    expect_true(length(p$layers) > n_layers_before)
+  })
+
+  it("works via create_ld_plot show_boundaries flag", {
+    lda_res <- make_lda_result()
+    plot_res <- create_ld_plot(
+      lda_res, dim_x = "LD1", dim_y = "LD2",
+      show_boundaries = TRUE
+    )
+    expect_true(plot_res$success)
+    expect_true(inherits(plot_res$result, "gg"))
+    expect_true(grepl(
+      "decision regions",
+      plot_res$result$labels$subtitle
+    ))
+  })
+
+  it("combines subtitles when both overlays active", {
+    lda_res <- make_lda_result()
+    plot_res <- create_ld_plot(
+      lda_res, dim_x = "LD1", dim_y = "LD2",
+      show_diagnostics = TRUE,
+      show_boundaries = TRUE
+    )
+    expect_true(plot_res$success)
+    sub <- plot_res$result$labels$subtitle
+    expect_true(grepl("decision regions", sub))
+    expect_true(grepl("per-group VC", sub))
+  })
+})
+
+# =============================================================================
+# compute_1d_boundary
+# =============================================================================
+
+describe("compute_1d_boundary", {
+  it("returns a finite numeric scalar", {
+    lda_res <- make_lda_result_2group()
+    boundary <- lda_diagnostics$compute_1d_boundary(
+      lda_res
+    )
+    expect_true(is.numeric(boundary))
+    expect_equal(length(boundary), 1)
+    expect_true(is.finite(boundary))
+  })
+
+  it("boundary falls between group means on LD1", {
+    lda_res <- make_lda_result_2group()
+    boundary <- lda_diagnostics$compute_1d_boundary(
+      lda_res
+    )
+    ld1 <- lda_res$scores$LD1
+    groups <- lda_res$meta[["species"]]
+    m_a <- mean(ld1[groups == "A"])
+    m_b <- mean(ld1[groups == "B"])
+    lo <- min(m_a, m_b)
+    hi <- max(m_a, m_b)
+    expect_true(boundary >= lo && boundary <= hi)
+  })
+
+  it("1D plot shows boundary via show_boundaries", {
+    lda_res <- make_lda_result_2group()
+    plot_res <- create_ld_plot(
+      lda_res,
+      show_boundaries = TRUE
+    )
+    expect_true(plot_res$success)
+    expect_true(grepl(
+      "decision boundary",
+      plot_res$result$labels$subtitle
+    ))
   })
 })
