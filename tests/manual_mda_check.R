@@ -53,7 +53,8 @@ tryCatch({
   cat("class:", class(mda_obj), "\n")
   cat("dimension:", mda_obj$dimension, "\n")
   cat("percent.explained:", mda_obj$percent.explained, "\n")
-  cat("sub.prior:", mda_obj$sub.prior, "\n")
+  cat("sub.prior:\n")
+  print(mda_obj$sub.prior)
   cat("deviance:", mda_obj$deviance, "\n")
 
   # predict types
