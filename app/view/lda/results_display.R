@@ -21,9 +21,13 @@ box::use(
 #' @export
 render_lda_results <- function(lda_result, ns,
                                test_result = NULL) {
-  type_label <- if (
-    lda_result$analysis_type == "lda"
-  ) "LDA" else "QDA"
+  type_label <- switch(
+    lda_result$analysis_type,
+    lda = "LDA",
+    qda = "QDA",
+    mda = "MDA",
+    "LDA"
+  )
   is_cv <- !is.null(lda_result$cv)
   is_split <- !is.null(test_result)
 
@@ -109,11 +113,18 @@ render_lda_results <- function(lda_result, ns,
       render_means_table(lda_result$means)
     )
 
-  # 4. LD Coefficients (LDA only, model mode)
+  # 4. LD Coefficients (LDA and MDA, model mode)
   if (
-    lda_result$analysis_type == "lda" &&
+    lda_result$analysis_type %in% c("lda", "mda") &&
     !is.null(lda_result$scaling)
   ) {
+    coef_title <- if (
+      lda_result$analysis_type == "mda"
+    ) {
+      "Discriminant Coefficients"
+    } else {
+      "Coefficients of Linear Discriminants"
+    }
     sub_panels[[length(sub_panels) + 1]] <-
       bslib$accordion_panel(
         title = shiny$tags$span(
@@ -121,10 +132,28 @@ render_lda_results <- function(lda_result, ns,
             "arrows-expand-vertical",
             class = "me-2"
           ),
-          "Coefficients of Linear Discriminants"
+          coef_title
         ),
         value = "scaling_sub",
         render_scaling_table(lda_result$scaling)
+      )
+  }
+
+  # 4b. MDA Subclass Information (MDA only)
+  if (
+    lda_result$analysis_type == "mda" &&
+    !is.null(lda_result$sub_prior)
+  ) {
+    sub_panels[[length(sub_panels) + 1]] <-
+      bslib$accordion_panel(
+        title = shiny$tags$span(
+          bsicons$bs_icon(
+            "diagram-3", class = "me-2"
+          ),
+          "MDA Subclass Information"
+        ),
+        value = "mda_sub",
+        render_mda_subclass_info(lda_result)
       )
   }
 
@@ -406,6 +435,60 @@ render_scaling_table <- function(scaling) {
   )
   rownames(df) <- NULL
   make_dt(df, page_length = 10)
+}
+
+
+render_mda_subclass_info <- function(lda_result) {
+  parts <- list()
+
+  # Subclass priors
+  sub_prior <- lda_result$sub_prior
+  if (!is.null(sub_prior)) {
+    sp_df <- data.frame(
+      Subclass = names(sub_prior),
+      Prior = round(as.numeric(sub_prior), 4),
+      stringsAsFactors = FALSE
+    )
+    parts[[length(parts) + 1]] <- shiny$tagList(
+      shiny$tags$h6(
+        class = "mt-2 mb-2",
+        "Subclass Priors"
+      ),
+      make_dt(sp_df, page_length = 20)
+    )
+  }
+
+  # Model summary info
+  info_items <- list()
+  if (!is.null(lda_result$dimension)) {
+    info_items[[length(info_items) + 1]] <-
+      shiny$tags$li(paste(
+        "Dimension:", lda_result$dimension
+      ))
+  }
+  if (!is.null(lda_result$subclasses)) {
+    info_items[[length(info_items) + 1]] <-
+      shiny$tags$li(paste(
+        "Subclasses per group:",
+        lda_result$subclasses
+      ))
+  }
+  if (!is.null(lda_result$deviance)) {
+    info_items[[length(info_items) + 1]] <-
+      shiny$tags$li(paste(
+        "Deviance:",
+        round(lda_result$deviance, 3)
+      ))
+  }
+  if (length(info_items) > 0) {
+    parts[[length(parts) + 1]] <- shiny$tags$div(
+      class = "mt-2",
+      shiny$tags$h6("Model Details"),
+      shiny$tags$ul(info_items)
+    )
+  }
+
+  do.call(shiny$tagList, parts)
 }
 
 
