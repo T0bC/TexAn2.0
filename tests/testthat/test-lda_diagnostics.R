@@ -6,7 +6,7 @@ box::use(
 box::use(
   app/logic/lda/lda,
   app/logic/lda/lda_diagnostics,
-  app/logic/lda/ld_plot[create_ld_plot],
+  app/logic/lda/ld_plot[create_ld_plot, create_qda_plot],
 )
 
 # =============================================================================
@@ -294,5 +294,142 @@ describe("compute_1d_boundary", {
       "decision boundary",
       plot_res$result$labels$subtitle
     ))
+  })
+})
+
+# =============================================================================
+# Helper: QDA result (3 groups, has companion LDA)
+# =============================================================================
+
+make_qda_result <- function(seed = 99) {
+  set.seed(seed)
+  data <- data.frame(
+    species = rep(c("A", "B", "C"), each = 20),
+    site = rep(c("X", "Y"), 30),
+    m1 = c(
+      rnorm(20, mean = 0), rnorm(20, mean = 3),
+      rnorm(20, mean = 6)
+    ),
+    m2 = c(
+      rnorm(20, mean = 0), rnorm(20, mean = 2),
+      rnorm(20, mean = 4)
+    ),
+    m3 = rnorm(60),
+    stringsAsFactors = FALSE
+  )
+  res <- lda$run_qda(
+    data, c("m1", "m2", "m3"), "species",
+    meta_cols = c("species", "site")
+  )
+  res$result
+}
+
+# =============================================================================
+# create_qda_plot (LD space)
+# =============================================================================
+
+describe("create_qda_plot in LD space", {
+  it("produces a ggplot when using LD axes", {
+    qda_res <- make_qda_result()
+    plot_res <- create_qda_plot(
+      qda_res, dim_x = "LD1", dim_y = "LD2",
+      show_boundaries = FALSE
+    )
+    expect_true(plot_res$success)
+    expect_true(inherits(plot_res$result, "gg"))
+  })
+
+  it("title indicates LDA projection", {
+    qda_res <- make_qda_result()
+    plot_res <- create_qda_plot(
+      qda_res, dim_x = "LD1", dim_y = "LD2"
+    )
+    expect_true(grepl(
+      "LDA projection",
+      plot_res$result$labels$title
+    ))
+  })
+
+  it("adds boundary layers when enabled", {
+    qda_res <- make_qda_result()
+    plot_no <- create_qda_plot(
+      qda_res, dim_x = "LD1", dim_y = "LD2",
+      show_boundaries = FALSE
+    )
+    plot_yes <- create_qda_plot(
+      qda_res, dim_x = "LD1", dim_y = "LD2",
+      show_boundaries = TRUE
+    )
+    expect_true(
+      length(plot_yes$result$layers) >
+        length(plot_no$result$layers)
+    )
+    expect_true(grepl(
+      "QDA decision regions",
+      plot_yes$result$labels$subtitle
+    ))
+  })
+})
+
+# =============================================================================
+# create_qda_plot (original variable space)
+# =============================================================================
+
+describe("create_qda_plot in original space", {
+  it("produces a ggplot when using original vars", {
+    qda_res <- make_qda_result()
+    plot_res <- create_qda_plot(
+      qda_res, dim_x = "m1", dim_y = "m2",
+      show_boundaries = FALSE
+    )
+    expect_true(plot_res$success)
+    expect_true(inherits(plot_res$result, "gg"))
+  })
+
+  it("title indicates original variables", {
+    qda_res <- make_qda_result()
+    plot_res <- create_qda_plot(
+      qda_res, dim_x = "m1", dim_y = "m2"
+    )
+    expect_true(grepl(
+      "original variables",
+      plot_res$result$labels$title
+    ))
+  })
+
+  it("errors when mixing LD and original axes", {
+    qda_res <- make_qda_result()
+    plot_res <- create_qda_plot(
+      qda_res, dim_x = "LD1", dim_y = "m2"
+    )
+    expect_true(!plot_res$success)
+  })
+})
+
+# =============================================================================
+# add_qda_boundaries_overlay
+# =============================================================================
+
+describe("add_qda_boundaries_overlay", {
+  it("adds layers to an existing ggplot (LD space)", {
+    qda_res <- make_qda_result()
+    base_res <- create_qda_plot(
+      qda_res, dim_x = "LD1", dim_y = "LD2",
+      show_boundaries = FALSE
+    )
+    base_plot <- base_res$result
+    n_before <- length(base_plot$layers)
+
+    plot_data <- data.frame(
+      x = qda_res$lda_scores$LD1,
+      y = qda_res$lda_scores$LD2
+    )
+    p <- lda_diagnostics$add_qda_boundaries_overlay(
+      base_plot, qda_res, "LD1", "LD2",
+      plot_data, axis_type = "ld",
+      grid_n = 20
+    )
+    expect_true(inherits(p, "gg"))
+    expect_true(length(p$layers) > n_before)
   })
 })
