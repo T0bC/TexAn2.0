@@ -12,6 +12,7 @@ box::use(
 box::use(
   app/logic/column_utils,
   app/logic/error_handling,
+  app/logic/example_data,
   app/logic/load_data,
   app/view/components/column_validation_modal,
   app/view/components/sidebar_tabs,
@@ -44,6 +45,27 @@ ui <- function(id) {
         ),
         shiny$helpText(
           "Accepted formats: CSV or XLSX (single file)."
+        ),
+        shiny$hr(),
+        shiny$h6(class = "text-muted mb-3", "Example Datasets"),
+        shiny$selectInput(
+          inputId = ns("example_dataset"),
+          label = NULL,
+          choices = c("Select a dataset..." = "", example_data$list_examples())
+        ),
+        shiny$div(
+          class = "d-flex gap-2 align-items-center",
+          shiny$actionButton(
+            inputId = ns("load_example_btn"),
+            label = "Load",
+            icon = shiny$icon("play"),
+            class = "btn-sm btn-primary"
+          ),
+          shiny$downloadButton(
+            outputId = ns("download_example_btn"),
+            label = "Save copy",
+            class = "btn-sm btn-outline-secondary"
+          )
         )
       ),
       sidebar_tabs$create_tab(
@@ -171,6 +193,75 @@ server <- function(id) {
         )
       }
     })
+
+    # Handle "Load" example dataset button
+    shiny$observeEvent(input$load_example_btn, {
+      filename <- input$example_dataset
+      if (is.null(filename) || filename == "") {
+        shiny$showNotification(
+          "Please select an example dataset first.",
+          type = "warning"
+        )
+        return()
+      }
+
+      result <- example_data$load_example(filename)
+
+      if (!result$success) {
+        loaded_data(NULL)
+        last_error(result$error)
+        return()
+      }
+
+      validation <- load_data$validate_data(result$data)
+      if (!validation$valid) {
+        loaded_data(NULL)
+        last_error(validation$error)
+        return()
+      }
+
+      last_error(NULL)
+      rhino$log$info("Example dataset loaded: '{filename}'")
+      data_version(data_version() + 1)
+      loaded_data(result$data)
+      shiny$showNotification(
+        paste0(
+          "Example '", filename, "' loaded! (",
+          nrow(result$data), " rows, ",
+          ncol(result$data), " columns)"
+        ),
+        type = "message",
+        duration = 3
+      )
+
+      col_validation <- column_utils$validate_column_naming(
+        result$data
+      )
+      if (!col_validation$valid) {
+        rhino$log$warn(
+          "Ambiguous columns: {paste(col_validation$ambiguous_cols, collapse = ', ')}"
+        )
+        shiny$showModal(
+          column_validation_modal$create_modal(
+            col_validation
+          )
+        )
+      }
+    })
+
+    # Download handler for "Save copy" of example dataset
+    output$download_example_btn <- shiny$downloadHandler(
+      filename = function() {
+        sel <- input$example_dataset
+        if (is.null(sel) || sel == "") "example.xlsx" else sel
+      },
+      content = function(file) {
+        sel <- input$example_dataset
+        shiny$req(sel, nchar(sel) > 0)
+        src <- example_data$example_path(sel)
+        file.copy(src, file)
+      }
+    )
 
     # Main content: welcome screen, error, or data panels
     output$main_content <- shiny$renderUI({
