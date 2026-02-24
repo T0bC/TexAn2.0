@@ -432,14 +432,26 @@ run_hierarchical <- function(num_data, n_clusters,
 run_dbscan <- function(num_data, metric) {
   dist_matrix <- stats$dist(num_data, method = metric)
 
-  # Auto-compute eps using k-nearest neighbor distances
-  # k = minPts - 1 (convention: minPts = ncol + 1)
-  min_pts <- ncol(num_data) + 1
-  min_pts <- max(min_pts, 3)
+  # Auto-compute minPts: use ln(n) as the default
+  # heuristic which scales with dataset size.
+  # The classic ncol+1 rule is too strict for
+  # high-dimensional data with moderate sample sizes.
+  # Floor at 3, cap at ncol+1 to stay reasonable.
+  n_obs <- nrow(num_data)
+  min_pts <- max(3L, min(
+    round(log(n_obs)),
+    ncol(num_data) + 1L
+  ))
 
+  k <- min_pts - 1
   knn_dists <- dbscan$kNNdist(
-    dist_matrix, k = min_pts - 1
+    dist_matrix, k = k
   )
+  # kNNdist returns a matrix when k > 1;
+  # use only the k-th NN column (standard approach)
+  if (is.matrix(knn_dists)) {
+    knn_dists <- knn_dists[, ncol(knn_dists)]
+  }
   # Use the "knee" of the sorted kNN distance curve
   sorted_dists <- sort(knn_dists)
   eps <- estimate_dbscan_eps(sorted_dists)
@@ -487,16 +499,21 @@ estimate_dbscan_eps <- function(sorted_dists) {
   n <- length(sorted_dists)
   if (n < 3) return(stats$median(sorted_dists))
 
-  # Detect knee via maximum second derivative
-  # (same approach as elbow detection)
-  first_diff <- diff(sorted_dists)
-  second_diff <- diff(first_diff)
-
-  if (length(second_diff) > 0) {
-    knee_idx <- which.max(second_diff) + 1
-    knee_idx <- max(1, min(knee_idx, n))
-    sorted_dists[knee_idx]
-  } else {
-    stats$median(sorted_dists)
+  # Kneedle-style detection: normalize the curve to
+  # [0,1] x [0,1], subtract the diagonal, and find
+  # the index with maximum deviation.
+  x <- seq(0, 1, length.out = n)
+  y_min <- sorted_dists[1]
+  y_max <- sorted_dists[n]
+  if (y_max - y_min < .Machine$double.eps) {
+    return(stats$median(sorted_dists))
   }
+  y_norm <- (sorted_dists - y_min) / (y_max - y_min)
+
+  # Deviation from the straight line connecting
+  # first and last points
+  deviation <- y_norm - x
+  knee_idx <- which.max(deviation)
+  knee_idx <- max(1, min(knee_idx, n))
+  sorted_dists[knee_idx]
 }
