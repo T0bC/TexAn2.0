@@ -1,0 +1,40 @@
+# Git
+.git/
+.github/
+.gitignore
+
+# IDE / editor
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+.vscode/
+*.Rproj
+
+# Development-only
+.lintr
+.llm/
+.renvignore
+.rscignore
+.rhino/
+docs/
+tests/
+node_modules/
+
+# renv library (rebuilt inside container via renv::restore)
+renv/library/
+renv/staging/
+renv/settings.json
+
+# Windows-specific env (not valid in Linux container)
+.Renviron
+
+# Test data (not needed in production)
+data/
+
+# Logs
+app.log
+
+# Docker
+Dockerfile
+.dockerignore
