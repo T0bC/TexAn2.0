@@ -125,6 +125,21 @@ build_posthoc_table <- function(df) {
   )
 }
 
+# --- Private helper: exclude outlier/trimmed rows for a measure ---
+filter_excluded_rows <- function(df, measure_col) {
+  outlier_col <- paste0(measure_col, "_outlier")
+  trimmed_col <- paste0(measure_col, "_trimmed")
+
+  keep <- rep(TRUE, nrow(df))
+  if (outlier_col %in% names(df)) {
+    keep <- keep & !df[[outlier_col]]
+  }
+  if (trimmed_col %in% names(df)) {
+    keep <- keep & !df[[trimmed_col]]
+  }
+  df[keep, , drop = FALSE]
+}
+
 # --- Private helper: render post-hoc result as UI ---
 render_posthoc_result <- function(result, x_axis, params) {
   if (is.null(result)) return(NULL)
@@ -450,10 +465,11 @@ server <- function(id, input_data, data_version,
       # --- Run omnibus tests per measurement ---
       n_ways <- length(x_cols)
       omnibus_results <- lapply(measures, function(m) {
+        df_m <- filter_excluded_rows(data, m)
         if (params$test_approach == "robust") {
           if (n_ways == 1) {
             robust_tests$perform_t1way(
-              df = data,
+              df = df_m,
               x_axis = x_cols,
               measure_col = m,
               tr_value = tr_val,
@@ -463,7 +479,7 @@ server <- function(id, input_data, data_version,
             )
           } else if (n_ways == 2) {
             robust_tests$perform_t2way(
-              df = data,
+              df = df_m,
               x_axis = x_cols,
               measure_col = m,
               tr_value = tr_val,
@@ -473,7 +489,7 @@ server <- function(id, input_data, data_version,
             )
           } else if (n_ways == 3) {
             robust_tests$perform_t3way(
-              df = data,
+              df = df_m,
               x_axis = x_cols,
               measure_col = m,
               tr_value = tr_val,
@@ -493,21 +509,21 @@ server <- function(id, input_data, data_version,
         } else if (params$test_approach == "parametric") {
           if (n_ways == 1) {
             parametric_tests$perform_anova1way(
-              df = data,
+              df = df_m,
               x_axis = x_cols,
               measure_col = m,
               tr_value = tr_val
             )
           } else if (n_ways == 2) {
             parametric_tests$perform_anova2way(
-              df = data,
+              df = df_m,
               x_axis = x_cols,
               measure_col = m,
               tr_value = tr_val
             )
           } else if (n_ways == 3) {
             parametric_tests$perform_anova3way(
-              df = data,
+              df = df_m,
               x_axis = x_cols,
               measure_col = m,
               tr_value = tr_val
@@ -539,8 +555,9 @@ server <- function(id, input_data, data_version,
         params$test_approach == "robust"
       ) {
         ph <- lapply(measures, function(m) {
+          df_m <- filter_excluded_rows(data, m)
           robust_posthoc$perform_combined_posthoc(
-            df = data,
+            df = df_m,
             x_axis = x_cols,
             measure_col = m,
             tr_value = tr_val,
@@ -558,8 +575,9 @@ server <- function(id, input_data, data_version,
         ph
       } else if (params$test_approach == "parametric") {
         ph <- lapply(measures, function(m) {
+          df_m <- filter_excluded_rows(data, m)
           parametric_posthoc$perform_combined_parametric_posthoc(
-            df = data,
+            df = df_m,
             x_axis = x_cols,
             measure_col = m,
             p_adjust_method =
