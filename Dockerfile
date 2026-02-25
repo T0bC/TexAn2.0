@@ -61,6 +61,12 @@ RUN R -e "source('renv/activate.R'); renv::restore(prompt = FALSE)"
 # ---------- Verify packages installed correctly ----------
 RUN R -e "library(shiny); cat('shiny version:', as.character(packageVersion('shiny')), '\n')"
 
+# ---------- Skip slow renv checks at RUNTIME only ----------
+# These only affect container startup speed
+# They do NOT affect package installation during build
+ENV RENV_CONFIG_SYNCHRONIZED_CHECK=FALSE
+ENV RENV_CONFIG_SANDBOX_ENABLED=FALSE
+
 # ---------- Copy application code ----------
 COPY app.R app.R
 COPY rhino.yml rhino.yml
