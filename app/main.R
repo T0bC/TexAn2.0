@@ -135,17 +135,30 @@ server <- function(id) {
       input_data = plotting_data,
       data_version = shiny$reactive(plotting_data_version())
     )
+    # Processed data from plotting: includes _outlier/_trimmed flag columns
+    # Falls back to raw plotting_data when no processing has been done yet
+    processed_plotting_data <- shiny$reactive({
+      pd <- plotting_result$processed_data()
+      if (!is.null(pd)) pd else plotting_data()
+    })
+    processed_data_version <- shiny$reactiveVal(0L)
+    shiny$observe({
+      processed_plotting_data()
+      shiny$isolate(
+        processed_data_version(processed_data_version() + 1L)
+      )
+    })
     summary$server(
       "summary",
-      input_data = plotting_data,
-      data_version = shiny$reactive(plotting_data_version()),
+      input_data = processed_plotting_data,
+      data_version = shiny$reactive(processed_data_version()),
       plotting_x_axis = plotting_result$x_axis,
       plotting_measures = plotting_result$measure_cols
     )
     statistics$server(
       "statistics",
-      input_data = plotting_data,
-      data_version = shiny$reactive(plotting_data_version()),
+      input_data = processed_plotting_data,
+      data_version = shiny$reactive(processed_data_version()),
       plotting_x_axis = plotting_result$x_axis,
       plotting_measures = plotting_result$measure_cols,
       plotting_trim_percent = plotting_result$trim_percent,
