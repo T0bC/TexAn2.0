@@ -26,6 +26,7 @@ box::use(
   app/view/lda/data_selection,
   app/view/lda/plotting_controls,
   app/view/lda/results_display,
+  app/view/lda/var_contrib_jitter,
   app/view/pca/na_summary,
 )
 
@@ -116,6 +117,12 @@ server <- function(id, input_data, data_version,
       data_version = data_version
     )
     plotting_controls$tab_server(
+      input, output, session,
+      lda_result = result
+    )
+
+    # Delegate variable contribution jitter plot rendering
+    var_contrib_jitter_state <- var_contrib_jitter$render_output(
       input, output, session,
       lda_result = result
     )
@@ -506,6 +513,35 @@ server <- function(id, input_data, data_version,
         )
       }
 
+      # Variable contribution jitter plot panel
+      var_contrib_panel <- NULL
+      has_scaling <- !is.null(res) && (
+        (!is.null(res$scaling)) ||
+        (res$analysis_type == "qda" &&
+          !is.null(res$lda_scaling))
+      )
+      if (has_scaling) {
+        var_contrib_panel <- bslib$accordion_panel(
+          title = shiny$tags$span(
+            bsicons$bs_icon(
+              "diagram-3", class = "me-1"
+            ),
+            "Variable Contributions"
+          ),
+          value = "var_contrib_jitter_panel",
+          shiny$tagList(
+            ggiraph$girafeOutput(
+              ns("var_contrib_jitter"),
+              height = "auto"
+            ),
+            shiny$uiOutput(
+              ns("var_contrib_jitter_caption")
+            )
+          ),
+          download_buttons(ns, "var_contrib")
+        )
+      }
+
       shiny$tagList(
         preprocess_banner,
         warn_banner,
@@ -514,7 +550,8 @@ server <- function(id, input_data, data_version,
           open = "ld_plot_panel",
           multiple = TRUE,
           lda_panel,
-          ld_plot_panel
+          ld_plot_panel,
+          var_contrib_panel
         )
       )
     })
@@ -626,6 +663,11 @@ server <- function(id, input_data, data_version,
     register_plot_downloads(
       output, input, "ld_plot",
       last_ld_plot, "LD_Scores_Plot"
+    )
+    register_plot_downloads(
+      output, input, "var_contrib",
+      var_contrib_jitter_state$plot,
+      "Variable_Contributions"
     )
 
     # Return LDA result for downstream modules (e.g. Cluster)
