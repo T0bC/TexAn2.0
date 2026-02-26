@@ -9,9 +9,6 @@ box::use(
     compute_eigencor_data, create_eigencor_plot,
     eigencor_error_parser
   ],
-  app/logic/pca/var_contrib[
-    create_var_contrib_plot, var_contrib_error_parser
-  ],
   app/logic/pca/var_contrib_jitter[
     create_var_contrib_jitter_plot,
     var_contrib_jitter_error_parser
