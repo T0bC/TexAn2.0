@@ -153,7 +153,9 @@ server <- function(id) {
       input_data = processed_plotting_data,
       data_version = shiny$reactive(processed_data_version()),
       plotting_x_axis = plotting_result$x_axis,
-      plotting_measures = plotting_result$measure_cols
+      plotting_measures = plotting_result$measure_cols,
+      plotting_normalize_enabled = plotting_result$normalize_enabled,
+      plotting_transform_info = plotting_result$transform_info
     )
     statistics$server(
       "statistics",
@@ -162,7 +164,9 @@ server <- function(id) {
       plotting_x_axis = plotting_result$x_axis,
       plotting_measures = plotting_result$measure_cols,
       plotting_trim_percent = plotting_result$trim_percent,
-      plotting_plot_objects = plotting_result$plot_objects
+      plotting_plot_objects = plotting_result$plot_objects,
+      plotting_normalize_enabled = plotting_result$normalize_enabled,
+      plotting_transform_info = plotting_result$transform_info
     )
     pca_result <- pca$server(
       "pca",
