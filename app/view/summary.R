@@ -57,6 +57,8 @@ ui <- function(id) {
           value = FALSE
         ),
         shiny$tags$hr(),
+        # Show transformed summary checkbox (dynamic visibility)
+        shiny$uiOutput(ns("normalize_checkbox_ui")),
         # Download all tables button
         shiny$downloadButton(
           outputId = ns("download_all"),
@@ -75,7 +77,9 @@ ui <- function(id) {
 #' @export
 server <- function(id, input_data, data_version,
                    plotting_x_axis = NULL,
-                   plotting_measures = NULL) {
+                   plotting_measures = NULL,
+                   plotting_normalize_enabled = NULL,
+                   plotting_transform_info = NULL) {
   shiny$moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -88,6 +92,9 @@ server <- function(id, input_data, data_version,
       last_error(NULL)
       shiny$updateCheckboxInput(
         session, "shapiro", value = FALSE
+      )
+      shiny$updateCheckboxInput(
+        session, "show_transformed", value = FALSE
       )
       shiny$updateSelectizeInput(
         session, "filter_options_select",
@@ -176,7 +183,7 @@ server <- function(id, input_data, data_version,
       data <- input_data()
       if (is.null(data)) return(NULL)
       cols <- column_utils$get_measurement_cols(data)
-      cols[!grepl("_outlier|_trimmed", cols)]
+      cols[!grepl("_outlier|_trimmed|_normalized", cols)]
     })
 
     # --- Debounced computation inputs ---
@@ -185,11 +192,51 @@ server <- function(id, input_data, data_version,
       shiny$req(input$filter_options_select)
       shiny$req(active_measures())
       list(
-        grouping_vars = input$filter_options_select,
-        measure_vars  = active_measures(),
-        shapiro       = input$shapiro %||% FALSE
+        grouping_vars    = input$filter_options_select,
+        measure_vars     = active_measures(),
+        shapiro          = input$shapiro %||% FALSE,
+        show_transformed = input$show_transformed %||% FALSE
       )
     }) |> shiny$debounce(400)
+
+    # --- Normalize checkbox (only visible when normalization active) ---
+    output$normalize_checkbox_ui <- shiny$renderUI({
+      norm_active <- if (!is.null(plotting_normalize_enabled)) {
+        isTRUE(plotting_normalize_enabled())
+      } else {
+        FALSE
+      }
+      if (!norm_active) return(NULL)
+
+      shiny$tagList(
+        shiny$checkboxInput(
+          inputId = ns("show_transformed"),
+          label = shiny$tags$span(
+            "Show transformed summary ",
+            bslib$tooltip(
+              bsicons$bs_icon(
+                "info-circle", class = "text-muted"
+              ),
+              paste(
+                "When enabled, summary statistics are",
+                "computed on the normalized data.",
+                "Default shows raw values."
+              )
+            )
+          ),
+          value = FALSE
+        ),
+        shiny$tags$div(
+          class = "alert alert-info py-1 px-2 small",
+          shiny$tags$strong("Note: "),
+          paste(
+            "Normalized data is used for statistical",
+            "testing. Descriptive stats shown in",
+            "original units by default."
+          )
+        )
+      )
+    })
 
     # --- Run computation when inputs change ---
     shiny$observeEvent(debounced_inputs(), {
@@ -200,10 +247,19 @@ server <- function(id, input_data, data_version,
 
       last_error(NULL)
 
+      # If show_transformed is checked, swap to _normalized cols
+      measure_vars <- params$measure_vars
+      if (isTRUE(params$show_transformed)) {
+        measure_vars <- vapply(measure_vars, function(col) {
+          norm_col <- paste0(col, "_normalized")
+          if (norm_col %in% names(data)) norm_col else col
+        }, character(1), USE.NAMES = FALSE)
+      }
+
       result <- summary$run_summary(
         data          = data,
         grouping_vars = params$grouping_vars,
-        measure_vars  = params$measure_vars,
+        measure_vars  = measure_vars,
         shapiro_test  = params$shapiro
       )
 
