@@ -127,8 +127,10 @@ build_posthoc_table <- function(df) {
 
 # --- Private helper: exclude outlier/trimmed rows for a measure ---
 filter_excluded_rows <- function(df, measure_col) {
-  outlier_col <- paste0(measure_col, "_outlier")
-  trimmed_col <- paste0(measure_col, "_trimmed")
+  # Strip _normalized suffix for flag column lookup
+  base_col <- sub("_normalized$", "", measure_col)
+  outlier_col <- paste0(base_col, "_outlier")
+  trimmed_col <- paste0(base_col, "_trimmed")
 
   keep <- rep(TRUE, nrow(df))
   if (outlier_col %in% names(df)) {
@@ -305,7 +307,9 @@ server <- function(id, input_data, data_version,
                    plotting_x_axis = NULL,
                    plotting_measures = NULL,
                    plotting_trim_percent = NULL,
-                   plotting_plot_objects = NULL) {
+                   plotting_plot_objects = NULL,
+                   plotting_normalize_enabled = NULL,
+                   plotting_transform_info = NULL) {
   shiny$moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -371,6 +375,19 @@ server <- function(id, input_data, data_version,
         plotting_measures()
       } else {
         NULL
+      }
+
+      # When normalization is active, use _normalized columns
+      norm_active <- if (!is.null(plotting_normalize_enabled)) {
+        isTRUE(plotting_normalize_enabled())
+      } else {
+        FALSE
+      }
+      if (norm_active && !is.null(measures)) {
+        measures <- vapply(measures, function(col) {
+          norm_col <- paste0(col, "_normalized")
+          if (norm_col %in% names(data)) norm_col else col
+        }, character(1), USE.NAMES = FALSE)
       }
       x_cols <- if (!is.null(plotting_x_axis)) {
         plotting_x_axis()
