@@ -27,6 +27,7 @@ ui <- function(id) {
     id = ns("active_page"),
     title = "TexAn 2.0",
     theme = settings$get_default_theme(),
+    fillable = FALSE,
     header = shiny$tagList(
       shiny$tags$head(
         shiny$tags$script(src = "static/js/disabled_tabs.js"),
