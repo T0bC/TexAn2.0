@@ -5,6 +5,10 @@ box::use(
   shiny,
 )
 
+box::use(
+  app/logic/lda/dimension_eval[evaluate_dimensions],
+)
+
 #' Render LDA/QDA results in accordion panels with DT tables
 #'
 #' Consolidates results into three top-level panels:
@@ -172,6 +176,41 @@ render_lda_results <- function(lda_result, ns,
           lda_result$proportion_of_trace
         )
       )
+  }
+
+  # 5b. Dimension Evaluation (ANOVA)
+  has_scores <- !is.null(lda_result$scores) ||
+    (!is.null(lda_result$lda_scores) &&
+      lda_result$analysis_type == "qda")
+  if (has_scores && !is_cv) {
+    dim_eval_res <- evaluate_dimensions(lda_result)
+    if (isTRUE(dim_eval_res$success)) {
+      qda_note <- if (
+        lda_result$analysis_type == "qda"
+      ) {
+        shiny$tags$small(
+          class = "text-info d-block mb-2",
+          paste0(
+            "Based on companion LDA projection ",
+            "(QDA has no linear discriminant axes)."
+          )
+        )
+      }
+      sub_panels[[length(sub_panels) + 1]] <-
+        bslib$accordion_panel(
+          title = shiny$tags$span(
+            bsicons$bs_icon(
+              "clipboard-data", class = "me-2"
+            ),
+            "Dimension Evaluation (ANOVA)"
+          ),
+          value = "dim_eval_sub",
+          shiny$tagList(
+            qda_note,
+            render_dim_eval_table(dim_eval_res$result)
+          )
+        )
+    }
   }
 
   # 6. Confusion Matrix
@@ -529,6 +568,64 @@ render_trace_table <- function(trace_df) {
       ),
       fontWeight = "bold"
     )
+}
+
+
+render_dim_eval_table <- function(dim_eval_df) {
+  # Rename columns for display
+  display_df <- dim_eval_df
+  colnames(display_df) <- c(
+    "Dimension", "F", "p-value",
+    "R\u00b2 (%)", "Sig."
+  )
+
+  dt <- DT$datatable(
+    display_df,
+    options = list(
+      pageLength = 20,
+      scrollX = TRUE,
+      dom = "t",
+      order = list(),
+      columnDefs = list(
+        list(
+          className = "dt-right",
+          targets = c(1, 2, 3)
+        ),
+        list(
+          className = "dt-center",
+          targets = 4
+        )
+      )
+    ),
+    rownames = FALSE,
+    class = paste(
+      "table table-sm table-striped",
+      "table-hover compact"
+    )
+  ) |>
+    DT$formatStyle(
+      "R\u00b2 (%)",
+      backgroundColor = DT$styleInterval(
+        c(10, 25),
+        c("#6c757d40", "#ffc10740", "#19875440")
+      ),
+      fontWeight = "bold"
+    )
+
+  shiny$tagList(
+    dt,
+    shiny$tags$small(
+      class = "text-muted mt-2 d-block",
+      paste0(
+        "One-way ANOVA per dimension: ",
+        "F and R\u00b2 measure how well the ",
+        "grouping variable explains variance ",
+        "in each discriminant axis. ",
+        "Significance: *** p<0.001, ** p<0.01, ",
+        "* p<0.05, . p<0.1"
+      )
+    )
+  )
 }
 
 
