@@ -125,6 +125,13 @@ build_posthoc_table <- function(df) {
   )
 }
 
+# --- Private helper: resolve plot key from measure name ---
+# Plots are keyed by raw column name; when normalization is
+# active the measure name has a _normalized suffix.
+resolve_plot_key <- function(measure) {
+  sub("_normalized$", "", measure)
+}
+
 # --- Private helper: exclude outlier/trimmed rows for a measure ---
 filter_excluded_rows <- function(df, measure_col) {
   # Strip _normalized suffix for flag column lookup
@@ -629,6 +636,7 @@ server <- function(id, input_data, data_version,
       plots <- snapshotted_plots()
       shiny$req(plots)
 
+      # Register outputs for raw plot keys
       lapply(names(plots), function(measure) {
         local({
           local_measure <- measure
@@ -676,6 +684,62 @@ server <- function(id, input_data, data_version,
           })
         })
       })
+
+      # Also register under _normalized keys so the same
+      # ggiraph output is reachable by normalized measure name
+      results <- computation_results()
+      if (!is.null(results) && !is.null(results$measures)) {
+        norm_measures <- results$measures[
+          grepl("_normalized$", results$measures)
+        ]
+        for (nm in norm_measures) {
+          local({
+            local_nm <- nm
+            raw_key <- resolve_plot_key(local_nm)
+            safe_id <- make.names(local_nm)
+            output_id <- paste0("stat_plot_", safe_id)
+
+            output[[output_id]] <- ggiraph$renderGirafe({
+              p <- snapshotted_plots()[[raw_key]]
+              shiny$req(p)
+
+              ws <- window_size()
+              w_svg <- max(4, ws$width / 100)
+              h_svg <- max(3.5, (ws$height * 0.35) / 96)
+
+              ggiraph$girafe(
+                ggobj = p,
+                width_svg = w_svg,
+                height_svg = h_svg,
+                options = list(
+                  ggiraph$opts_sizing(
+                    rescale = FALSE
+                  ),
+                  ggiraph$opts_hover(
+                    css = paste(
+                      "fill-opacity:1;",
+                      "stroke-width:2;"
+                    )
+                  ),
+                  ggiraph$opts_tooltip(
+                    css = paste(
+                      "background-color:white;",
+                      "padding:8px;",
+                      "border-radius:4px;",
+                      "border:1px solid #ccc;",
+                      "font-size:12px;"
+                    ),
+                    use_fill = FALSE
+                  ),
+                  ggiraph$opts_selection(
+                    type = "none"
+                  )
+                )
+              )
+            })
+          })
+        }
+      }
     }, ignoreNULL = TRUE)
 
     # --- Register download handlers when results arrive ---
@@ -701,9 +765,10 @@ server <- function(id, input_data, data_version,
             content = function(file) {
               res <- computation_results()
               pl <- snapshotted_plots()
+              plot_key <- resolve_plot_key(local_m)
               html <- report$generate_html_report(
                 measure = local_m,
-                plot_object = pl[[local_m]],
+                plot_object = pl[[plot_key]],
                 omnibus_result = res$omnibus[[local_m]],
                 posthoc_result = res$posthoc[[local_m]],
                 params = res$params,
@@ -855,8 +920,9 @@ server <- function(id, input_data, data_version,
           function(m) {
             safe_id <- make.names(m)
             output_id <- paste0("stat_plot_", safe_id)
+            plot_key <- resolve_plot_key(m)
             has_plot <- !is.null(plots) &&
-              m %in% names(plots)
+              plot_key %in% names(plots)
 
             plot_ui <- if (has_plot) {
               shiny$tags$div(
