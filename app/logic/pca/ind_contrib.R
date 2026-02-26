@@ -111,7 +111,8 @@ create_ind_contrib_plot <- function(pca_result,
           dim_label = dim_labels[i],
           contrib = contrib[, d],
           cos2 = cos2[, d],
-          stringsAsFactors = FALSE
+          stringsAsFactors = FALSE,
+          row.names = NULL
         )
       }
       df <- do.call(rbind, rows)
