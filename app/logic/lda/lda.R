@@ -663,7 +663,7 @@ build_mda_result <- function(mda_obj, data, numeric_data,
   scores_df <- as.data.frame(scores_mat)
   if (ncol(scores_df) > 0) {
     colnames(scores_df) <- paste0(
-      "LD", seq_len(ncol(scores_df))
+      "DC", seq_len(ncol(scores_df))
     )
   }
 
@@ -679,7 +679,7 @@ build_mda_result <- function(mda_obj, data, numeric_data,
       diff(cum_vals)
     )
     proportion_of_trace <- data.frame(
-      LD = paste0("LD", seq_len(n_dim)),
+      LD = paste0("DC", seq_len(n_dim)),
       `Proportion` = round(prop_vals, 4),
       `Cumulative` = round(cum_vals, 4),
       check.names = FALSE
@@ -729,7 +729,6 @@ build_mda_result <- function(mda_obj, data, numeric_data,
     model = mda_obj,
     scores = scores_df,
     scaling = scaling,
-    numeric_data = numeric_data,
     proportion_of_trace = proportion_of_trace,
     sub_prior = sub_prior,
     subclasses = mda_obj$subclasses,
