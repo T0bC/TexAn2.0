@@ -369,7 +369,7 @@ server <- function(id, input_data, data_version,
         sc_scale <- if (do_scale) {
           vapply(
             numeric_pre,
-            function(col) sd(col, na.rm = TRUE),
+            function(col) stats::sd(col, na.rm = TRUE),
             numeric(1)
           )
         } else {
