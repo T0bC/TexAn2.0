@@ -132,6 +132,7 @@ transform_skewed <- function(data, measurement_cols,
 
       result_data <- data
       transformed <- list()
+      transform_params <- list()
       skipped <- character(0)
 
       for (i in seq_len(nrow(skewed))) {
@@ -166,6 +167,12 @@ transform_skewed <- function(data, measurement_cols,
           skewness_after = round(skew_after, 3)
         )
 
+        # Store per-column transform params for replay
+        col_params <- transform_res$params
+        col_params$column <- col_name
+        transform_params[[length(transform_params) + 1]] <-
+          col_params
+
         rhino$log$info(
           "Skewness: transformed '{col_name}'",
           " ({direction}, {transform_res$method_used},",
@@ -197,12 +204,104 @@ transform_skewed <- function(data, measurement_cols,
       list(
         data = result_data,
         transformed_cols = transformed_df,
+        transform_params = transform_params,
         skipped_cols = skipped
       )
     },
     operation_name = "Skewness Correction",
     error_parser = skewness_error_parser
   )
+}
+
+#' Apply a stored transform to a single column
+#'
+#' Replays the exact transformation on new data using
+#' stored parameters (no re-estimation). Used by the
+#' prediction module to apply training transforms to
+#' unknown data.
+#'
+#' @param x Numeric vector (new data column)
+#' @param params List with: method, direction, shift,
+#'   lambda (NULL for log), reflect_max (NULL for right),
+#'   column (informational)
+#' @return Numeric vector of transformed values
+#' @export
+apply_stored_transform <- function(x, params) {
+  method <- params$method
+  direction <- params$direction
+  shift <- params$shift
+  lambda <- params$lambda
+  reflect_max <- params$reflect_max
+
+  if (direction == "left" && !is.null(reflect_max)) {
+    # Reflect using the stored reflect_max
+    x_work <- reflect_max - x
+  } else {
+    x_work <- x
+  }
+
+  # Determine base method (strip "reflect+" prefix)
+  base_method <- sub("^reflect\\+", "", method)
+
+  if (base_method == "log") {
+    shifted <- x_work - shift
+    transformed <- log1p(shifted)
+  } else if (base_method == "boxcox") {
+    shifted <- if (shift <= 0) {
+      x_work - shift + 1
+    } else {
+      x_work
+    }
+    transformed <- if (abs(lambda) < 1e-6) {
+      log(shifted)
+    } else {
+      (shifted^lambda - 1) / lambda
+    }
+  } else {
+    stop(paste0(
+      "Unknown transform method: '", method, "'"
+    ))
+  }
+
+  # Reverse reflection to preserve ordering
+  if (direction == "left" && !is.null(reflect_max)) {
+    transformed <- -(transformed -
+      max(transformed, na.rm = TRUE))
+  }
+
+  transformed
+}
+
+#' Apply stored transforms to a data frame
+#'
+#' Applies all stored per-column transform parameters
+#' to the corresponding columns in a data frame.
+#' Columns not in transform_params are left untouched.
+#'
+#' @param data Data frame
+#' @param transform_params List of per-column param lists,
+#'   each with $column and transform parameters
+#' @return Data frame with transformed columns
+#' @export
+apply_stored_transforms <- function(data,
+                                    transform_params) {
+  if (length(transform_params) == 0) return(data)
+
+  result <- data
+  for (params in transform_params) {
+    col <- params$column
+    if (!col %in% names(result)) {
+      warning(paste0(
+        "Column '", col,
+        "' not found in data; skipping transform"
+      ))
+      next
+    }
+    result[[col]] <- apply_stored_transform(
+      result[[col]], params
+    )
+  }
+  result
 }
 
 #' Error parser for skewness transformation errors
@@ -245,11 +344,13 @@ skewness_error_parser <- function(
 #' @param x Numeric vector
 #' @param direction "left" or "right"
 #' @param method "auto", "log", or "boxcox"
-#' @return List with $values and $method_used, or NULL on failure
+#' @return List with $values, $method_used, and $params,
+#'   or NULL on failure
 try_transform_column <- function(x, direction, method) {
   # For left-skewed data, reflect first
   if (direction == "left") {
-    reflected <- max(x, na.rm = TRUE) + 1 - x
+    reflect_max <- max(x, na.rm = TRUE) + 1
+    reflected <- reflect_max - x
     result <- try_transform_positive(
       reflected, method
     )
@@ -260,11 +361,22 @@ try_transform_column <- function(x, direction, method) {
     result$method_used <- paste0(
       "reflect+", result$method_used
     )
+    # Wrap params with direction and reflect_max
+    result$params$direction <- "left"
+    result$params$reflect_max <- reflect_max
+    result$params$method <- paste0(
+      "reflect+", result$params$method
+    )
     return(result)
   }
 
   # Right-skewed: transform directly
-  try_transform_positive(x, method)
+  result <- try_transform_positive(x, method)
+  if (!is.null(result)) {
+    result$params$direction <- "right"
+    result$params$reflect_max <- NULL
+  }
+  result
 }
 
 #' Apply transformation to a (positive-shifted) vector
@@ -294,9 +406,11 @@ try_transform_positive <- function(x, method) {
 #' Try log1p transformation
 #'
 #' Shifts data so minimum is 0, then applies log1p.
+#' Returns stored params for replay on new data.
 #'
 #' @param x Numeric vector
-#' @return List with $values and $method_used, or NULL
+#' @return List with $values, $method_used, and $params,
+#'   or NULL on failure
 try_log_transform <- function(x) {
   tryCatch(
     {
@@ -306,7 +420,15 @@ try_log_transform <- function(x) {
       if (any(is.na(transformed) | is.infinite(transformed))) {
         return(NULL)
       }
-      list(values = transformed, method_used = "log")
+      list(
+        values = transformed,
+        method_used = "log",
+        params = list(
+          method = "log",
+          shift = min_val,
+          lambda = NULL
+        )
+      )
     },
     error = function(e) NULL
   )
@@ -316,9 +438,11 @@ try_log_transform <- function(x) {
 #'
 #' Estimates optimal lambda via MASS::boxcox, then applies
 #' the power transformation. Requires strictly positive data.
+#' Returns stored params for replay on new data.
 #'
 #' @param x Numeric vector
-#' @return List with $values and $method_used, or NULL
+#' @return List with $values, $method_used, and $params,
+#'   or NULL on failure
 try_boxcox_transform <- function(x) {
   tryCatch(
     {
@@ -365,6 +489,11 @@ try_boxcox_transform <- function(x) {
         values = transformed,
         method_used = paste0(
           "boxcox(lambda=", round(lambda, 2), ")"
+        ),
+        params = list(
+          method = "boxcox",
+          shift = min_val,
+          lambda = lambda
         )
       )
     },
