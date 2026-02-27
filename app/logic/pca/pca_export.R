@@ -3,6 +3,10 @@ box::use(
   rhino,
 )
 
+box::use(
+  app/logic/settings[app_version],
+)
+
 # =============================================================================
 # Pure logic functions for PCA result export
 # No Shiny dependencies allowed in this file.
@@ -81,6 +85,56 @@ create_pca_excel <- function(pca_result, file) {
   )
 }
 
+
+#' Create a standardized RDS bundle for PCA export
+#'
+#' Builds the named list that the prediction module
+#' expects when loading a PCA .rds file.
+#'
+#' @param pca_result PCA result list from run_pca()
+#'   (the $result field, not the wrapper)
+#' @param raw_data Data frame, original data before
+#'   any transforms
+#' @param used_data Data frame, data actually passed
+#'   to prcomp (after transform + NA removal)
+#' @param numeric_cols Character vector of measurement
+#'   column names
+#' @param meta_cols Character vector of metadata column
+#'   names
+#' @param transform_params List of per-column transform
+#'   param lists (from transform_skewed), or empty list
+#' @param settings List with skewness_correction,
+#'   scale_method, etc.
+#' @return Named list (the bundle)
+#' @export
+create_pca_bundle <- function(pca_result, raw_data,
+                              used_data, numeric_cols,
+                              meta_cols,
+                              transform_params = list(),
+                              settings = list()) {
+  bundle <- list(
+    analysis_type = "pca",
+    model = pca_result$pca_obj,
+    raw_data = raw_data,
+    used_data = used_data,
+    group_col = NULL,
+    numeric_cols = numeric_cols,
+    meta_cols = meta_cols,
+    transform_params = transform_params,
+    scale_params = NULL,
+    settings = settings,
+    data_source = "raw",
+    app_version = app_version,
+    created = Sys.time()
+  )
+
+  rhino$log$info(
+    "PCA bundle: created ({length(numeric_cols)} vars,",
+    " {nrow(used_data)} obs)"
+  )
+
+  bundle
+}
 
 # =============================================================================
 # Internal helpers (not exported)
