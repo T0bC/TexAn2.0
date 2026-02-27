@@ -408,9 +408,28 @@ server <- function(id) {
         meta_col <- NULL
       }
 
+      # PCA-specific plot controls
+      group_cols <- input$group_col
+      if (
+        is.null(group_cols) ||
+        length(group_cols) == 0
+      ) {
+        group_cols <- NULL
+      }
+      show_hull <- isTRUE(input$show_convex_hull)
+      pt_alpha <- input$point_alpha %||% "Contribution"
+      pt_size <- input$point_size %||% "Contribution"
+      biplot_layer <- input$biplot_layer %||%
+        "individuals"
+
       plot_res <- create_prediction_overlay_plot(
         bdl, pred, unknown,
-        dim_x, dim_y, meta_col
+        dim_x, dim_y, meta_col,
+        group_cols = group_cols,
+        show_convex_hull = show_hull,
+        point_alpha = pt_alpha,
+        point_size = pt_size,
+        layer = biplot_layer
       )
 
       if (!plot_res$success) return(NULL)
@@ -545,7 +564,7 @@ render_placeholder <- function(ns) {
         class = "text-center text-muted",
         shiny$tags$p(
           bsicons$bs_icon(
-            "crosshair2",
+            "crosshair",
             size = "3em",
             class = "mb-3"
           )
