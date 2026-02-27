@@ -7,6 +7,10 @@ box::use(
 
 box::use(
   app/logic/error_handling,
+  app/logic/lda/ld_plot[
+    create_ld_plot, create_qda_plot,
+    axis_label,
+  ],
   app/logic/pca/biplot[create_biplot],
   app/logic/pca/pca[build_pca_result, build_ind_meta],
 )
@@ -40,6 +44,10 @@ box::use(
 #'   for PCA biplot ("Contribution" or fixed, PCA only)
 #' @param layer Character, biplot layer: "individuals",
 #'   "variables", or "combined" (PCA only)
+#' @param show_diagnostics Logical, overlay assumption
+#'   diagnostics (LDA/MDA only)
+#' @param show_boundaries Logical, overlay decision
+#'   boundary regions (LDA/MDA/QDA)
 #' @return List with $success, $result (ggplot) or $error
 #' @export
 create_prediction_overlay_plot <- function(
@@ -49,7 +57,9 @@ create_prediction_overlay_plot <- function(
     show_convex_hull = FALSE,
     point_alpha = 0.5,
     point_size = 2.5,
-    layer = "individuals") {
+    layer = "individuals",
+    show_diagnostics = FALSE,
+    show_boundaries = FALSE) {
   error_handling$safe_execute(
     expr = {
       analysis_type <- bundle$analysis_type
@@ -67,15 +77,20 @@ create_prediction_overlay_plot <- function(
         ),
         lda = build_ld_overlay(
           bundle, prediction_result,
-          unknown_data, dim_x, dim_y, meta_col
+          unknown_data, dim_x, dim_y, meta_col,
+          show_diagnostics = show_diagnostics,
+          show_boundaries = show_boundaries
         ),
         mda = build_ld_overlay(
           bundle, prediction_result,
-          unknown_data, dim_x, dim_y, meta_col
+          unknown_data, dim_x, dim_y, meta_col,
+          show_diagnostics = show_diagnostics,
+          show_boundaries = show_boundaries
         ),
         qda = build_qda_overlay(
           bundle, prediction_result,
-          unknown_data, dim_x, dim_y, meta_col
+          unknown_data, dim_x, dim_y, meta_col,
+          show_boundaries = show_boundaries
         ),
         stop(paste0(
           "Unsupported analysis type: '",
@@ -218,114 +233,133 @@ build_pca_overlay <- function(bundle, pred_result,
   p
 }
 
-#' Build LDA/MDA overlay: training LD scores + unknown
+#' Build LDA/MDA overlay: delegate to create_ld_plot
+#' for the training base layer, then overlay unknowns.
 build_ld_overlay <- function(bundle, pred_result,
                              unknown_data, dim_x,
-                             dim_y, meta_col) {
-  # Training scores from bundle result
-  model <- bundle$model
-  used_data <- bundle$used_data
-  numeric_cols <- bundle$numeric_cols
-  train_numeric <- used_data[
-    , numeric_cols, drop = FALSE
-  ]
+                             dim_y, meta_col,
+                             show_diagnostics = FALSE,
+                             show_boundaries = FALSE) {
+  # Reconstruct lda_result-like structure from bundle
+  lda_like <- reconstruct_lda_result(bundle)
 
-  # Get training LD scores
-  is_mda <- bundle$analysis_type == "mda"
-  if (is_mda) {
-    train_scores_raw <- stats$predict(
-      model, train_numeric, type = "variates"
-    )
-    train_scores <- as.data.frame(train_scores_raw)
-    if (ncol(train_scores) > 0) {
-      colnames(train_scores) <- paste0(
-        "LD", seq_len(ncol(train_scores))
-      )
-    }
-  } else {
-    train_pred <- stats$predict(model, train_numeric)
-    train_scores <- as.data.frame(train_pred$x)
-  }
-
-  # Build training data frame
-  group_col <- bundle$group_col
-  train_df <- data.frame(
-    x = train_scores[[dim_x]],
-    y = train_scores[[dim_y]],
-    type = "Training",
-    group = as.character(
-      used_data[[group_col]]
-    ),
-    label = "",
-    stringsAsFactors = FALSE
+  # Delegate training plot to create_ld_plot
+  plot_res <- create_ld_plot(
+    lda_result = lda_like,
+    dim_x = dim_x,
+    dim_y = dim_y,
+    show_diagnostics = show_diagnostics,
+    show_boundaries = show_boundaries
   )
 
-  # Unknown scores
+  if (!plot_res$success) {
+    stop(
+      plot_res$error$message %||%
+      "LD plot failed"
+    )
+  }
+
+  p <- plot_res$result
+
+  # Build unknown overlay data frame
   unknown_scores <- pred_result$scores
-  unknown_df <- data.frame(
-    x = unknown_scores[[dim_x]],
-    y = unknown_scores[[dim_y]],
-    type = "Unknown",
-    group = as.character(
-      pred_result$predicted_class
-    ),
-    stringsAsFactors = FALSE
+  unknown_df <- build_unknown_overlay_df(
+    unknown_scores, pred_result, unknown_data,
+    dim_x, dim_y, meta_col
   )
 
-  if (
-    !is.null(meta_col) &&
-    meta_col %in% names(unknown_data)
-  ) {
-    unknown_df$label <- as.character(
-      unknown_data[[meta_col]]
+  # Layer unknown points (triangles) on top
+  p <- p +
+    ggiraph$geom_point_interactive(
+      data = unknown_df,
+      ggplot2$aes(
+        x = x, y = y,
+        fill = group,
+        tooltip = tooltip,
+        data_id = data_id
+      ),
+      shape = 24,
+      color = "black",
+      stroke = 0.8,
+      size = 4,
+      alpha = 0.95
     )
+
+  # Add unknown labels
+  prop_trace <- lda_like$proportion_of_trace
+  y_range <- diff(range(
+    c(unknown_df$y, lda_like$scores[[dim_y]]),
+    na.rm = TRUE
+  ))
+  p <- p +
+    ggplot2$geom_text(
+      data = unknown_df,
+      ggplot2$aes(
+        x = x, y = y, label = label
+      ),
+      nudge_y = -y_range * 0.03,
+      size = 2.8,
+      color = "grey30",
+      fontface = "italic"
+    )
+
+  # Update title and subtitle with prediction info
+  n_train <- nrow(bundle$used_data)
+  n_unknown <- nrow(unknown_df)
+  x_label <- axis_label(dim_x, prop_trace)
+  y_label <- axis_label(dim_y, prop_trace)
+
+  is_mda <- bundle$analysis_type == "mda"
+  title_prefix <- if (is_mda) {
+    "MDA Prediction"
   } else {
-    unknown_df$label <- paste0(
-      "Unknown_", seq_len(nrow(unknown_df))
-    )
+    "LDA Prediction"
   }
 
-  combined <- rbind(train_df, unknown_df)
-  combined$group <- factor(combined$group)
-  combined$type <- factor(
-    combined$type, levels = c("Training", "Unknown")
-  )
+  p <- p +
+    ggplot2$labs(
+      x = x_label,
+      y = y_label,
+      title = paste0(
+        title_prefix, " \u2014 ",
+        dim_x, " vs ", dim_y
+      ),
+      subtitle = paste0(
+        n_train, " training + ",
+        n_unknown, " unknown samples"
+      )
+    )
 
-  title <- paste0(
-    toupper(bundle$analysis_type),
-    " \u2014 ", dim_x, " vs ", dim_y
-  )
-  build_overlay_ggplot(combined, dim_x, dim_y, title)
+  p
 }
 
-#' Build QDA overlay via companion LDA projection
+#' Build QDA overlay: delegate to create_qda_plot
+#' for the training base layer, then overlay unknowns.
 build_qda_overlay <- function(bundle, pred_result,
                               unknown_data, dim_x,
-                              dim_y, meta_col) {
-  # Use companion LDA scores for training
-  if (is.null(bundle$lda_scores)) {
-    stop(paste(
-      "QDA bundle does not contain companion LDA",
-      "scores for visualization."
-    ))
-  }
+                              dim_y, meta_col,
+                              show_boundaries = FALSE) {
+  # Reconstruct qda_result-like structure from bundle
+  qda_like <- reconstruct_qda_result(bundle)
 
-  train_scores <- bundle$lda_scores
-  group_col <- bundle$group_col
-  used_data <- bundle$used_data
-
-  train_df <- data.frame(
-    x = train_scores[[dim_x]],
-    y = train_scores[[dim_y]],
-    type = "Training",
-    group = as.character(
-      used_data[[group_col]]
-    ),
-    label = "",
-    stringsAsFactors = FALSE
+  # Delegate training plot to create_qda_plot
+  plot_res <- create_qda_plot(
+    qda_result = qda_like,
+    dim_x = dim_x,
+    dim_y = dim_y,
+    show_boundaries = show_boundaries
   )
 
-  # Unknown LD scores (from companion LDA predict)
+  if (!plot_res$success) {
+    stop(
+      plot_res$error$message %||%
+      "QDA plot failed"
+    )
+  }
+
+  p <- plot_res$result
+
+  # Build unknown overlay data frame
   unknown_scores <- pred_result$scores
   if (is.null(unknown_scores)) {
     stop(paste(
@@ -334,40 +368,59 @@ build_qda_overlay <- function(bundle, pred_result,
     ))
   }
 
-  unknown_df <- data.frame(
-    x = unknown_scores[[dim_x]],
-    y = unknown_scores[[dim_y]],
-    type = "Unknown",
-    group = as.character(
-      pred_result$predicted_class
-    ),
-    stringsAsFactors = FALSE
+  unknown_df <- build_unknown_overlay_df(
+    unknown_scores, pred_result, unknown_data,
+    dim_x, dim_y, meta_col
   )
 
-  if (
-    !is.null(meta_col) &&
-    meta_col %in% names(unknown_data)
-  ) {
-    unknown_df$label <- as.character(
-      unknown_data[[meta_col]]
+  # Layer unknown points (triangles) on top
+  p <- p +
+    ggiraph$geom_point_interactive(
+      data = unknown_df,
+      ggplot2$aes(
+        x = x, y = y,
+        fill = group,
+        tooltip = tooltip,
+        data_id = data_id
+      ),
+      shape = 24,
+      color = "black",
+      stroke = 0.8,
+      size = 4,
+      alpha = 0.95
     )
-  } else {
-    unknown_df$label <- paste0(
-      "Unknown_", seq_len(nrow(unknown_df))
+
+  # Add unknown labels
+  all_y <- c(unknown_df$y, qda_like$lda_scores[[dim_y]])
+  y_range <- diff(range(all_y, na.rm = TRUE))
+  p <- p +
+    ggplot2$geom_text(
+      data = unknown_df,
+      ggplot2$aes(
+        x = x, y = y, label = label
+      ),
+      nudge_y = -y_range * 0.03,
+      size = 2.8,
+      color = "grey30",
+      fontface = "italic"
     )
-  }
 
-  combined <- rbind(train_df, unknown_df)
-  combined$group <- factor(combined$group)
-  combined$type <- factor(
-    combined$type, levels = c("Training", "Unknown")
-  )
+  # Update title and subtitle
+  n_train <- nrow(bundle$used_data)
+  n_unknown <- nrow(unknown_df)
+  p <- p +
+    ggplot2$labs(
+      title = paste0(
+        "QDA Prediction \u2014 ",
+        dim_x, " vs ", dim_y
+      ),
+      subtitle = paste0(
+        n_train, " training + ",
+        n_unknown, " unknown samples"
+      )
+    )
 
-  title <- paste0(
-    "QDA \u2014 ", dim_x, " vs ", dim_y,
-    " (LDA projection)"
-  )
-  build_overlay_ggplot(combined, dim_x, dim_y, title)
+  p
 }
 
 
@@ -392,83 +445,168 @@ reconstruct_pca_result <- function(bundle) {
   result
 }
 
-#' Build the combined ggplot with training + unknown
-build_overlay_ggplot <- function(combined, dim_x,
-                                 dim_y, title) {
-  train_data <- combined[combined$type == "Training", ]
-  unknown_data <- combined[combined$type == "Unknown", ]
+#' Reconstruct an lda_result-like structure from a bundle
+#'
+#' Builds the list that create_ld_plot expects from the
+#' bundle's stored model and training data.
+reconstruct_lda_result <- function(bundle) {
+  model <- bundle$model
+  used_data <- bundle$used_data
+  numeric_cols <- bundle$numeric_cols
+  group_col <- bundle$group_col
+  meta_cols <- bundle$meta_cols %||% character(0)
+  is_mda <- bundle$analysis_type == "mda"
 
-  # Tooltip for unknowns
-  unknown_data$tooltip <- paste0(
-    "<b>", unknown_data$label, "</b><br>",
-    "Predicted: ", unknown_data$group, "<br>",
-    dim_x, ": ", round(unknown_data$x, 3), "<br>",
-    dim_y, ": ", round(unknown_data$y, 3)
-  )
-  unknown_data$data_id <- paste0(
-    "unknown_", seq_len(nrow(unknown_data))
-  )
+  train_numeric <- used_data[
+    , numeric_cols, drop = FALSE
+  ]
 
-  p <- ggplot2$ggplot() +
-    # Training points (circles, semi-transparent)
-    ggplot2$geom_point(
-      data = train_data,
-      ggplot2$aes(
-        x = x, y = y, fill = group
-      ),
-      shape = 21,
-      color = "white",
-      stroke = 0.4,
-      size = 2.5,
-      alpha = 0.4
-    ) +
-    # Training confidence ellipses
-    ggplot2$stat_ellipse(
-      data = train_data,
-      ggplot2$aes(
-        x = x, y = y, color = group
-      ),
-      level = 0.95,
-      linetype = "dashed",
-      linewidth = 0.5,
-      show.legend = FALSE
-    ) +
-    # Unknown points (triangles, fully opaque)
-    ggiraph$geom_point_interactive(
-      data = unknown_data,
-      ggplot2$aes(
-        x = x, y = y,
-        fill = group,
-        tooltip = tooltip,
-        data_id = data_id
-      ),
-      shape = 24,
-      color = "black",
-      stroke = 0.8,
-      size = 4,
-      alpha = 0.95
-    ) +
-    ggplot2$labs(
-      x = dim_x,
-      y = dim_y,
-      fill = "Group",
-      title = title,
-      subtitle = paste0(
-        nrow(train_data), " training + ",
-        nrow(unknown_data), " unknown samples"
-      )
-    ) +
-    ggplot2$theme_minimal(base_size = 12) +
-    ggplot2$theme(
-      legend.position = "right",
-      plot.title = ggplot2$element_text(
-        face = "bold", size = 13
-      ),
-      plot.subtitle = ggplot2$element_text(
-        color = "grey40", size = 10
-      ),
-      panel.grid.minor = ggplot2$element_blank()
+  # Compute training LD scores
+  if (is_mda) {
+    scores_raw <- stats$predict(
+      model, train_numeric, type = "variates"
     )
+    scores <- as.data.frame(scores_raw)
+    if (ncol(scores) > 0) {
+      colnames(scores) <- paste0(
+        "LD", seq_len(ncol(scores))
+      )
+    }
+  } else {
+    train_pred <- stats$predict(model, train_numeric)
+    scores <- as.data.frame(train_pred$x)
+  }
 
-  p
+  # Build metadata
+  meta <- if (length(meta_cols) > 0) {
+    used_data[, meta_cols, drop = FALSE]
+  } else {
+    data.frame(Row = seq_len(nrow(used_data)))
+  }
+
+  # Build proportion of trace
+  if (!is_mda) {
+    n_ld <- length(model$svd)
+    prop_vals <- model$svd^2 / sum(model$svd^2)
+    proportion_of_trace <- data.frame(
+      LD = paste0("LD", seq_len(n_ld)),
+      `Singular Value` = round(model$svd, 4),
+      Proportion = round(prop_vals, 4),
+      Cumulative = round(cumsum(prop_vals), 4),
+      check.names = FALSE
+    )
+  } else {
+    # MDA: derive from percent.explained
+    pct <- model$percent.explained
+    if (!is.null(pct) && length(pct) > 0) {
+      cum_vals <- pct / 100
+      prop_vals <- c(cum_vals[1], diff(cum_vals))
+      n_dim <- length(pct)
+      proportion_of_trace <- data.frame(
+        LD = paste0("LD", seq_len(n_dim)),
+        Proportion = round(prop_vals, 4),
+        Cumulative = round(cum_vals, 4),
+        check.names = FALSE
+      )
+    } else {
+      proportion_of_trace <- NULL
+    }
+  }
+
+  list(
+    analysis_type = bundle$analysis_type,
+    grouping_col = group_col,
+    columns = numeric_cols,
+    scores = scores,
+    meta = meta,
+    model = model,
+    proportion_of_trace = proportion_of_trace
+  )
+}
+
+#' Reconstruct a qda_result-like structure from a bundle
+#'
+#' Builds the list that create_qda_plot expects from the
+#' bundle's stored model and training data.
+reconstruct_qda_result <- function(bundle) {
+  model <- bundle$model
+  used_data <- bundle$used_data
+  numeric_cols <- bundle$numeric_cols
+  group_col <- bundle$group_col
+  meta_cols <- bundle$meta_cols %||% character(0)
+
+  if (is.null(bundle$lda_scores)) {
+    stop(paste(
+      "QDA bundle does not contain companion LDA",
+      "scores for visualization."
+    ))
+  }
+
+  # Build metadata
+  meta <- if (length(meta_cols) > 0) {
+    used_data[, meta_cols, drop = FALSE]
+  } else {
+    data.frame(Row = seq_len(nrow(used_data)))
+  }
+
+  # Build companion LDA proportion of trace
+  lda_prop <- bundle$lda_proportion_of_trace
+
+  list(
+    analysis_type = "qda",
+    grouping_col = group_col,
+    columns = numeric_cols,
+    meta = meta,
+    model = model,
+    lda_scores = bundle$lda_scores,
+    lda_proportion_of_trace = lda_prop,
+    numeric_data = used_data[
+      , numeric_cols, drop = FALSE
+    ]
+  )
+}
+
+#' Build unknown sample overlay data frame
+#'
+#' Creates the data frame used to layer unknown
+#' predictions on top of the training base plot.
+build_unknown_overlay_df <- function(
+    unknown_scores, pred_result, unknown_data,
+    dim_x, dim_y, meta_col) {
+  unknown_df <- data.frame(
+    x = unknown_scores[[dim_x]],
+    y = unknown_scores[[dim_y]],
+    group = as.character(
+      pred_result$predicted_class
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  # Labels
+  if (
+    !is.null(meta_col) &&
+    meta_col %in% names(unknown_data)
+  ) {
+    unknown_df$label <- as.character(
+      unknown_data[[meta_col]]
+    )
+  } else {
+    unknown_df$label <- paste0(
+      "Unknown_", seq_len(nrow(unknown_df))
+    )
+  }
+
+  # Tooltips
+  unknown_df$tooltip <- paste0(
+    "<b>", unknown_df$label, "</b><br>",
+    "Predicted: ", unknown_df$group, "<br>",
+    dim_x, ": ", round(unknown_df$x, 3), "<br>",
+    dim_y, ": ", round(unknown_df$y, 3)
+  )
+  unknown_df$data_id <- paste0(
+    "unknown_", seq_len(nrow(unknown_df))
+  )
+
+  unknown_df$group <- factor(unknown_df$group)
+  unknown_df
 }
