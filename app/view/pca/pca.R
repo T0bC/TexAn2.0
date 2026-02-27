@@ -15,8 +15,7 @@ box::use(
   app/logic/pca/na_handling[clean_na_rows],
   app/logic/pca/optimal_components[calculate_optimal_components],
   app/logic/pca/pca[validate_inputs, run_pca],
-  app/logic/pca/pca_export[create_pca_excel],
-  app/logic/pca/scaling[scale_data],
+  app/logic/pca/pca_export[create_pca_excel, create_pca_bundle],
   app/logic/skewness_transform[
     detect_skewness, transform_skewed
   ],
@@ -72,6 +71,7 @@ server <- function(id, input_data, data_version) {
     pca_result <- shiny$reactiveVal(NULL)
     na_info <- shiny$reactiveVal(NULL)
     transform_info <- shiny$reactiveVal(NULL)
+    bundle_data <- shiny$reactiveVal(NULL)
 
     # Reset state when new data is loaded
     shiny$observeEvent(data_version(), {
@@ -83,6 +83,7 @@ server <- function(id, input_data, data_version) {
       pca_result(NULL)
       na_info(NULL)
       transform_info(NULL)
+      bundle_data(NULL)
       rhino$log$info("PCA: state reset for new data")
     }, ignoreInit = TRUE)
 
@@ -171,6 +172,7 @@ server <- function(id, input_data, data_version) {
       pca_result(NULL)
       na_info(NULL)
       transform_info(NULL)
+      bundle_data(NULL)
 
       data <- input_data()
       measure_cols <- input$measureVar
@@ -230,23 +232,13 @@ server <- function(id, input_data, data_version) {
         }
       }
 
-      # Scale data based on user selection
+      # Determine scaling params for PCA
       analysis_data <- cleaned_data
       scale_method <- input$scale_method
-      if (!is.null(scale_method) && scale_method != "none") {
-        do_center <- scale_method %in%
-          c("scale_center", "center_only")
-        do_scale <- scale_method == "scale_center"
-        scale_res <- scale_data(
-          cleaned_data, measure_cols,
-          center = do_center, scale = do_scale
-        )
-        if (!scale_res$success) {
-          last_error(scale_res$error)
-          return()
-        }
-        analysis_data <- scale_res$result
-      }
+      do_center <- !is.null(scale_method) &&
+        scale_method %in% c("scale_center", "center_only")
+      do_scale <- !is.null(scale_method) &&
+        scale_method == "scale_center"
 
       rhino$log$info(
         "PCA: computing correlation plot",
@@ -296,9 +288,37 @@ server <- function(id, input_data, data_version) {
       )
       pca_res <- run_pca(
         analysis_data, measure_cols,
-        meta_cols = meta_cols
+        meta_cols = meta_cols,
+        center = do_center,
+        scale. = do_scale
       )
       pca_result(pca_res)
+
+      # Store bundle data for RDS export
+      if (pca_res$success) {
+        tf_info <- transform_info()
+        t_params <- if (
+          !is.null(tf_info) &&
+          !is.null(tf_info$transform_params)
+        ) {
+          tf_info$transform_params
+        } else {
+          list()
+        }
+        bundle_data(list(
+          raw_data = na_result$data,
+          used_data = analysis_data,
+          numeric_cols = measure_cols,
+          meta_cols = meta_cols,
+          transform_params = t_params,
+          settings = list(
+            skewness_correction = isTRUE(
+              input$correct_skewness
+            ),
+            scale_method = scale_method %||% "none"
+          )
+        ))
+      }
 
       # Update dimension dropdowns to match actual components
       if (pca_res$success) {
@@ -744,7 +764,7 @@ server <- function(id, input_data, data_version) {
     output$download_pca_rds <- shiny$downloadHandler(
       filename = function() {
         paste0(
-          "pca_object_",
+          "pca_bundle_",
           format(Sys.time(), "%Y%m%d_%H%M%S"),
           ".rds"
         )
@@ -753,7 +773,18 @@ server <- function(id, input_data, data_version) {
         pca_res <- pca_result()
         shiny$req(pca_res)
         shiny$req(pca_res$success)
-        saveRDS(pca_res$result, file)
+        bd <- bundle_data()
+        shiny$req(bd)
+        bundle <- create_pca_bundle(
+          pca_result = pca_res$result,
+          raw_data = bd$raw_data,
+          used_data = bd$used_data,
+          numeric_cols = bd$numeric_cols,
+          meta_cols = bd$meta_cols,
+          transform_params = bd$transform_params,
+          settings = bd$settings
+        )
+        saveRDS(bundle, file)
       }
     )
 
