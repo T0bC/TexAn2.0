@@ -9,18 +9,40 @@ box::use(
   app/view/components/sidebar_tabs,
 )
 
+# =============================================================================
+# UI — all inputs are static so they exist immediately
+# =============================================================================
+
 #' @export
 tab_ui <- function(ns) {
   sidebar_tabs$create_tab(
     icon = "palette",
     tooltip_text = "Plot Settings",
     value = "plotting_tab",
-    shiny$h6(
-      class = "text-muted mb-3",
-      "Plot Settings"
+    # Hidden input that server sets to "pca" or "lda"
+    # to toggle which control panel is visible
+    shiny$tags$div(
+      style = "display:none;",
+      shiny$textInput(
+        inputId = ns("plot_mode"),
+        label = NULL,
+        value = "none"
+      )
     ),
-    # Analysis-type-specific controls (rendered dynamically)
-    shiny$uiOutput(ns("plot_controls")),
+    # LDA/MDA/QDA controls panel
+    shiny$conditionalPanel(
+      condition = paste0(
+        "input['", ns("plot_mode"), "'] === 'lda'"
+      ),
+      build_lda_controls_ui(ns)
+    ),
+    # PCA controls panel
+    shiny$conditionalPanel(
+      condition = paste0(
+        "input['", ns("plot_mode"), "'] === 'pca'"
+      ),
+      build_pca_controls_ui(ns)
+    ),
     # Label column selector (shared across all types)
     shiny$uiOutput(ns("label_selector")),
     shiny$tags$hr(),
@@ -78,127 +100,48 @@ tab_ui <- function(ns) {
   )
 }
 
+
+# =============================================================================
+# Server
+# =============================================================================
+
 #' @export
 tab_server <- function(input, output, session,
                        bundle_reactive,
                        unknown_data_reactive) {
   ns <- session$ns
 
-  # Render analysis-type-specific plot controls
-  output$plot_controls <- shiny$renderUI({
+  # Toggle which control panel is visible and update
+  # dimension choices when the bundle changes
+  shiny$observeEvent(bundle_reactive(), {
     bundle <- bundle_reactive()
-    if (is.null(bundle)) return(NULL)
+    if (is.null(bundle)) {
+      # Hide both panels
+      shiny$updateTextInput(
+        session, "plot_mode", value = "none"
+      )
+      return()
+    }
 
     analysis_type <- bundle$analysis_type
 
     if (analysis_type == "pca") {
-      build_pca_controls(ns, bundle)
+      shiny$updateTextInput(
+        session, "plot_mode", value = "pca"
+      )
+      update_pca_choices(session, bundle)
     } else if (
       analysis_type %in% c("lda", "mda", "qda")
     ) {
-      build_lda_controls(ns, bundle)
-    } else {
-      NULL
-    }
-  })
-
-  # Update LDA/MDA/QDA dimension choices when bundle changes
-  shiny$observeEvent(bundle_reactive(), {
-    bundle <- bundle_reactive()
-    if (is.null(bundle)) return()
-    analysis_type <- bundle$analysis_type
-
-    if (analysis_type %in% c("lda", "mda")) {
-      dims <- get_available_dims(bundle)
-      n_ld <- length(dims)
-
-      shiny$updateSelectizeInput(
-        session, "ldDimX",
-        choices = dims,
-        selected = dims[1]
+      shiny$updateTextInput(
+        session, "plot_mode", value = "lda"
       )
-      shiny$updateSelectizeInput(
-        session, "ldDimY",
-        choices = dims,
-        selected = if (n_ld >= 2) {
-          dims[2]
-        } else {
-          dims[1]
-        }
-      )
-    } else if (analysis_type == "qda") {
-      # QDA: offer LD axes + original variables
-      ld_names <- if (!is.null(bundle$lda_scores)) {
-        colnames(bundle$lda_scores)
-      } else {
-        character(0)
-      }
-      orig_names <- bundle$numeric_cols
-
-      choices <- list()
-      if (length(ld_names) > 0) {
-        choices[["LD Axes (LDA projection)"]] <-
-          ld_names
-      }
-      if (length(orig_names) > 0) {
-        choices[["Original Variables"]] <- orig_names
-      }
-
-      n_ld <- length(ld_names)
-      default_x <- if (n_ld >= 1) {
-        ld_names[1]
-      } else {
-        orig_names[1]
-      }
-      default_y <- if (n_ld >= 2) {
-        ld_names[2]
-      } else if (length(orig_names) >= 2) {
-        orig_names[2]
-      } else {
-        default_x
-      }
-
-      shiny$updateSelectizeInput(
-        session, "ldDimX",
-        choices = choices,
-        selected = default_x
-      )
-      shiny$updateSelectizeInput(
-        session, "ldDimY",
-        choices = choices,
-        selected = default_y
-      )
-    } else if (analysis_type == "pca") {
-      dims <- get_available_dims(bundle)
-      shiny$updateSelectizeInput(
-        session, "dim_x",
-        choices = dims,
-        selected = dims[1]
-      )
-      shiny$updateSelectizeInput(
-        session, "dim_y",
-        choices = dims,
-        selected = dims[min(2, length(dims))]
-      )
-
-      # Update group column choices
-      meta_cols <- bundle$meta_cols
-      if (
-        !is.null(meta_cols) &&
-        length(meta_cols) > 0
-      ) {
-        available <- intersect(
-          meta_cols, names(bundle$used_data)
-        )
-        shiny$updateSelectizeInput(
-          session, "group_col",
-          choices = available
-        )
-      }
+      update_lda_choices(session, bundle)
     }
   }, ignoreNULL = TRUE)
 
-  # Label column selector
+  # Label column selector (renderUI is fine here —
+  # not on the critical path for plot rendering)
   output$label_selector <- shiny$renderUI({
     unknown <- unknown_data_reactive()
     if (is.null(unknown)) return(NULL)
@@ -235,28 +178,13 @@ tab_server <- function(input, output, session,
 
 
 # =============================================================================
-# Internal helpers (not exported)
+# Static UI builders (called at UI creation time)
 # =============================================================================
 
-#' Build LDA/MDA/QDA plot controls
-build_lda_controls <- function(ns, bundle) {
-  analysis_type <- bundle$analysis_type
-  dims <- get_available_dims(bundle)
-  n_dims <- length(dims)
-
-  title_label <- if (analysis_type == "qda") {
-    "QDA Plotting Controls"
-  } else if (analysis_type == "mda") {
-    "MDA Plotting Controls"
-  } else {
-    "LDA Plotting Controls"
-  }
-
+#' Build the LDA/MDA/QDA controls panel (static)
+build_lda_controls_ui <- function(ns) {
   shiny$tagList(
-    shiny$h6(
-      class = "text-muted mb-2",
-      title_label
-    ),
+    shiny$uiOutput(ns("lda_title")),
     # LD dimension selection
     shiny$fluidRow(
       shiny$column(
@@ -276,8 +204,8 @@ build_lda_controls <- function(ns, bundle) {
               )
             )
           ),
-          choices = dims,
-          selected = dims[1]
+          choices = c("LD1", "LD2"),
+          selected = "LD1"
         )
       ),
       shiny$column(
@@ -297,39 +225,32 @@ build_lda_controls <- function(ns, bundle) {
               )
             )
           ),
-          choices = dims,
-          selected = if (n_dims >= 2) {
-            dims[2]
-          } else {
-            dims[1]
-          }
+          choices = c("LD1", "LD2"),
+          selected = "LD2"
         )
       )
     ),
     # Assumption diagnostics overlay toggle
-    # (not for QDA — QDA uses its own boundary overlay)
-    if (analysis_type != "qda") {
-      shiny$checkboxInput(
-        inputId = ns("show_diagnostics"),
-        label = shiny$tags$span(
-          "Show Assumption Diagnostics ",
-          bslib$tooltip(
-            bsicons$bs_icon(
-              "info-circle",
-              class = "text-muted"
-            ),
-            paste(
-              "Overlay per-group (solid) and pooled",
-              "within-group (dashed) covariance",
-              "ellipses on the LD Scores plot.",
-              "If both match, the equal-covariance",
-              "assumption holds."
-            )
+    shiny$checkboxInput(
+      inputId = ns("show_diagnostics"),
+      label = shiny$tags$span(
+        "Show Assumption Diagnostics ",
+        bslib$tooltip(
+          bsicons$bs_icon(
+            "info-circle",
+            class = "text-muted"
+          ),
+          paste(
+            "Overlay per-group (solid) and pooled",
+            "within-group (dashed) covariance",
+            "ellipses on the LD Scores plot.",
+            "If both match, the equal-covariance",
+            "assumption holds."
           )
-        ),
-        value = FALSE
-      )
-    },
+        )
+      ),
+      value = FALSE
+    ),
     # Decision boundaries overlay toggle
     shiny$checkboxInput(
       inputId = ns("show_boundaries"),
@@ -354,18 +275,8 @@ build_lda_controls <- function(ns, bundle) {
   )
 }
 
-#' Build PCA plot controls
-build_pca_controls <- function(ns, bundle) {
-  dims <- get_available_dims(bundle)
-  meta_cols <- bundle$meta_cols
-  available_groups <- if (
-    !is.null(meta_cols) && length(meta_cols) > 0
-  ) {
-    intersect(meta_cols, names(bundle$used_data))
-  } else {
-    character(0)
-  }
-
+#' Build the PCA controls panel (static)
+build_pca_controls_ui <- function(ns) {
   shiny$tagList(
     shiny$h6(
       class = "text-muted mb-2",
@@ -397,29 +308,27 @@ build_pca_controls <- function(ns, bundle) {
     ),
     shiny$tags$hr(),
     # Group column selector
-    if (length(available_groups) > 0) {
-      shiny$selectizeInput(
-        inputId = ns("group_col"),
-        label = shiny$tags$span(
-          "Group training data ",
-          bslib$tooltip(
-            bsicons$bs_icon(
-              "info-circle", class = "text-muted"
-            ),
-            paste(
-              "Select metadata column(s) to group",
-              "the training data in the overlay",
-              "plot. Multiple columns are combined."
-            )
+    shiny$selectizeInput(
+      inputId = ns("group_col"),
+      label = shiny$tags$span(
+        "Group training data ",
+        bslib$tooltip(
+          bsicons$bs_icon(
+            "info-circle", class = "text-muted"
+          ),
+          paste(
+            "Select metadata column(s) to group",
+            "the training data in the overlay",
+            "plot. Multiple columns are combined."
           )
-        ),
-        choices = available_groups,
-        multiple = TRUE,
-        options = list(
-          placeholder = "Select grouping column(s)..."
         )
+      ),
+      choices = NULL,
+      multiple = TRUE,
+      options = list(
+        placeholder = "Select grouping column(s)..."
       )
-    },
+    ),
     # Convex hull toggle
     shiny$checkboxInput(
       inputId = ns("show_convex_hull"),
@@ -477,8 +386,8 @@ build_pca_controls <- function(ns, bundle) {
         shiny$selectizeInput(
           inputId = ns("dim_x"),
           label = "X Axis",
-          choices = dims,
-          selected = dims[1]
+          choices = c("Dim.1", "Dim.2", "Dim.3"),
+          selected = "Dim.1"
         )
       ),
       shiny$column(
@@ -486,14 +395,132 @@ build_pca_controls <- function(ns, bundle) {
         shiny$selectizeInput(
           inputId = ns("dim_y"),
           label = "Y Axis",
-          choices = dims,
-          selected = dims[min(2, length(dims))]
+          choices = c("Dim.1", "Dim.2", "Dim.3"),
+          selected = "Dim.2"
         )
       )
     ),
     shiny$tags$hr()
   )
 }
+
+
+# =============================================================================
+# Server helpers for updating choices
+# =============================================================================
+
+#' Update LDA/MDA/QDA dimension choices
+update_lda_choices <- function(session, bundle) {
+  analysis_type <- bundle$analysis_type
+
+  if (analysis_type %in% c("lda", "mda")) {
+    dims <- get_available_dims(bundle)
+    n_ld <- length(dims)
+
+    shiny$updateSelectizeInput(
+      session, "ldDimX",
+      choices = dims,
+      selected = dims[1]
+    )
+    shiny$updateSelectizeInput(
+      session, "ldDimY",
+      choices = dims,
+      selected = if (n_ld >= 2) {
+        dims[2]
+      } else {
+        dims[1]
+      }
+    )
+  } else if (analysis_type == "qda") {
+    # QDA: offer LD axes + original variables
+    ld_names <- if (!is.null(bundle$lda_scores)) {
+      colnames(bundle$lda_scores)
+    } else {
+      character(0)
+    }
+    orig_names <- bundle$numeric_cols
+
+    choices <- list()
+    if (length(ld_names) > 0) {
+      choices[["LD Axes (LDA projection)"]] <-
+        ld_names
+    }
+    if (length(orig_names) > 0) {
+      choices[["Original Variables"]] <- orig_names
+    }
+
+    n_ld <- length(ld_names)
+    default_x <- if (n_ld >= 1) {
+      ld_names[1]
+    } else {
+      orig_names[1]
+    }
+    default_y <- if (n_ld >= 2) {
+      ld_names[2]
+    } else if (length(orig_names) >= 2) {
+      orig_names[2]
+    } else {
+      default_x
+    }
+
+    shiny$updateSelectizeInput(
+      session, "ldDimX",
+      choices = choices,
+      selected = default_x
+    )
+    shiny$updateSelectizeInput(
+      session, "ldDimY",
+      choices = choices,
+      selected = default_y
+    )
+  }
+
+  # Update title dynamically
+  title_label <- switch(
+    analysis_type,
+    qda = "QDA Plotting Controls",
+    mda = "MDA Plotting Controls",
+    "LDA Plotting Controls"
+  )
+  session$output$lda_title <- shiny$renderUI({
+    shiny$h6(class = "text-muted mb-2", title_label)
+  })
+}
+
+#' Update PCA dimension and group choices
+update_pca_choices <- function(session, bundle) {
+  dims <- get_available_dims(bundle)
+  shiny$updateSelectizeInput(
+    session, "dim_x",
+    choices = dims,
+    selected = dims[1]
+  )
+  shiny$updateSelectizeInput(
+    session, "dim_y",
+    choices = dims,
+    selected = dims[min(2, length(dims))]
+  )
+
+  # Update group column choices
+  meta_cols <- bundle$meta_cols
+  if (
+    !is.null(meta_cols) &&
+    length(meta_cols) > 0
+  ) {
+    available <- intersect(
+      meta_cols, names(bundle$used_data)
+    )
+    shiny$updateSelectizeInput(
+      session, "group_col",
+      choices = available
+    )
+  }
+}
+
+
+# =============================================================================
+# Internal helpers
+# =============================================================================
 
 #' Get available dimension names for plotting
 get_available_dims <- function(bundle) {
