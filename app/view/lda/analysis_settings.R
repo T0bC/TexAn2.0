@@ -129,10 +129,15 @@ tab_ui <- function(ns) {
               "info-circle", class = "text-muted"
             ),
             paste(
-              "Number of Gaussian subclasses per",
-              "group. More subclasses allow more",
-              "flexible within-group distributions",
-              "but require more observations."
+              "MDA models each group as a mixture",
+              "of Gaussian sub-populations.",
+              "1 = equivalent to standard LDA.",
+              "Higher values capture multi-modal",
+              "or non-elliptical group shapes but",
+              "need enough observations per group",
+              "(rule of thumb: >= 10 per subclass).",
+              "Changing this also changes the",
+              "discriminant coordinate system."
             )
           )
         ),
@@ -150,9 +155,13 @@ tab_ui <- function(ns) {
               "info-circle", class = "text-muted"
             ),
             paste(
-              "Maximum number of EM algorithm",
-              "iterations. Increase if the model",
-              "has not converged."
+              "Maximum iterations of the",
+              "Expectation-Maximisation algorithm",
+              "that estimates subclass memberships.",
+              "Low values (3-5) give quick fits;",
+              "increase to 20-50 if results seem",
+              "unstable or deviance is still",
+              "decreasing between runs."
             )
           )
         ),
