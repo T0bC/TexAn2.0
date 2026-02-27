@@ -187,6 +187,7 @@ pca_error_parser <- function(error_msg,
 #' @param n Number of observations
 #' @param p Number of variables
 #' @return List with $eig, $var, $ind, $ncp, $call_info
+#' @export
 build_pca_result <- function(pca_obj, ncp, n, p) {
   sdev <- pca_obj$sdev
   eigenvalues <- sdev^2
@@ -298,6 +299,7 @@ build_pca_result <- function(pca_obj, ncp, n, p) {
 #' @param meta_cols Character vector of metadata column names
 #' @param n Number of rows (for fallback labels)
 #' @return Data frame with metadata or row numbers
+#' @export
 build_ind_meta <- function(data, meta_cols, n) {
   if (length(meta_cols) == 0 ||
       !any(meta_cols %in% names(data))) {
