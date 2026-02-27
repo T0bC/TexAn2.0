@@ -3,6 +3,10 @@ box::use(
   rhino,
 )
 
+box::use(
+  app/logic/settings[app_version],
+)
+
 # =============================================================================
 # Pure logic functions for LDA/QDA result export
 # No Shiny dependencies allowed in this file.
@@ -282,6 +286,74 @@ get_best_confusion <- function(lda_result,
   }
 }
 
+
+#' Create a standardized RDS bundle for LDA/QDA/MDA export
+#'
+#' Builds the named list that the prediction module
+#' expects when loading an LDA/QDA/MDA .rds file.
+#'
+#' @param lda_result Result list from run_lda/run_qda/run_mda
+#' @param raw_data Data frame, original data before any
+#'   transforms
+#' @param used_data Data frame, data actually passed to the
+#'   model (after transform + scale + NA removal)
+#' @param numeric_cols Character vector of measurement
+#'   column names
+#' @param meta_cols Character vector of metadata column
+#'   names
+#' @param transform_params List of per-column transform
+#'   param lists (from transform_skewed), or empty list
+#' @param scale_params List with $center and $scale named
+#'   numeric vectors, or NULL if no scaling
+#' @param settings List with skewness_correction,
+#'   scale_method, prior, etc.
+#' @param data_source Character, "raw" or "pca_scores"
+#' @return Named list (the bundle)
+#' @export
+create_lda_bundle <- function(lda_result, raw_data,
+                              used_data, numeric_cols,
+                              meta_cols,
+                              transform_params = list(),
+                              scale_params = NULL,
+                              settings = list(),
+                              data_source = "raw") {
+  analysis_type <- lda_result$analysis_type
+
+  bundle <- list(
+    analysis_type = analysis_type,
+    model = lda_result$model,
+    raw_data = raw_data,
+    used_data = used_data,
+    group_col = lda_result$grouping_col,
+    numeric_cols = numeric_cols,
+    meta_cols = meta_cols,
+    transform_params = transform_params,
+    scale_params = scale_params,
+    settings = settings,
+    data_source = data_source,
+    app_version = app_version,
+    created = Sys.time()
+  )
+
+  # For QDA: include companion LDA model and scores
+  if (analysis_type == "qda") {
+    bundle$lda_model <- lda_result$lda_model
+    bundle$lda_scaling <- lda_result$lda_scaling
+    bundle$lda_svd <- lda_result$lda_svd
+    bundle$lda_scores <- lda_result$lda_scores
+    bundle$lda_proportion_of_trace <-
+      lda_result$lda_proportion_of_trace
+  }
+
+  rhino$log$info(
+    "LDA bundle: created {toupper(analysis_type)}",
+    " ({length(numeric_cols)} vars,",
+    " {nrow(used_data)} obs,",
+    " source='{data_source}')"
+  )
+
+  bundle
+}
 
 add_sheet <- function(wb, sheet_name, data) {
   openxlsx$addWorksheet(wb, sheet_name)
