@@ -461,7 +461,7 @@ reconstruct_lda_result <- function(bundle) {
     , numeric_cols, drop = FALSE
   ]
 
-  # Compute training LD scores
+  # Compute training LD scores + predicted classes
   if (is_mda) {
     scores_raw <- stats$predict(
       model, train_numeric, type = "variates"
@@ -472,14 +472,31 @@ reconstruct_lda_result <- function(bundle) {
         "LD", seq_len(ncol(scores))
       )
     }
+    predicted_class <- stats$predict(
+      model, train_numeric
+    )
+    scaling <- NULL
   } else {
     train_pred <- stats$predict(model, train_numeric)
     scores <- as.data.frame(train_pred$x)
+    predicted_class <- train_pred$class
+    scaling <- as.data.frame(model$scaling)
   }
 
-  # Build metadata
-  meta <- if (length(meta_cols) > 0) {
-    used_data[, meta_cols, drop = FALSE]
+  # Group levels from training data
+  grouping_vals <- used_data[[group_col]]
+  group_levels <- if (is.factor(grouping_vals)) {
+    levels(grouping_vals)
+  } else {
+    sort(unique(as.character(grouping_vals)))
+  }
+
+  # Build metadata — must include grouping column
+  # so create_ld_plot's get_group_values can find it
+  all_meta <- unique(c(group_col, meta_cols))
+  available <- intersect(all_meta, names(used_data))
+  meta <- if (length(available) > 0) {
+    used_data[, available, drop = FALSE]
   } else {
     data.frame(Row = seq_len(nrow(used_data)))
   }
@@ -520,6 +537,9 @@ reconstruct_lda_result <- function(bundle) {
     scores = scores,
     meta = meta,
     model = model,
+    scaling = scaling,
+    predicted_class = predicted_class,
+    group_levels = group_levels,
     proportion_of_trace = proportion_of_trace
   )
 }
@@ -542,11 +562,21 @@ reconstruct_qda_result <- function(bundle) {
     ))
   }
 
-  # Build metadata
-  meta <- if (length(meta_cols) > 0) {
-    used_data[, meta_cols, drop = FALSE]
+  # Build metadata — must include grouping column
+  all_meta <- unique(c(group_col, meta_cols))
+  available <- intersect(all_meta, names(used_data))
+  meta <- if (length(available) > 0) {
+    used_data[, available, drop = FALSE]
   } else {
     data.frame(Row = seq_len(nrow(used_data)))
+  }
+
+  # Group levels from training data
+  grouping_vals <- used_data[[group_col]]
+  group_levels <- if (is.factor(grouping_vals)) {
+    levels(grouping_vals)
+  } else {
+    sort(unique(as.character(grouping_vals)))
   }
 
   # Build companion LDA proportion of trace
@@ -558,7 +588,10 @@ reconstruct_qda_result <- function(bundle) {
     columns = numeric_cols,
     meta = meta,
     model = model,
+    group_levels = group_levels,
     lda_scores = bundle$lda_scores,
+    lda_scaling = bundle$lda_scaling,
+    lda_model = bundle$lda_model,
     lda_proportion_of_trace = lda_prop,
     numeric_data = used_data[
       , numeric_cols, drop = FALSE
