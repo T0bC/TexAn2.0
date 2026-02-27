@@ -14,7 +14,7 @@ box::use(
     run_lda, run_mda, run_predict, run_qda,
     validate_inputs
   ],
-  app/logic/lda/lda_export[create_lda_excel],
+  app/logic/lda/lda_export[create_lda_excel, create_lda_bundle],
   app/logic/pca/na_handling[clean_na_rows],
   app/logic/pca/scaling[scale_data],
   app/logic/skewness_transform[
@@ -70,6 +70,7 @@ server <- function(id, input_data, data_version,
     na_info <- shiny$reactiveVal(NULL)
     transform_info <- shiny$reactiveVal(NULL)
     validation_warnings <- shiny$reactiveVal(character(0))
+    bundle_data <- shiny$reactiveVal(NULL)
 
     # Reset state when new data is loaded
     shiny$observeEvent(data_version(), {
@@ -79,6 +80,7 @@ server <- function(id, input_data, data_version,
       na_info(NULL)
       transform_info(NULL)
       validation_warnings(character(0))
+      bundle_data(NULL)
       rhino$log$info("LDA: state reset for new data")
     }, ignoreInit = TRUE)
 
@@ -138,6 +140,7 @@ server <- function(id, input_data, data_version,
       na_info(NULL)
       transform_info(NULL)
       validation_warnings(character(0))
+      bundle_data(NULL)
 
       data_source <- input$data_source
       measure_cols <- input$measureVar
@@ -338,6 +341,70 @@ server <- function(id, input_data, data_version,
       }
 
       result(lda_res$result)
+
+      # Store bundle data for RDS export
+      tf_info <- transform_info()
+      t_params <- if (
+        !is.null(tf_info) &&
+        !is.null(tf_info$transform_params)
+      ) {
+        tf_info$transform_params
+      } else {
+        list()
+      }
+      # Capture scale params from the pre-scaled data
+      s_params <- if (
+        data_source == "raw" &&
+        !is.null(scale_method) &&
+        scale_method != "none"
+      ) {
+        numeric_pre <- cleaned_data[
+          , measure_cols, drop = FALSE
+        ]
+        sc_center <- if (do_center) {
+          colMeans(numeric_pre, na.rm = TRUE)
+        } else {
+          NULL
+        }
+        sc_scale <- if (do_scale) {
+          vapply(
+            numeric_pre,
+            function(col) sd(col, na.rm = TRUE),
+            numeric(1)
+          )
+        } else {
+          NULL
+        }
+        list(center = sc_center, scale = sc_scale)
+      } else {
+        NULL
+      }
+      bundle_data(list(
+        raw_data = na_result$data,
+        used_data = analysis_data,
+        numeric_cols = measure_cols,
+        meta_cols = meta_cols,
+        transform_params = t_params,
+        scale_params = s_params,
+        data_source = data_source,
+        settings = list(
+          skewness_correction = (
+            data_source == "raw" &&
+            isTRUE(input$correct_skewness)
+          ),
+          scale_method = if (
+            data_source == "raw"
+          ) {
+            scale_method %||% "none"
+          } else {
+            "none"
+          },
+          prior = prior_choice,
+          analysis_type = analysis_type,
+          method = method,
+          validation_method = validation_method
+        )
+      ))
 
       # Predict on test set if split mode
       if (
@@ -578,8 +645,14 @@ server <- function(id, input_data, data_version,
     # Download handler: RDS export
     output$download_lda_rds <- shiny$downloadHandler(
       filename = function() {
+        res <- result()
+        prefix <- if (!is.null(res)) {
+          paste0(res$analysis_type, "_bundle_")
+        } else {
+          "lda_bundle_"
+        }
         paste0(
-          "lda_object_",
+          prefix,
           format(Sys.time(), "%Y%m%d_%H%M%S"),
           ".rds"
         )
@@ -587,9 +660,20 @@ server <- function(id, input_data, data_version,
       content = function(file) {
         res <- result()
         shiny$req(res)
-        # Strip the model object for a cleaner RDS
-        # (model can be large); keep everything else
-        saveRDS(res, file)
+        bd <- bundle_data()
+        shiny$req(bd)
+        bundle <- create_lda_bundle(
+          lda_result = res,
+          raw_data = bd$raw_data,
+          used_data = bd$used_data,
+          numeric_cols = bd$numeric_cols,
+          meta_cols = bd$meta_cols,
+          transform_params = bd$transform_params,
+          scale_params = bd$scale_params,
+          settings = bd$settings,
+          data_source = bd$data_source
+        )
+        saveRDS(bundle, file)
       }
     )
 
