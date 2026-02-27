@@ -49,9 +49,9 @@ create_ld_plot <- function(lda_result,
       scores <- lda_result$scores
       if (is.null(scores) || ncol(scores) == 0) {
         stop(
-          "No LD scores available. ",
-          "LD plot requires an LDA model ",
-          "(not QDA or CV mode)."
+          "No discriminant scores available. ",
+          "This plot requires a fitted LDA or ",
+          "MDA model (not QDA or CV mode)."
         )
       }
 
@@ -207,6 +207,15 @@ build_2d_plot <- function(scores, meta, grouping_col,
   x_label <- axis_label(dim_x, proportion_of_trace)
   y_label <- axis_label(dim_y, proportion_of_trace)
 
+  # Title prefix depends on analysis type
+  is_mda <- !is.null(lda_result) &&
+    identical(lda_result$analysis_type, "mda")
+  title_prefix <- if (is_mda) {
+    "Discriminant Scores"
+  } else {
+    "LD Scores"
+  }
+
   p <- ggplot2$ggplot(
     df,
     ggplot2$aes(
@@ -229,7 +238,7 @@ build_2d_plot <- function(scores, meta, grouping_col,
       x = x_label,
       y = y_label,
       fill = "Group",
-      title = paste0("LD Scores \u2014 ", dim_x, " vs ", dim_y)
+      title = paste0(title_prefix, " \u2014 ", dim_x, " vs ", dim_y)
     ) +
     ld_theme()
 
@@ -295,6 +304,14 @@ build_1d_plot <- function(scores, meta, grouping_col,
 
   x_label <- axis_label(dim_x, proportion_of_trace)
 
+  is_mda <- !is.null(lda_result) &&
+    identical(lda_result$analysis_type, "mda")
+  title_prefix <- if (is_mda) {
+    "Discriminant Scores"
+  } else {
+    "LD Scores"
+  }
+
   p <- ggplot2$ggplot(
     df,
     ggplot2$aes(
@@ -320,7 +337,7 @@ build_1d_plot <- function(scores, meta, grouping_col,
       x = x_label,
       y = "Group",
       fill = "Group",
-      title = paste0("LD Scores \u2014 ", dim_x)
+      title = paste0(title_prefix, " \u2014 ", dim_x)
     ) +
     ld_theme() +
     ggplot2$theme(aspect.ratio = 0.4)
