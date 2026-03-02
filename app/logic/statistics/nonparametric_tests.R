@@ -6,6 +6,7 @@ box::use(
 box::use(
   app/logic/error_handling,
   app/logic/statistics/omnibus,
+  app/logic/statistics/validation_utils,
 )
 
 box::use(
@@ -32,33 +33,9 @@ kruskal1way_config <- list(
   result_cols = c("Df", "H_statistic", "p_value"),
 
   validate = function(df, x_axis) {
-    if (length(x_axis) != 1) {
-      return(error_handling$simple_error(
-        message = paste0(
-          "Kruskal-Wallis requires exactly one ",
-          "grouping variable."
-        ),
-        operation_name = "kruskal1way_validate",
-        context = list(
-          n_grouping_vars = length(x_axis)
-        )
-      ))
-    }
-    n_groups <- length(unique(df[[x_axis[1]]]))
-    if (n_groups < 2) {
-      return(error_handling$simple_error(
-        message = paste0(
-          "Kruskal-Wallis requires at least 2 groups, ",
-          "found ", n_groups, "."
-        ),
-        operation_name = "kruskal1way_validate",
-        context = list(
-          grouping = x_axis[1],
-          n_groups = n_groups
-        )
-      ))
-    }
-    NULL
+    validation_utils$validate_n_way(
+      df, x_axis, 1, "Kruskal-Wallis", "kruskal1way_validate"
+    )
   },
 
   build_context = function(df, x_axis, measure_col,
@@ -190,36 +167,9 @@ art2way_config <- list(
   ),
 
   validate = function(df, x_axis) {
-    if (length(x_axis) != 2) {
-      return(error_handling$simple_error(
-        message = paste0(
-          "Two-way ART requires exactly two ",
-          "grouping variables."
-        ),
-        operation_name = "art2way_validate",
-        context = list(
-          n_grouping_vars = length(x_axis)
-        )
-      ))
-    }
-    for (i in seq_along(x_axis)) {
-      n_levels <- length(unique(df[[x_axis[i]]]))
-      if (n_levels < 2) {
-        return(error_handling$simple_error(
-          message = paste0(
-            "Two-way ART requires at least 2 ",
-            "levels in '", x_axis[i],
-            "', found ", n_levels, "."
-          ),
-          operation_name = "art2way_validate",
-          context = list(
-            factor = x_axis[i],
-            n_levels = n_levels
-          )
-        ))
-      }
-    }
-    NULL
+    validation_utils$validate_n_way(
+      df, x_axis, 2, "Two-way ART", "art2way_validate"
+    )
   },
 
   build_context = function(df, x_axis, measure_col,
@@ -392,36 +342,9 @@ art3way_config <- list(
   ),
 
   validate = function(df, x_axis) {
-    if (length(x_axis) != 3) {
-      return(error_handling$simple_error(
-        message = paste0(
-          "Three-way ART requires exactly three ",
-          "grouping variables."
-        ),
-        operation_name = "art3way_validate",
-        context = list(
-          n_grouping_vars = length(x_axis)
-        )
-      ))
-    }
-    for (i in seq_along(x_axis)) {
-      n_levels <- length(unique(df[[x_axis[i]]]))
-      if (n_levels < 2) {
-        return(error_handling$simple_error(
-          message = paste0(
-            "Three-way ART requires at least 2 ",
-            "levels in '", x_axis[i],
-            "', found ", n_levels, "."
-          ),
-          operation_name = "art3way_validate",
-          context = list(
-            factor = x_axis[i],
-            n_levels = n_levels
-          )
-        ))
-      }
-    }
-    NULL
+    validation_utils$validate_n_way(
+      df, x_axis, 3, "Three-way ART", "art3way_validate"
+    )
   },
 
   build_context = function(df, x_axis, measure_col,
