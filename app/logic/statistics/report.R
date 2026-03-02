@@ -172,6 +172,9 @@ build_posthoc_html <- function(posthoc_result) {
   # Detect prefix set
   has_lincon <- any(grepl("^Lincon\\.", names(posthoc_result)))
   has_tukey <- any(grepl("^Tukey\\.", names(posthoc_result)))
+  has_dunn <- any(grepl("^Dunn\\.", names(posthoc_result)))
+  has_wilcox <- any(grepl("^Wilcox\\.", names(posthoc_result)))
+  has_art <- any(grepl("^ART\\.", names(posthoc_result)))
 
   if (has_lincon) {
     left_prefix <- "Lincon"
@@ -183,6 +186,21 @@ build_posthoc_html <- function(posthoc_result) {
     left_label <- "Tukey HSD"
     right_prefix <- "Cohen"
     right_label <- "Cohen's d"
+  } else if (has_dunn) {
+    left_prefix <- "Dunn"
+    left_label <- "Dunn's Test"
+    right_prefix <- "Cliff"
+    right_label <- "Cliff's Delta"
+  } else if (has_wilcox) {
+    left_prefix <- "Wilcox"
+    left_label <- "Pairwise Wilcoxon"
+    right_prefix <- "Cliff"
+    right_label <- "Cliff's Delta"
+  } else if (has_art) {
+    left_prefix <- "ART"
+    left_label <- "ART Contrasts"
+    right_prefix <- "ART.d"
+    right_label <- "ART Cohen's d"
   } else {
     # Unknown prefix — render the whole table as-is
     return(paste0(
@@ -192,14 +210,29 @@ build_posthoc_html <- function(posthoc_result) {
     ))
   }
 
-  left_cols <- grep(
-    paste0("^", left_prefix, "\\."),
-    names(posthoc_result), value = TRUE
-  )
-  right_cols <- grep(
-    paste0("^", right_prefix, "\\."),
-    names(posthoc_result), value = TRUE
-  )
+  # For ART, split by explicit column names
+  if (has_art) {
+    art_left_names <- c(
+      "ART.estimate", "ART.SE", "ART.df",
+      "ART.t.ratio", "ART.p.value", "ART.p.adjusted"
+    )
+    art_right_names <- c(
+      "ART.d", "ART.d.ci.lower", "ART.d.ci.upper"
+    )
+    left_cols <- intersect(art_left_names, names(posthoc_result))
+    right_cols <- intersect(
+      art_right_names, names(posthoc_result)
+    )
+  } else {
+    left_cols <- grep(
+      paste0("^", left_prefix, "\\."),
+      names(posthoc_result), value = TRUE
+    )
+    right_cols <- grep(
+      paste0("^", right_prefix, "\\."),
+      names(posthoc_result), value = TRUE
+    )
+  }
 
   # Left table: Interaction + left columns, strip prefix
   left_df <- posthoc_result[
@@ -213,9 +246,14 @@ build_posthoc_html <- function(posthoc_result) {
   right_df <- posthoc_result[
     , c("Interaction", right_cols), drop = FALSE
   ]
-  names(right_df) <- gsub(
-    paste0("^", right_prefix, "\\."), "", names(right_df)
-  )
+  if (has_art) {
+    names(right_df) <- gsub("^ART\\.d\\.", "", names(right_df))
+    names(right_df) <- gsub("^ART\\.d$", "d", names(right_df))
+  } else {
+    names(right_df) <- gsub(
+      paste0("^", right_prefix, "\\."), "", names(right_df)
+    )
+  }
 
   paste0(
     "<h2>Pairwise Comparisons</h2>\n",
