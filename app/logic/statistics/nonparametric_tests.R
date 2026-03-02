@@ -273,9 +273,6 @@ art2way_config <- list(
     cell_counts <- table(conversion$data[factor_vars])
     min_cell_size <- min(cell_counts)
     max_cell_size <- max(cell_counts)
-    # DEBUG: Print cell counts to see what's happening
-    cat("DEBUG: Cell counts:", paste(cell_counts, collapse=", "), "\n")
-    cat("DEBUG: Min/Max cell size:", min_cell_size, "/", max_cell_size, "\n")
     if (min_cell_size < 3) {
       stop(error_handling$simple_error(
         message = paste0(
