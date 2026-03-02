@@ -3,7 +3,7 @@ set -e
 
 # ── Configuration ──────────────────────────────────────
 APP_DIR="/opt/shinyapps/texAn2.0"      # Change to your app path
-IMAGE_NAME="texan"                   # Change to your image name
+IMAGE_NAME="texan:latest"                   # Change to your image name
 # ───────────────────────────────────────────────────────
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
