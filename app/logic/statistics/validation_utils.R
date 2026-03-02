@@ -13,6 +13,47 @@ box::use(
 # =============================================================================
 
 
+#' Validate n-way omnibus test inputs
+#'
+#' Generic validation for omnibus tests (ANOVA, Kruskal-Wallis, ART, t1way, etc.)
+#' Checks that the correct number of grouping variables is provided and each
+#' factor has at least 2 levels.
+#'
+#' @param df Data frame
+#' @param x_axis Grouping columns
+#' @param n_ways Expected number of grouping variables (1, 2, or 3)
+#' @param test_name Human-readable test name for error messages
+#' @param operation_name Operation name for error context
+#' @return NULL if valid, app_error otherwise
+#' @export
+validate_n_way <- function(df, x_axis, n_ways, test_name, operation_name) {
+  if (length(x_axis) != n_ways) {
+    return(error_handling$simple_error(
+      message = paste0(
+        test_name, " requires exactly ", n_ways,
+        " grouping variable", if (n_ways > 1) "s" else "", "."
+      ),
+      operation_name = operation_name,
+      context = list(n_grouping_vars = length(x_axis))
+    ))
+  }
+  for (i in seq_along(x_axis)) {
+    n_levels <- length(unique(df[[x_axis[i]]]))
+    if (n_levels < 2) {
+      return(error_handling$simple_error(
+        message = paste0(
+          test_name, " requires at least 2 levels in '",
+          x_axis[i], "', found ", n_levels, "."
+        ),
+        operation_name = operation_name,
+        context = list(factor = x_axis[i], n_levels = n_levels)
+      ))
+    }
+  }
+  NULL
+}
+
+
 #' Validate post-hoc inputs
 #'
 #' Checks that there are at least 2 groups for pairwise comparisons.
