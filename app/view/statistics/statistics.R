@@ -605,6 +605,13 @@ server <- function(id, input_data, data_version,
       })
       names(omnibus_results) <- measures
 
+      # --- Count NAs per measure (for UI hints) ---
+      na_counts <- vapply(measures, function(m) {
+        df_m <- filter_excluded_rows(data, m)
+        sum(is.na(df_m[[m]]))
+      }, integer(1))
+      names(na_counts) <- measures
+
       # --- Run post-hoc tests per measurement ---
       posthoc_results <- if (
         params$test_approach == "robust"
@@ -658,6 +665,7 @@ server <- function(id, input_data, data_version,
         trim_value = tr_val,
         omnibus = omnibus_results,
         posthoc = posthoc_results,
+        na_counts = na_counts,
         timestamp = Sys.time()
       ))
       computation_status("done")
@@ -981,6 +989,33 @@ server <- function(id, input_data, data_version,
               bslib$card_body(
                 class = "p-2 plot-card-body",
                 plot_ui,
+                # NA removal hint (if any rows were dropped)
+                if (
+                  !is.null(results$na_counts) &&
+                  m %in% names(results$na_counts) &&
+                  results$na_counts[[m]] > 0
+                ) {
+                  n_na <- results$na_counts[[m]]
+                  shiny$tags$div(
+                    class = paste(
+                      "alert alert-warning",
+                      "py-2 px-3 mb-2"
+                    ),
+                    shiny$tags$small(
+                      bsicons$bs_icon(
+                        "exclamation-triangle",
+                        class = "me-1"
+                      ),
+                      paste0(
+                        n_na,
+                        " observation(s) with missing",
+                        " values were excluded from",
+                        " the statistical analysis",
+                        " for this measure."
+                      )
+                    )
+                  )
+                },
                 # Omnibus test results
                 render_omnibus_result(
                   results$omnibus[[m]],
