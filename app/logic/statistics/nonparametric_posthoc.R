@@ -8,6 +8,7 @@ box::use(
   app/logic/error_handling,
   app/logic/statistics/omnibus,
   app/logic/statistics/cliff_delta[cidmulv2_labelled],
+  app/logic/statistics/validation_utils,
 )
 
 box::use(
@@ -21,90 +22,6 @@ box::use(
 # Returns raw p-values only — adjustment is deferred to the combined table.
 # No Shiny dependencies allowed in this file.
 # =============================================================================
-
-
-# =============================================================================
-# Private helpers
-# =============================================================================
-
-#' Validate post-hoc inputs
-#'
-#' @param df Data frame
-#' @param x_axis Grouping columns
-#' @return NULL if valid, app_error otherwise
-validate_posthoc <- function(df, x_axis) {
-  if (length(x_axis) > 1) {
-    combined <- do.call(paste, c(df[x_axis], sep = "."))
-  } else {
-    combined <- df[[x_axis[1]]]
-  }
-  n_groups <- length(unique(combined))
-  if (n_groups < 2) {
-    return(error_handling$simple_error(
-      message = paste0(
-        "Post-hoc tests require at least 2 groups, found ",
-        n_groups, "."
-      ),
-      operation_name = "posthoc_validate",
-      context = list(n_groups = n_groups)
-    ))
-  }
-  NULL
-}
-
-#' Build error context for post-hoc tests
-#'
-#' @param df Data frame
-#' @param x_axis Grouping columns
-#' @param measure_col Measurement column
-#' @return List with context information
-build_posthoc_context <- function(df, x_axis, measure_col) {
-  list(
-    measure = measure_col,
-    grouping = paste(x_axis, collapse = ", "),
-    n_observations = nrow(df)
-  )
-}
-
-#' Normalize interaction strings for consistent matching
-#'
-#' Extracts group names from "GroupA vs. GroupB" format and creates
-#' an alphabetized key for consistent matching between tests.
-#'
-#' @param df Data frame with Interaction column
-#' @return Data frame with added InteractionKey column
-normalize_interaction <- function(df) {
-  if (!"Interaction" %in% names(df)) return(df)
-
-  df$InteractionKey <- vapply(df$Interaction, function(int) {
-    parts <- trimws(strsplit(int, " vs\\. ")[[1]])
-    paste(sort(parts), collapse = " vs. ")
-  }, character(1))
-
-  df
-}
-
-#' Filter for valid comparisons in multi-factor designs
-#'
-#' Keeps only comparisons where groups differ by exactly one factor level.
-#'
-#' @param df Data frame with Interaction column
-#' @param x_axis Character vector of grouping columns
-#' @return Filtered data frame
-filter_valid_comparisons <- function(df, x_axis) {
-  if (is.null(x_axis) || length(x_axis) <= 1) return(df)
-
-  keep <- vapply(df$Interaction, function(int) {
-    parts <- trimws(strsplit(int, " vs\\. ")[[1]])
-    if (length(parts) != 2) return(FALSE)
-    a_parts <- strsplit(parts[1], "\\.")[[1]]
-    b_parts <- strsplit(parts[2], "\\.")[[1]]
-    if (length(a_parts) != length(b_parts)) return(FALSE)
-    sum(a_parts != b_parts) == 1
-  }, logical(1))
-
-  df[keep, , drop = FALSE]
-}
 
 
 # =============================================================================
@@ -129,12 +46,12 @@ perform_dunn_test <- function(df, x_axis, measure_col) {
     " factors='{paste(x_axis, collapse=\", \")}'"
   )
 
-  validation <- validate_posthoc(df, x_axis)
+  validation <- validation_utils$validate_posthoc(df, x_axis)
   if (error_handling$is_app_error(validation)) {
     return(validation)
   }
 
-  error_context <- build_posthoc_context(df, x_axis, measure_col)
+  error_context <- validation_utils$build_posthoc_context(df, x_axis, measure_col)
 
   test_result <- error_handling$safe_execute(
     expr = {
@@ -211,12 +128,12 @@ perform_wilcox_pairwise <- function(df, x_axis, measure_col) {
     " factors='{paste(x_axis, collapse=\", \")}'"
   )
 
-  validation <- validate_posthoc(df, x_axis)
+  validation <- validation_utils$validate_posthoc(df, x_axis)
   if (error_handling$is_app_error(validation)) {
     return(validation)
   }
 
-  error_context <- build_posthoc_context(df, x_axis, measure_col)
+  error_context <- validation_utils$build_posthoc_context(df, x_axis, measure_col)
 
   test_result <- error_handling$safe_execute(
     expr = {
@@ -344,12 +261,12 @@ perform_art_contrasts <- function(df, x_axis, measure_col) {
     " factors='{paste(x_axis, collapse=\", \")}'"
   )
 
-  validation <- validate_posthoc(df, x_axis)
+  validation <- validation_utils$validate_posthoc(df, x_axis)
   if (error_handling$is_app_error(validation)) {
     return(validation)
   }
 
-  error_context <- build_posthoc_context(df, x_axis, measure_col)
+  error_context <- validation_utils$build_posthoc_context(df, x_axis, measure_col)
 
   test_result <- error_handling$safe_execute(
     expr = {
@@ -443,53 +360,6 @@ perform_art_contrasts <- function(df, x_axis, measure_col) {
 
 
 # =============================================================================
-# Cliff's Delta (reused from robust_posthoc infrastructure)
-# =============================================================================
-
-#' Run single Cliff's Delta iteration
-#'
-#' @param sample_data Data frame
-#' @param x_axis Grouping columns
-#' @param measure_col Measurement column
-#' @return Data frame with cliff results
-run_cliff_iteration <- function(sample_data, x_axis,
-                                measure_col) {
-  if (length(x_axis) > 1) {
-    sample_data$combinedGroups <- do.call(
-      paste, c(sample_data[x_axis], sep = ".")
-    )
-  } else {
-    sample_data$combinedGroups <- sample_data[[x_axis[1]]]
-  }
-  sample_data$combinedGroupsNum <- as.numeric(
-    as.factor(sample_data$combinedGroups)
-  )
-
-  cliff_result <- cidmulv2_labelled(
-    data = sample_data,
-    gcode = "combinedGroupsNum",
-    glab = "combinedGroups",
-    dp = measure_col,
-    alpha = 0.05,
-    CI.FWE = FALSE
-  )
-
-  test_df <- cliff_result$test
-  data.frame(
-    Interaction = paste(
-      test_df$Group.A, "vs.", test_df$Group.B
-    ),
-    Cliff.psihat = test_df$p.hat,
-    Cliff.ci.lower = test_df$p.ci.lower,
-    Cliff.ci.upper = test_df$p.ci.upper,
-    Cliff.p.value = test_df$p.value,
-    Cliff.p.crit = test_df$p.crit,
-    stringsAsFactors = FALSE
-  )
-}
-
-
-# =============================================================================
 # Combined non-parametric post-hoc
 # =============================================================================
 
@@ -566,10 +436,10 @@ combine_oneway <- function(df, x_axis, measure_col,
   # Run Cliff's Delta
   cliff_result <- error_handling$safe_execute(
     expr = {
-      run_cliff_iteration(df, x_axis, measure_col)
+      validation_utils$run_cliff_iteration(df, x_axis, measure_col)
     },
     operation_name = "cliff_delta",
-    context = build_posthoc_context(df, x_axis, measure_col),
+    context = validation_utils$build_posthoc_context(df, x_axis, measure_col),
     error_parser = error_handling$stat_error_parser
   )
   if (!cliff_result$success) {
@@ -621,8 +491,8 @@ combine_oneway <- function(df, x_axis, measure_col,
   }
 
   # Normalize and merge
-  pairwise_norm <- normalize_interaction(pairwise_result)
-  cliff_norm <- normalize_interaction(cliff_result)
+  pairwise_norm <- validation_utils$normalize_interaction(pairwise_result)
+  cliff_norm <- validation_utils$normalize_interaction(cliff_result)
 
   cliff_cols <- setdiff(
     names(cliff_norm), c("Interaction", "InteractionKey")
@@ -729,7 +599,7 @@ combine_multiway <- function(df, x_axis, measure_col,
 
   # Filter valid comparisons for multi-way designs
   if (filter_valid && length(x_axis) > 1) {
-    art_result <- filter_valid_comparisons(art_result, x_axis)
+    art_result <- validation_utils$filter_valid_comparisons(art_result, x_axis)
     if (nrow(art_result) == 0) {
       return(error_handling$simple_error(
         message = "No valid comparisons remain after filtering.",
