@@ -4,6 +4,7 @@ box::use(
   ggiraph,
   rhino,
   shiny,
+  stats,
 )
 
 box::use(
@@ -605,12 +606,26 @@ server <- function(id, input_data, data_version,
       })
       names(omnibus_results) <- measures
 
-      # --- Count NAs per measure (for UI hints) ---
-      na_counts <- vapply(measures, function(m) {
+      # --- Count NAs per measure with per-group breakdown ---
+      na_details <- lapply(measures, function(m) {
         df_m <- filter_excluded_rows(data, m)
-        sum(is.na(df_m[[m]]))
-      }, integer(1))
-      names(na_counts) <- measures
+        na_mask <- is.na(df_m[[m]])
+        total_na <- sum(na_mask)
+        if (total_na == 0) {
+          return(list(total = 0L, groups = NULL))
+        }
+        # Build per-group NA counts
+        grp <- df_m[, x_cols, drop = FALSE]
+        grp$.na <- na_mask
+        agg <- stats$aggregate(
+          .na ~ .,
+          data = grp, FUN = sum
+        )
+        # Keep only groups that actually have NAs
+        agg <- agg[agg$.na > 0, , drop = FALSE]
+        list(total = total_na, groups = agg)
+      })
+      names(na_details) <- measures
 
       # --- Run post-hoc tests per measurement ---
       posthoc_results <- if (
@@ -665,7 +680,7 @@ server <- function(id, input_data, data_version,
         trim_value = tr_val,
         omnibus = omnibus_results,
         posthoc = posthoc_results,
-        na_counts = na_counts,
+        na_details = na_details,
         timestamp = Sys.time()
       ))
       computation_status("done")
@@ -991,27 +1006,74 @@ server <- function(id, input_data, data_version,
                 plot_ui,
                 # NA removal hint (if any rows were dropped)
                 if (
-                  !is.null(results$na_counts) &&
-                  m %in% names(results$na_counts) &&
-                  results$na_counts[[m]] > 0
+                  !is.null(results$na_details) &&
+                  m %in% names(results$na_details) &&
+                  results$na_details[[m]]$total > 0
                 ) {
-                  n_na <- results$na_counts[[m]]
+                  na_info <- results$na_details[[m]]
+                  grp_rows <- if (
+                    !is.null(na_info$groups) &&
+                    nrow(na_info$groups) > 0
+                  ) {
+                    lapply(
+                      seq_len(nrow(na_info$groups)),
+                      function(r) {
+                        row <- na_info$groups[r, ]
+                        # Build label from factor columns
+                        fac_cols <- setdiff(
+                          names(row), ".na"
+                        )
+                        label <- paste(
+                          vapply(fac_cols, function(fc) {
+                            paste0(fc, " = ", row[[fc]])
+                          }, character(1)),
+                          collapse = ", "
+                        )
+                        shiny$tags$li(
+                          shiny$tags$span(
+                            label
+                          ),
+                          shiny$tags$span(
+                            class = paste(
+                              "badge bg-warning",
+                              "text-dark ms-2"
+                            ),
+                            paste0(
+                              row$.na, " missing"
+                            )
+                          )
+                        )
+                      }
+                    )
+                  }
                   shiny$tags$div(
                     class = paste(
                       "alert alert-warning",
                       "py-2 px-3 mb-2"
                     ),
-                    shiny$tags$small(
-                      bsicons$bs_icon(
-                        "exclamation-triangle",
-                        class = "me-1"
+                    shiny$tags$details(
+                      shiny$tags$summary(
+                        style = "cursor: pointer;",
+                        shiny$tags$small(
+                          bsicons$bs_icon(
+                            "exclamation-triangle",
+                            class = "me-1"
+                          ),
+                          paste0(
+                            na_info$total,
+                            " observation(s) with",
+                            " missing values were",
+                            " excluded from the",
+                            " statistical analysis."
+                          )
+                        )
                       ),
-                      paste0(
-                        n_na,
-                        " observation(s) with missing",
-                        " values were excluded from",
-                        " the statistical analysis",
-                        " for this measure."
+                      shiny$tags$ul(
+                        class = paste(
+                          "list-unstyled mb-0",
+                          "mt-2 ms-3 small"
+                        ),
+                        grp_rows
                       )
                     )
                   )
