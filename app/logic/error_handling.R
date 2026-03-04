@@ -5,6 +5,48 @@ box::use(
   utils[capture.output],
 )
 
+#' Sanitize file paths in stack traces
+#'
+#' Converts absolute paths to relative app paths for security.
+#' Removes server-specific path prefixes like /app/, /home/user/, C:\\Users\\...
+#'
+#' @param trace_text Character, raw stack trace text
+#' @return Character, sanitized stack trace
+sanitize_stack_paths <- function(trace_text) {
+
+  if (is.null(trace_text) || length(trace_text) == 0) {
+    return(trace_text)
+  }
+
+
+  # Pattern to match file paths in stack traces: [/path/to/file.R#123]
+
+  # Replace absolute paths with relative paths starting from 'app/'
+  sanitized <- gsub(
+    "\\[([^\\]]*[/\\\\])(app[/\\\\][^\\]]+)\\]",
+    "[\\2]",
+    trace_text
+  )
+
+
+  # Remove /tmp/... paths (R session temp files)
+  sanitized <- gsub(
+    "\\[/tmp/[^\\]]+\\]",
+    "[internal]",
+    sanitized
+  )
+
+  # Remove Windows temp paths
+  sanitized <- gsub(
+    "\\[[A-Za-z]:[^\\]]*[/\\\\]Temp[/\\\\][^\\]]+\\]",
+    "[internal]",
+    sanitized,
+    ignore.case = TRUE
+  )
+
+  sanitized
+}
+
 #' Check if an object is a structured app error
 #'
 #' Uses "is_error" %in% names() to avoid warnings when checking data frames,
@@ -53,12 +95,14 @@ create_app_error <- function(user_msg, raw_msg = NULL, error_obj = NULL,
           # Filter to only lines containing file references [path#line]
           # These are the frames from our application code
           filtered <- raw_output[grepl("\\[.*#[0-9]+\\]", raw_output)]
-          if (length(filtered) > 0) {
+          trace_text <- if (length(filtered) > 0) {
             paste(cli$ansi_html(filtered), collapse = "\n")
           } else {
             # Fallback: show top frames if no file refs found
             paste(cli$ansi_html(head(raw_output, 20)), collapse = "\n")
           }
+          # Sanitize paths for security (remove absolute paths)
+          sanitize_stack_paths(trace_text)
         } else {
           NULL
         }
