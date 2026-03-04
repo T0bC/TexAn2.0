@@ -26,7 +26,7 @@ ui <- function(id) {
 
   bslib$page_navbar(
     id = ns("active_page"),
-    title = "TexAn 2.0",
+    title = "TexAn",
     theme = settings$get_default_theme(),
     fillable = FALSE,
     header = shiny$tagList(
