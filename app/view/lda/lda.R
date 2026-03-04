@@ -171,9 +171,12 @@ server <- function(id, input_data, data_version,
         return()
       }
 
-      # Validate inputs
+      # Validate inputs (pass subclasses for MDA validation)
+      mda_subclasses <- input$mda_subclasses %||% 3
       validation <- validate_inputs(
-        measure_cols, data, grouping_col
+        measure_cols, data, grouping_col,
+        analysis_type = analysis_type,
+        subclasses = mda_subclasses
       )
       if (!validation$valid) {
         last_error(validation$error)
@@ -304,7 +307,6 @@ server <- function(id, input_data, data_version,
 
       # Run LDA, QDA, or MDA
       if (analysis_type == "mda") {
-        mda_subclasses <- input$mda_subclasses %||% 3
         mda_iter <- input$mda_iter %||% 5
         lda_res <- run_mda(
           data = train_data,
