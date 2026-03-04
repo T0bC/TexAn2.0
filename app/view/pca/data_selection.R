@@ -241,34 +241,6 @@ tab_server <- function(input, output, session,
     )
   }, ignoreInit = TRUE)
 
-  # Update metaData choices when data changes
-  shiny$observe({
-    data <- input_data()
-    if (is.null(data)) return()
-    cols <- column_utils$get_descriptive_cols(data)
-    shiny$updateSelectizeInput(
-      session, "metaData",
-      choices = cols,
-      selected = input$metaData[
-        input$metaData %in% cols
-      ]
-    )
-  })
-
-  # Update measureVar choices when data changes
-  shiny$observe({
-    data <- input_data()
-    if (is.null(data)) return()
-    cols <- column_utils$get_measurement_cols(data)
-    shiny$updateSelectizeInput(
-      session, "measureVar",
-      choices = cols,
-      selected = input$measureVar[
-        input$measureVar %in% cols
-      ]
-    )
-  })
-
   # Select all measurement columns on link click
   shiny$observeEvent(input$select_all_measure, {
     data <- input_data()
@@ -280,18 +252,19 @@ tab_server <- function(input, output, session,
     )
   })
 
-  # Update GroupBiplot choices from selected metaData
+  # Update GroupBiplot choices from selected metaData (debounced)
+  debounced_meta <- shiny$reactive({
+    m <- input$metaData
+    if (is.null(m)) character(0) else m
+  }) |> shiny$debounce(500)
+
   shiny$observe({
-    selected_meta <- input$metaData
-    if (is.null(selected_meta)) {
-      selected_meta <- character(0)
-    }
+    selected_meta <- debounced_meta()
+    cur_grp <- shiny$isolate(input$GroupBiplot)
     shiny$updateSelectizeInput(
       session, "GroupBiplot",
       choices = selected_meta,
-      selected = input$GroupBiplot[
-        input$GroupBiplot %in% selected_meta
-      ]
+      selected = cur_grp[cur_grp %in% selected_meta]
     )
   })
 }
