@@ -16,15 +16,20 @@ box::use(
 #' Checks that measurement columns exist, a grouping column is
 #' selected, and the grouping column has at least 2 levels.
 #' Warns (but does not fail) if any group has fewer observations
-#' than variables (n < p).
+#' than variables (n < p). For QDA, fails if any group has fewer
+#' than p + 1 observations.
 #'
 #' @param columns Character vector of selected measurement column names
 #' @param data Data frame to validate against
 #' @param grouping_col Character, name of the grouping column
+#' @param analysis_type Character, "lda", "qda", or "mda"
+#' @param subclasses Integer, number of subclasses for MDA (default 3)
 #' @return List with $valid (logical), $error (app_error or NULL),
 #'   and $warnings (character vector, may be empty)
 #' @export
-validate_inputs <- function(columns, data, grouping_col) {
+validate_inputs <- function(columns, data, grouping_col,
+                            analysis_type = "lda",
+                            subclasses = 3) {
   warnings <- character(0)
 
   if (is.null(columns) || length(columns) == 0) {
@@ -114,9 +119,75 @@ validate_inputs <- function(columns, data, grouping_col) {
     ))
   }
 
-  # Warn if any group has fewer observations than variables
+  # Check group sizes against number of variables
   group_counts <- table(groups)
   p <- length(columns)
+
+  # QDA requires n >= p + 1 per group (separate covariance matrices)
+  if (analysis_type == "qda") {
+    small_groups <- names(group_counts)[group_counts < p + 1]
+    if (length(small_groups) > 0) {
+      rhino$log$warn(
+        "QDA: groups too small for grouping column '{grouping_col}'"
+      )
+      return(list(
+        valid = FALSE,
+        error = error_handling$simple_error(
+          message = paste0(
+            "QDA requires at least ", p + 1,
+            " observations per group (p + 1 = ",
+            length(columns), " + 1). ",
+            "The following groups in '", grouping_col,
+            "' are too small: ",
+            paste(
+              small_groups,
+              paste0("(n=", group_counts[small_groups], ")"),
+              collapse = ", "
+            ),
+            ". Consider using LDA instead, or reduce ",
+            "the number of variables via PCA."
+          ),
+          operation_name = "qda_validate_inputs"
+        ),
+        warnings = warnings
+      ))
+    }
+  }
+
+  # MDA requires each group to have enough observations for subclasses
+  if (analysis_type == "mda") {
+    # Each group needs at least subclasses observations
+    # (ideally more for stable estimation)
+    min_required <- max(subclasses, p + 1)
+    small_groups <- names(group_counts)[group_counts < min_required]
+    if (length(small_groups) > 0) {
+      rhino$log$warn(
+        "MDA: groups too small for grouping column '{grouping_col}'"
+      )
+      return(list(
+        valid = FALSE,
+        error = error_handling$simple_error(
+          message = paste0(
+            "MDA with ", subclasses, " subclasses requires at least ",
+            min_required, " observations per group. ",
+            "The following groups in '", grouping_col,
+            "' are too small: ",
+            paste(
+              small_groups,
+              paste0("(n=", group_counts[small_groups], ")"),
+              collapse = ", "
+            ),
+            ". Consider reducing the number of subclasses, ",
+            "using LDA instead, or reducing variables via PCA."
+          ),
+          operation_name = "mda_validate_inputs"
+        ),
+        warnings = warnings
+      ))
+    }
+  }
+
+  # Warn if any group has fewer observations than variables (LDA/MDA)
   small_groups <- names(group_counts)[group_counts < p]
   if (length(small_groups) > 0) {
     warn_msg <- paste0(
@@ -164,7 +235,7 @@ run_lda <- function(data, columns, grouping_col,
                     nu = NULL, meta_cols = character(0)) {
   error_handling$safe_execute(
     {
-      grouping <- as.factor(data[[grouping_col]])
+      grouping <- droplevels(as.factor(data[[grouping_col]]))
       numeric_data <- data[, columns, drop = FALSE]
       prior_vec <- build_prior(prior, grouping)
 
@@ -220,7 +291,7 @@ run_qda <- function(data, columns, grouping_col,
                     nu = NULL, meta_cols = character(0)) {
   error_handling$safe_execute(
     {
-      grouping <- as.factor(data[[grouping_col]])
+      grouping <- droplevels(as.factor(data[[grouping_col]]))
       numeric_data <- data[, columns, drop = FALSE]
       prior_vec <- build_prior(prior, grouping)
 
@@ -280,7 +351,7 @@ run_mda <- function(data, columns, grouping_col,
                     dimension = NULL, eps = NULL) {
   error_handling$safe_execute(
     {
-      grouping <- as.factor(data[[grouping_col]])
+      grouping <- droplevels(as.factor(data[[grouping_col]]))
       numeric_data <- data[, columns, drop = FALSE]
       prior_vec <- build_prior(prior, grouping)
 
@@ -435,6 +506,8 @@ run_predict <- function(lda_result, test_data, columns,
 # =============================================================================
 
 build_prior <- function(prior_choice, grouping) {
+  # Drop unused factor levels (important after filtering)
+  grouping <- droplevels(grouping)
   n_groups <- nlevels(grouping)
   if (prior_choice == "equal") {
     prior_vec <- rep(1 / n_groups, n_groups)
@@ -928,6 +1001,17 @@ lda_error_parser <- function(error_msg,
       " Try reducing dimensionality via PCA first."
     )
   } else if (grepl(
+    "NAs are not allowed in subscripted",
+    error_msg, ignore.case = TRUE
+  )) {
+    paste0(
+      operation_name,
+      ": Internal error with NA values. ",
+      "This often occurs when some groups have too few observations ",
+      "for the requested number of subclasses. ",
+      "Try reducing the number of subclasses or using LDA instead."
+    )
+  } else if (grepl(
     "\\bNA\\b|missing|NaN",
     error_msg, ignore.case = TRUE
   )) {
@@ -935,6 +1019,17 @@ lda_error_parser <- function(error_msg,
       operation_name,
       ": Data contains missing values.",
       " Please handle missing data first."
+    )
+  } else if (grepl(
+    "some group is too small",
+    error_msg, ignore.case = TRUE
+  )) {
+    paste0(
+      operation_name,
+      ": Some group is too small. ",
+      "QDA requires at least (p + 1) observations per group, ",
+      "where p is the number of variables. ",
+      "Consider using LDA instead, or reduce dimensionality via PCA."
     )
   } else if (grepl(
     "group|level|factor",
