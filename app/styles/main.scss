@@ -45,23 +45,23 @@ body.bslib-page-navbar {
 // =============================================================================
 
 body.bslib-page-navbar {
-  min-height: 100vh;
+  min-height: 100vh !important;
 }
 
 body.bslib-page-navbar>.container-fluid {
-  min-height: calc(100vh - 40px);
+  min-height: calc(100vh - 40px) !important;
 }
 
 .tab-content {
-  min-height: 100%;
+  min-height: 100% !important;
 }
 
 .tab-pane {
-  min-height: 100%;
+  min-height: 100% !important;
 }
 
 .bslib-sidebar-layout {
-  min-height: calc(100vh - 40px);
+  min-height: calc(100vh - 40px) !important;
 }
 
 // =============================================================================
