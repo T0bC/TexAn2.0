@@ -6,7 +6,6 @@ box::use(
   openxlsx,
   rhino,
   shiny,
-  shinyjs,
 )
 
 box::use(
@@ -29,7 +28,6 @@ ui <- function(id) {
   ns <- shiny$NS(id)
 
   shiny$tagList(
-  shinyjs$useShinyjs(),
   shiny$tags$script(shiny$HTML(paste0(
     "(function(){",
     "  var unlockTimer = null;",
@@ -83,7 +81,9 @@ server <- function(id, input_data, data_version) {
     ns <- session$ns
 
     last_error <- shiny$reactiveVal(NULL)
-    result <- shiny$reactiveVal(NULL)
+    cached_plot_params <- shiny$reactiveVal(NULL)
+    cached_filtered_data <- shiny$reactiveVal(NULL)
+    plot_cache <- shiny$reactiveVal(list())
 
     # Cache window size from JS (px), with sensible defaults
     window_size <- shiny$reactiveVal(
@@ -102,8 +102,10 @@ server <- function(id, input_data, data_version) {
     # Reset state when new data is loaded
     shiny$observeEvent(data_version(), {
       rhino$log$info("Plotting: state reset for new data")
-      result(NULL)
       last_error(NULL)
+      plot_cache(list())
+      cached_plot_params(NULL)
+      cached_filtered_data(NULL)
     }, ignoreInit = TRUE)
 
     # Delegate to sub-module servers
@@ -120,16 +122,6 @@ server <- function(id, input_data, data_version) {
       input, output, session, filter_result$filtered_data, data_version
     )
 
-    # Stabilized measure columns: debounce to let the user
-    # finish selecting before triggering plot computation.
-    # Prevents a render loop where renderUI replaces the DOM
-    # (resetting the selectize) while plots are still computing.
-    stable_measure <- shiny$reactive({
-      m <- input$measureVar
-      if (is.null(m) || length(m) == 0) return(character(0))
-      m
-    }) |> shiny$debounce(300)
-
     # --- Collect style inputs into a reactive list ---
     plot_params_raw <- shiny$reactive({
       # Gate: need at least xAxis selected
@@ -140,12 +132,15 @@ server <- function(id, input_data, data_version) {
       cmap <- style_result$color_map()
       shiny$req(!is.null(cmap))
 
+      m <- input$measureVar
+      measure <- if (is.null(m) || length(m) == 0) character(0) else m
+
       grid_opts <- input$gridOptions
       stat_opts <- input$statOptions
 
       list(
         x_cols        = x_axis,
-        measure_cols  = stable_measure(),
+        measure_cols  = measure,
         tooltip_cols  = input$tooltip,
         color_cols    = input$pointColor,
         color_map     = cmap,
@@ -197,8 +192,6 @@ server <- function(id, input_data, data_version) {
     # when the fingerprint actually changes.  This lets the user
     # rapidly toggle filters / measure columns / style options and
     # only triggers one plot computation after everything settles.
-    cached_plot_params <- shiny$reactiveVal(NULL)
-    cached_filtered_data <- shiny$reactiveVal(NULL)
 
     # Non-measure fingerprint: captures everything that affects a
     # plot EXCEPT which measurement columns are selected.  Two plots
@@ -274,12 +267,6 @@ server <- function(id, input_data, data_version) {
     # Debounced accessors used by all downstream reactives
     plot_params <- shiny$reactive({ cached_plot_params() })
     debounced_filtered_data <- shiny$reactive({ cached_filtered_data() })
-
-    # --- Per-column plot cache (session-scoped) ---
-    # Stores a named list: y_col -> list(fingerprint, result).
-    # Only recomputes a plot when its style fingerprint changes.
-    # Adding a new measure column does NOT recompute existing plots.
-    plot_cache <- shiny$reactiveVal(list())
 
     # --- Build plots (one per measurement column) ---
     # All sidebar inputs are locked client-side via shiny:busy/idle
@@ -747,7 +734,10 @@ server <- function(id, input_data, data_version) {
     # Return selections for downstream modules (e.g. Summary, Statistics)
     list(
       x_axis = shiny$reactive({ input$xAxis }),
-      measure_cols = stable_measure,
+      measure_cols = shiny$reactive({
+        p <- plot_params()
+        if (is.null(p)) character(0) else p$measure_cols
+      }),
       trim_percent = shiny$reactive({ input$trim_slider %||% 0 }),
       processed_data = processed_data,
       normalize_enabled = shiny$reactive({
