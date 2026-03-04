@@ -35,17 +35,6 @@ server <- function(id) {
           title = "App Settings",
           size = "m",
           easyClose = TRUE,
-          shiny$selectInput(
-            inputId = session$ns("theme_selector"),
-            label = "Choose Theme",
-            choices = settings$get_theme_names(),
-            selected = settings$default_theme_name
-          ),
-          shiny$hr(),
-          shiny$helpText(
-            "More settings can be added here in the future."
-          ),
-          shiny$hr(),
           shiny$actionButton(
             inputId = session$ns("show_changelog"),
             label = "View Changelog",
@@ -58,13 +47,6 @@ server <- function(id) {
           )
         )
       )
-    })
-
-    # Apply theme when user selects a different one
-    shiny$observeEvent(input$theme_selector, {
-      theme <- settings$get_theme(input$theme_selector)
-      session$setCurrentTheme(theme)
-      rhino$log$info("Theme changed to: '{input$theme_selector}'")
     })
 
     # Show changelog modal
