@@ -6,6 +6,7 @@ box::use(
   openxlsx,
   rhino,
   shiny,
+  shinyjs,
 )
 
 box::use(
@@ -27,6 +28,31 @@ box::use(
 ui <- function(id) {
   ns <- shiny$NS(id)
 
+  shiny$tagList(
+  shinyjs$useShinyjs(),
+  shiny$tags$script(shiny$HTML(paste0(
+    "(function(){",
+    "  var unlockTimer = null;",
+    "  function lockSidebar(){",
+    "    if(unlockTimer){ clearTimeout(unlockTimer); unlockTimer=null; }",
+    "    $('.texan-sidebar').find('input,select,button,.selectize-input')",
+    "      .addClass('texan-busy-lock')",
+    "      .css('pointer-events','none');",
+    "    $('.texan-sidebar .selectize-input').css('opacity','0.6');",
+    "  }",
+    "  function unlockSidebar(){",
+    "    $('.texan-sidebar').find('.texan-busy-lock')",
+    "      .removeClass('texan-busy-lock')",
+    "      .css('pointer-events','');",
+    "    $('.texan-sidebar .selectize-input').css('opacity','');",
+    "  }",
+    "  $(document).on('shiny:busy', function(){ lockSidebar(); });",
+    "  $(document).on('shiny:idle', function(){",
+    "    if(unlockTimer) clearTimeout(unlockTimer);",
+    "    unlockTimer = setTimeout(unlockSidebar, 150);",
+    "  });",
+    "})();"
+  ))),
   sidebar_tabs$tab_layout(
     ns = ns,
     sidebar_id = "sidebar_tabs",
@@ -47,6 +73,7 @@ ui <- function(id) {
     ),
     enable_responsive_plots = TRUE,
     results_id = "main_content"
+  )
   )
 }
 
@@ -90,11 +117,21 @@ server <- function(id, input_data, data_version) {
       input, output, session, data_version
     )
     style_result <- style$tab_server(
-      input, output, session, input_data, data_version
+      input, output, session, filter_result$filtered_data, data_version
     )
 
+    # Stabilized measure columns: debounce to let the user
+    # finish selecting before triggering plot computation.
+    # Prevents a render loop where renderUI replaces the DOM
+    # (resetting the selectize) while plots are still computing.
+    stable_measure <- shiny$reactive({
+      m <- input$measureVar
+      if (is.null(m) || length(m) == 0) return(character(0))
+      m
+    }) |> shiny$debounce(300)
+
     # --- Collect style inputs into a reactive list ---
-    plot_params <- shiny$reactive({
+    plot_params_raw <- shiny$reactive({
       # Gate: need at least xAxis selected
       x_axis <- input$xAxis
       shiny$req(x_axis, length(x_axis) > 0)
@@ -108,7 +145,7 @@ server <- function(id, input_data, data_version) {
 
       list(
         x_cols        = x_axis,
-        measure_cols  = input$measureVar,
+        measure_cols  = stable_measure(),
         tooltip_cols  = input$tooltip,
         color_cols    = input$pointColor,
         color_map     = cmap,
@@ -155,7 +192,98 @@ server <- function(id, input_data, data_version) {
       )
     })
 
+    # Fingerprint-based debounce: collect all plot inputs into a
+    # single string, debounce it, and only update cached_plot_params
+    # when the fingerprint actually changes.  This lets the user
+    # rapidly toggle filters / measure columns / style options and
+    # only triggers one plot computation after everything settles.
+    cached_plot_params <- shiny$reactiveVal(NULL)
+    cached_filtered_data <- shiny$reactiveVal(NULL)
+
+    # Non-measure fingerprint: captures everything that affects a
+    # plot EXCEPT which measurement columns are selected.  Two plots
+    # with the same non-measure fingerprint and the same y_col
+    # produce identical output, so the cached result can be reused.
+    null_to_str <- function(x) {
+      if (is.null(x)) "NULL" else paste(x, collapse = ",")
+    }
+
+    make_style_fingerprint <- function(params, data_nrow, data_ncol) {
+      paste(
+        null_to_str(params$x_cols),
+        null_to_str(params$tooltip_cols),
+        null_to_str(params$color_cols),
+        length(params$color_map),
+        params$point_style$size,
+        params$point_style$spread,
+        params$point_style$alpha,
+        null_to_str(params$point_style$shape_cols),
+        params$processing$trim_percent,
+        params$processing$outlier_enabled,
+        params$processing$outlier_method,
+        params$processing$outlier_factor,
+        params$processing$bootstrap_samples,
+        params$processing$normalize_enabled,
+        params$processing$normalize_threshold,
+        params$processing$show_transformed,
+        params$grid_legend$legend_position,
+        params$grid_legend$h_grid,
+        params$grid_legend$v_grid,
+        params$grid_legend$top_right_borders,
+        params$grid_legend$show_median,
+        params$grid_legend$show_sd,
+        params$grid_legend$aspect_ratio,
+        params$stat_line_style$median_thickness,
+        params$stat_line_style$median_width,
+        params$stat_line_style$sd_thickness,
+        params$stat_line_style$sd_width,
+        params$axis_style$tick_length,
+        params$axis_style$line_thickness,
+        data_nrow, data_ncol,
+        sep = "|"
+      )
+    }
+
+    # Full fingerprint adds measure_cols for the debounce observer.
+    make_plot_fingerprint <- function(params, data) {
+      paste(
+        null_to_str(params$measure_cols),
+        make_style_fingerprint(params, nrow(data), ncol(data)),
+        sep = "|"
+      )
+    }
+
+    shiny$observe({
+      params <- plot_params_raw()
+      data <- filter_result$filtered_data()
+      shiny$req(params, data)
+
+      new_fp <- make_plot_fingerprint(params, data)
+      current <- cached_plot_params()
+      old_fp <- if (!is.null(current)) {
+        make_plot_fingerprint(current, cached_filtered_data())
+      } else {
+        ""
+      }
+      if (new_fp != old_fp) {
+        cached_plot_params(params)
+        cached_filtered_data(data)
+      }
+    }) |> shiny$debounce(300)
+
+    # Debounced accessors used by all downstream reactives
+    plot_params <- shiny$reactive({ cached_plot_params() })
+    debounced_filtered_data <- shiny$reactive({ cached_filtered_data() })
+
+    # --- Per-column plot cache (session-scoped) ---
+    # Stores a named list: y_col -> list(fingerprint, result).
+    # Only recomputes a plot when its style fingerprint changes.
+    # Adding a new measure column does NOT recompute existing plots.
+    plot_cache <- shiny$reactiveVal(list())
+
     # --- Build plots (one per measurement column) ---
+    # All sidebar inputs are locked client-side via shiny:busy/idle
+    # JS events (see UI) to prevent mid-flight input changes.
     plots <- shiny$reactive({
       params <- plot_params()
       show_transformed <- isTRUE(params$processing$show_transformed) &&
@@ -167,18 +295,26 @@ server <- function(id, input_data, data_version) {
       data <- if (show_transformed) {
         processed_data()
       } else {
-        filter_result$filtered_data()
+        debounced_filtered_data()
       }
       shiny$req(data, nrow(data) > 0)
       shiny$req(params$measure_cols, length(params$measure_cols) > 0)
 
-      rhino$log$info(
-        "Plotting: rendering {length(params$measure_cols)} plot(s) ",
-        "for x={paste(params$x_cols, collapse = ' | ')}",
-        if (show_transformed) " [transformed]" else ""
+      current_fp <- make_style_fingerprint(
+        params, nrow(data), ncol(data)
       )
+      cache <- plot_cache()
+      new_cols <- character(0)
+      reused_cols <- character(0)
 
-      lapply(params$measure_cols, function(y_col) {
+      result <- lapply(params$measure_cols, function(y_col) {
+        cached <- cache[[y_col]]
+        if (!is.null(cached) && identical(cached$fp, current_fp)) {
+          reused_cols <<- c(reused_cols, y_col)
+          return(list(y_col = y_col, result = cached$result))
+        }
+
+        new_cols <<- c(new_cols, y_col)
         # Swap to _normalized column when showing transformed data
         plot_col <- if (show_transformed) {
           norm_col <- paste0(y_col, "_normalized")
@@ -187,7 +323,7 @@ server <- function(id, input_data, data_version) {
           y_col
         }
 
-        exec_result <- error_handling$safe_execute(
+        error_handling$safe_execute(
           scatter$create_scatter_plot(
             data            = data,
             x_cols          = params$x_cols,
@@ -202,10 +338,37 @@ server <- function(id, input_data, data_version) {
             axis_style      = params$axis_style
           ),
           operation_name = paste("Plot", y_col)
-        )
-        # Keep y_col as the original name for card headers/diagnostics
+        ) -> exec_result
+
         list(y_col = y_col, result = exec_result)
       })
+
+      # Update the cache: keep only current measure columns
+      new_cache <- list()
+      for (item in result) {
+        new_cache[[item$y_col]] <- list(
+          fp = current_fp,
+          result = item$result
+        )
+      }
+      plot_cache(new_cache)
+
+      if (length(reused_cols) > 0) {
+        rhino$log$info(
+          "Plotting: reused {length(reused_cols)} cached plot(s): ",
+          "{paste(reused_cols, collapse = ', ')}"
+        )
+      }
+      if (length(new_cols) > 0) {
+        rhino$log$info(
+          "Plotting: rendered {length(new_cols)} new plot(s): ",
+          "{paste(new_cols, collapse = ', ')}",
+          " for x={paste(params$x_cols, collapse = ' | ')}",
+          if (show_transformed) " [transformed]" else ""
+        )
+      }
+
+      result
     })
 
     # --- Assumption diagnostics (per measurement column) ---
@@ -313,11 +476,16 @@ server <- function(id, input_data, data_version) {
         ))
       }
 
-      # Before xAxis is selected, show placeholder
-      x_axis <- input$xAxis
-      measure <- input$measureVar
-      if (is.null(x_axis) || length(x_axis) == 0 ||
-          is.null(measure) || length(measure) == 0) {
+      # Before params are ready, show placeholder
+      params <- plot_params()
+      if (is.null(params)) {
+        x_axis <- character(0)
+        measure <- character(0)
+      } else {
+        x_axis <- params$x_cols
+        measure <- params$measure_cols
+      }
+      if (length(x_axis) == 0 || length(measure) == 0) {
         return(shiny$tags$div(
           class = paste(
             "d-flex align-items-center",
@@ -525,7 +693,7 @@ server <- function(id, input_data, data_version) {
     # Statistics) so they respect the same outlier/trim settings.
     processed_data <- shiny$reactive({
       params <- plot_params()
-      data <- filter_result$filtered_data()
+      data <- debounced_filtered_data()
       shiny$req(data, nrow(data) > 0)
       shiny$req(params$measure_cols, length(params$measure_cols) > 0)
 
@@ -579,7 +747,7 @@ server <- function(id, input_data, data_version) {
     # Return selections for downstream modules (e.g. Summary, Statistics)
     list(
       x_axis = shiny$reactive({ input$xAxis }),
-      measure_cols = shiny$reactive({ input$measureVar }),
+      measure_cols = stable_measure,
       trim_percent = shiny$reactive({ input$trim_slider %||% 0 }),
       processed_data = processed_data,
       normalize_enabled = shiny$reactive({
