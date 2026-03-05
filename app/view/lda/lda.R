@@ -69,6 +69,7 @@ server <- function(id, input_data, data_version,
     test_result <- shiny$reactiveVal(NULL)
     na_info <- shiny$reactiveVal(NULL)
     transform_info <- shiny$reactiveVal(NULL)
+    skewness_info <- shiny$reactiveVal(NULL)
     validation_warnings <- shiny$reactiveVal(character(0))
     bundle_data <- shiny$reactiveVal(NULL)
 
@@ -79,6 +80,7 @@ server <- function(id, input_data, data_version,
       last_error(NULL)
       na_info(NULL)
       transform_info(NULL)
+      skewness_info(NULL)
       validation_warnings(character(0))
       bundle_data(NULL)
       rhino$log$info("LDA: state reset for new data")
@@ -213,26 +215,28 @@ server <- function(id, input_data, data_version,
         return()
       }
 
-      # Skewness correction (raw data only, skip for PCA scores)
-      if (
-        data_source == "raw" &&
-        isTRUE(input$correct_skewness)
-      ) {
+      # Always detect skewness for raw data (for info banner)
+      if (data_source == "raw") {
         skew_result <- detect_skewness(
           cleaned_data, measure_cols
         )
-        if (any(skew_result$is_skewed)) {
-          transform_res <- transform_skewed(
-            cleaned_data, measure_cols, skew_result
-          )
-          if (transform_res$success) {
-            cleaned_data <- transform_res$result$data
-            transform_info(transform_res$result)
-          } else {
-            rhino$log$warn(
-              "LDA: skewness correction failed,",
-              " proceeding with untransformed data"
+        skewness_info(skew_result)
+
+        # Apply normalization only if enabled
+        if (isTRUE(input$correct_skewness)) {
+          if (any(skew_result$is_skewed)) {
+            transform_res <- transform_skewed(
+              cleaned_data, measure_cols, skew_result
             )
+            if (transform_res$success) {
+              cleaned_data <- transform_res$result$data
+              transform_info(transform_res$result)
+            } else {
+              rhino$log$warn(
+                "LDA: skewness correction failed,",
+                " proceeding with untransformed data"
+              )
+            }
           }
         }
       }
@@ -519,6 +523,17 @@ server <- function(id, input_data, data_version,
         n_measure_cols = length(input$measureVar)
       )
 
+      # Skewness warning (when normalization disabled but skewed cols exist)
+      skew_warning <- if (
+        !isTRUE(input$correct_skewness) &&
+        !is.null(skewness_info())
+      ) {
+        na_summary$render_skewness_warning(
+          skewness_info(),
+          n_measure_cols = length(input$measureVar)
+        )
+      }
+
       # Validation warnings banner
       warns <- validation_warnings()
       warn_banner <- if (length(warns) > 0) {
@@ -613,6 +628,7 @@ server <- function(id, input_data, data_version,
 
       shiny$tagList(
         preprocess_banner,
+        skew_warning,
         warn_banner,
         bslib$accordion(
           id = ns("results_accordion"),
