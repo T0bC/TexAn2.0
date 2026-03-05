@@ -71,6 +71,7 @@ server <- function(id, input_data, data_version) {
     pca_result <- shiny$reactiveVal(NULL)
     na_info <- shiny$reactiveVal(NULL)
     transform_info <- shiny$reactiveVal(NULL)
+    skewness_info <- shiny$reactiveVal(NULL)
     bundle_data <- shiny$reactiveVal(NULL)
 
     # Reset state when new data is loaded
@@ -83,6 +84,7 @@ server <- function(id, input_data, data_version) {
       pca_result(NULL)
       na_info(NULL)
       transform_info(NULL)
+      skewness_info(NULL)
       bundle_data(NULL)
       rhino$log$info("PCA: state reset for new data")
     }, ignoreInit = TRUE)
@@ -211,11 +213,14 @@ server <- function(id, input_data, data_version) {
         return()
       }
 
-      # Skewness correction (if enabled)
+      # Always detect skewness (for info banner)
+      skew_result <- detect_skewness(
+        cleaned_data, measure_cols
+      )
+      skewness_info(skew_result)
+
+      # Apply normalization only if enabled
       if (isTRUE(input$correct_skewness)) {
-        skew_result <- detect_skewness(
-          cleaned_data, measure_cols
-        )
         if (any(skew_result$is_skewed)) {
           transform_res <- transform_skewed(
             cleaned_data, measure_cols, skew_result
@@ -408,6 +413,17 @@ server <- function(id, input_data, data_version) {
         transform_result = tf_res,
         n_measure_cols = length(input$measureVar)
       )
+
+      # Skewness warning (when normalization disabled but skewed cols exist)
+      skew_warning <- if (
+        !isTRUE(input$correct_skewness) &&
+        !is.null(skewness_info())
+      ) {
+        na_summary$render_skewness_warning(
+          skewness_info(),
+          n_measure_cols = length(input$measureVar)
+        )
+      }
 
       corr_res <- correlation_result()
       corr_content <- if (
@@ -706,6 +722,7 @@ server <- function(id, input_data, data_version) {
 
       shiny$tagList(
         preprocess_banner,
+        skew_warning,
         bslib$accordion(
           id = ns("results_accordion"),
           open = "biplot_panel",
