@@ -26,11 +26,19 @@ ui <- function(id) {
 
   bslib$page_navbar(
     id = ns("active_page"),
-    title = "TexAn",
+    title = shiny$tagList(
+      shiny$tags$img(
+        src = "static/texan_icon.svg",
+        height = "28px",
+        style = "margin-right: 6px; vertical-align: middle;"
+      ),
+      "TexAn"
+    ),
     theme = settings$get_default_theme(),
     fillable = FALSE,
     header = shiny$tagList(
       shiny$tags$head(
+        shiny$tags$link(rel = "icon", type = "image/svg+xml", href = "static/texan_icon.svg"),
         shiny$tags$script(src = "static/js/disabled_tabs.js"),
         shiny$tags$script(src = "static/js/plot_resize.js")
       ),
