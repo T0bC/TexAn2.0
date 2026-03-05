@@ -5,7 +5,7 @@ box::use(
 box::use(
   app/logic/data_utils,
   app/logic/plotting/assumption_checks,
-  app/logic/plotting/normalize,
+  app/logic/preprocessing/normalize,
 )
 
 # =============================================================================
