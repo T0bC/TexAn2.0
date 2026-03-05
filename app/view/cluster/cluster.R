@@ -73,6 +73,7 @@ server <- function(id, input_data, data_version,
     measure_cols_store <- shiny$reactiveVal(NULL)
     na_info <- shiny$reactiveVal(NULL)
     transform_info <- shiny$reactiveVal(NULL)
+    skewness_info <- shiny$reactiveVal(NULL)
     user_modified_k <- shiny$reactiveVal(FALSE)
     updating_k_programmatically <- shiny$reactiveVal(FALSE)
 
@@ -97,6 +98,7 @@ server <- function(id, input_data, data_version,
       measure_cols_store(NULL)
       na_info(NULL)
       transform_info(NULL)
+      skewness_info(NULL)
       user_modified_k(FALSE)
       updating_k_programmatically(TRUE)
       cached_fingerprint(NULL)
@@ -314,11 +316,14 @@ server <- function(id, input_data, data_version,
             return()
           }
 
-          # Step 1b: Skewness correction (if enabled)
+          # Step 1b: Always detect skewness (for info banner)
+          skew_result <- detect_skewness(
+            cleaned_data, measure_cols
+          )
+          skewness_info(skew_result)
+
+          # Apply normalization only if enabled
           if (isTRUE(input$correct_skewness)) {
-            skew_result <- detect_skewness(
-              cleaned_data, measure_cols
-            )
             if (any(skew_result$is_skewed)) {
               transform_res <- transform_skewed(
                 cleaned_data, measure_cols,
@@ -633,6 +638,17 @@ server <- function(id, input_data, data_version,
         n_measure_cols = length(input$measureVar)
       )
 
+      # Skewness warning (when normalization disabled but skewed cols exist)
+      skew_warning <- if (
+        !isTRUE(input$correct_skewness) &&
+        !is.null(skewness_info())
+      ) {
+        na_summary$render_skewness_warning(
+          skewness_info(),
+          n_measure_cols = length(input$measureVar)
+        )
+      }
+
       # Hopkins clusterability panel
       h_res <- hopkins_result()
       hopkins_panel <- if (!is.null(h_res)) {
@@ -814,6 +830,7 @@ server <- function(id, input_data, data_version,
 
       shiny$tagList(
         preprocess_banner,
+        skew_warning,
         bslib$accordion(
           id = ns("results_accordion"),
           open = "cluster_biplot_panel",
