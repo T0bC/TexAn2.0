@@ -12,11 +12,11 @@ box::use(
   app/logic/error_handling,
   app/logic/pca/correlation_plot[compute_correlation_data],
   app/logic/pca/kmo[calculate_kmo, kmo_badge_class, kmo_interpretation],
-  app/logic/pca/na_handling[clean_na_rows],
+  app/logic/preprocessing/na_handling[clean_na_rows],
   app/logic/pca/optimal_components[calculate_optimal_components],
   app/logic/pca/pca[validate_inputs, run_pca],
   app/logic/pca/pca_export[create_pca_excel, create_pca_bundle],
-  app/logic/skewness_transform[
+  app/logic/preprocessing/skewness_transform[
     detect_skewness, transform_skewed
   ],
   app/view/components/sidebar_tabs,
@@ -29,7 +29,7 @@ box::use(
   app/view/pca/var_contrib_jitter,
   app/view/pca/data_selection,
   app/view/pca/kmo_results,
-  app/view/pca/na_summary,
+  app/view/shared/preprocessing_summary,
   app/view/pca/optimal_components,
   app/view/pca/pca_results,
   app/view/pca/plotting_controls,
@@ -408,7 +408,7 @@ server <- function(id, input_data, data_version) {
       # Preprocessing summary banner (NA + skewness)
       na_res <- na_info()
       tf_res <- transform_info()
-      preprocess_banner <- na_summary$render_na_summary(
+      preprocess_banner <- preprocessing_summary$render_na_summary(
         na_res,
         transform_result = tf_res,
         n_measure_cols = length(input$measureVar)
@@ -419,7 +419,7 @@ server <- function(id, input_data, data_version) {
         !isTRUE(input$correct_skewness) &&
         !is.null(skewness_info())
       ) {
-        na_summary$render_skewness_warning(
+        preprocessing_summary$render_skewness_warning(
           skewness_info(),
           n_measure_cols = length(input$measureVar)
         )
