@@ -15,9 +15,9 @@ box::use(
     validate_inputs
   ],
   app/logic/lda/lda_export[create_lda_excel, create_lda_bundle],
-  app/logic/pca/na_handling[clean_na_rows],
+  app/logic/preprocessing/na_handling[clean_na_rows],
   app/logic/pca/scaling[scale_data],
-  app/logic/skewness_transform[
+  app/logic/preprocessing/skewness_transform[
     detect_skewness, transform_skewed
   ],
   app/view/components/sidebar_tabs,
@@ -27,7 +27,7 @@ box::use(
   app/view/lda/plotting_controls,
   app/view/lda/results_display,
   app/view/lda/var_contrib_jitter,
-  app/view/pca/na_summary,
+  app/view/shared/preprocessing_summary,
 )
 
 box::use(
@@ -517,7 +517,7 @@ server <- function(id, input_data, data_version,
       # Preprocessing summary banner (NA + skewness)
       na_res <- na_info()
       tf_res <- transform_info()
-      preprocess_banner <- na_summary$render_na_summary(
+      preprocess_banner <- preprocessing_summary$render_na_summary(
         na_res,
         transform_result = tf_res,
         n_measure_cols = length(input$measureVar)
@@ -528,7 +528,7 @@ server <- function(id, input_data, data_version,
         !isTRUE(input$correct_skewness) &&
         !is.null(skewness_info())
       ) {
-        na_summary$render_skewness_warning(
+        preprocessing_summary$render_skewness_warning(
           skewness_info(),
           n_measure_cols = length(input$measureVar)
         )
