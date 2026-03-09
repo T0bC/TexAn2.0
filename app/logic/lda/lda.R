@@ -514,8 +514,10 @@ build_prior <- function(prior_choice, grouping) {
     names(prior_vec) <- levels(grouping)
     prior_vec
   } else {
-    # "proportional" — let MASS compute from data
-    props <- table(grouping) / length(grouping)
+    # "proportional" — compute from non-NA observations only
+    # table() excludes NAs, so use sum(table()) not length(grouping)
+    counts <- table(grouping)
+    props <- counts / sum(counts)
     prior_vec <- as.numeric(props)
     names(prior_vec) <- levels(grouping)
     prior_vec
