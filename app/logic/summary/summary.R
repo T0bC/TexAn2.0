@@ -3,8 +3,8 @@ box::use(
 )
 
 box::use(
-  app/logic/column_utils,
-  app/logic/error_handling,
+  app/logic/shared/column_utils,
+  app/logic/shared/error_handling,
 )
 
 # =============================================================================

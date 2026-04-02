@@ -6,7 +6,7 @@ box::use(
 )
 
 box::use(
-  app/logic/settings,
+  app/logic/shared/settings,
 )
 
 #' Settings gear icon for placement in the navbar

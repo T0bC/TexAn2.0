@@ -4,8 +4,8 @@ box::use(
 )
 
 box::use(
-  app/logic/column_utils,
-  app/logic/error_handling,
+  app/logic/shared/column_utils,
+  app/logic/shared/error_handling,
   app/logic/median/compute,
   app/logic/median/quality_analysis,
   app/logic/median/quality_filter,

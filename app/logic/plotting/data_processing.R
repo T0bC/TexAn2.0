@@ -3,7 +3,7 @@ box::use(
 )
 
 box::use(
-  app/logic/data_utils,
+  app/logic/shared/data_utils,
   app/logic/plotting/assumption_checks,
   app/logic/preprocessing/normalize,
 )

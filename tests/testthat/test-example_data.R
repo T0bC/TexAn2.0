@@ -4,7 +4,7 @@ box::use(
 )
 
 box::use(
-  app/logic/example_data,
+  app/logic/load_data/example_data,
 )
 
 # =============================================================================

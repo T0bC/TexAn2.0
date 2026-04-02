@@ -8,7 +8,7 @@ box::use(
   app/logic/cluster/optimal_clusters[
     create_optimal_clusters_ggplot,
   ],
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/view/error_display,
 )
 

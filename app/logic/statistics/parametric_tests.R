@@ -4,7 +4,7 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/logic/statistics/omnibus,
   app/logic/statistics/validation_utils,
 )

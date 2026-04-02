@@ -6,7 +6,7 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/logic/lda/ld_plot[
     get_group_values, build_tooltips,
     ld_theme, axis_label,

@@ -6,7 +6,7 @@ box::use(
 )
 
 box::use(
-  app/logic/data_utils,
+  app/logic/shared/data_utils,
   app/logic/plotting/data_processing,
 )
 

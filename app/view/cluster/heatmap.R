@@ -7,7 +7,7 @@ box::use(
 
 box::use(
   app/logic/cluster/heatmap[create_cluster_heatmap],
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/view/error_display,
 )
 

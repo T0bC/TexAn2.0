@@ -5,7 +5,7 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/logic/statistics/omnibus,
   app/logic/statistics/cliff_delta[cidmulv2_labelled],
   app/logic/statistics/validation_utils,

@@ -4,7 +4,7 @@ box::use(
 )
 
 box::use(
-  app/logic/settings[app_version],
+  app/logic/shared/settings[app_version],
 )
 
 # =============================================================================

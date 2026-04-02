@@ -9,7 +9,7 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/logic/pca/correlation_plot[compute_correlation_data],
   app/logic/pca/kmo[calculate_kmo, kmo_badge_class, kmo_interpretation],
   app/logic/preprocessing/na_handling[clean_na_rows],

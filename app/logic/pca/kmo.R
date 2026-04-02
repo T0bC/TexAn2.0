@@ -5,7 +5,7 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
 )
 
 # =============================================================================

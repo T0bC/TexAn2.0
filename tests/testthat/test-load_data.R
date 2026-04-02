@@ -4,8 +4,8 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
-  app/logic/load_data,
+  app/logic/shared/error_handling,
+  app/logic/load_data/load_data,
 )
 
 # Helper: resolve path to test fixture files

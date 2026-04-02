@@ -13,7 +13,7 @@ box::use(
 
 box::use(
   app/logic/cluster,
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/logic/preprocessing/na_handling[clean_na_rows],
   app/logic/pca/scaling[scale_data],
   app/logic/preprocessing/skewness_transform[

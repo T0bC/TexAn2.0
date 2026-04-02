@@ -8,9 +8,9 @@ box::use(
 )
 
 box::use(
-  app/logic/column_utils,
-  app/logic/error_handling,
-  app/logic/summary,
+  app/logic/shared/column_utils,
+  app/logic/shared/error_handling,
+  app/logic/summary/summary,
   app/view/components/sidebar_tabs,
   app/view/error_display,
 )

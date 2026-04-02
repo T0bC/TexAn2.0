@@ -5,8 +5,8 @@ box::use(
 )
 
 box::use(
-  app/logic/logging,
-  app/logic/settings,
+  app/logic/shared/logging,
+  app/logic/shared/settings,
   app/view/cluster,
   app/view/help_modal,
   app/view/lda,

@@ -8,7 +8,7 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/logic/lda/data_splitting[create_stratified_split],
   app/logic/lda/lda[
     run_lda, run_mda, run_predict, run_qda,

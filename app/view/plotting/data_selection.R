@@ -6,7 +6,7 @@ box::use(
 )
 
 box::use(
-  app/logic/column_utils,
+  app/logic/shared/column_utils,
   app/view/components/sidebar_tabs,
 )
 

@@ -3,7 +3,7 @@ box::use(
 )
 
 box::use(
-  app/logic/summary,
+  app/logic/summary/summary,
 )
 
 impl <- attr(summary, "namespace")

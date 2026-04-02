@@ -4,7 +4,7 @@ box::use(
 
 box::use(
   app/logic/cluster,
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
 )
 
 # Helper: well-separated 2-cluster data

@@ -11,8 +11,8 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
-  app/logic/load_data[
+  app/logic/shared/error_handling,
+  app/logic/load_data/load_data[
     read_data_file, validate_data,
     validate_file_extension
   ],

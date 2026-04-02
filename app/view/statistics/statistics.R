@@ -8,7 +8,7 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/logic/statistics/nonparametric_posthoc,
   app/logic/statistics/nonparametric_tests,
   app/logic/statistics/parametric_posthoc,

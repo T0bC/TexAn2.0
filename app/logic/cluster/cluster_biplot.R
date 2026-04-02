@@ -10,7 +10,7 @@ box::use(
     CLUSTER_PALETTE,
     cluster_color,
   ],
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/logic/pca/biplot[create_biplot],
   app/logic/pca/pca[run_pca],
 )

@@ -10,10 +10,10 @@ box::use(
 )
 
 box::use(
-  app/logic/column_utils,
-  app/logic/error_handling,
-  app/logic/example_data,
-  app/logic/load_data,
+  app/logic/shared/column_utils,
+  app/logic/shared/error_handling,
+  app/logic/load_data/example_data,
+  app/logic/load_data/load_data,
   app/view/components/column_validation_modal,
   app/view/components/sidebar_tabs,
   app/view/error_display,

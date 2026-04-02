@@ -4,7 +4,7 @@ box::use(
 
 box::use(
   app/logic/cluster/hopkins[compute_hopkins],
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/view/error_display,
 )
 

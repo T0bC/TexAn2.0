@@ -1,7 +1,7 @@
 # =============================================================================
 # Quality column analysis for median calculation
 # Column classification (get_descriptive_cols, get_measurement_cols) lives
-# in app/logic/column_utils.R for app-wide reuse.
+# in app/logic/shared/column_utils.R for app-wide reuse.
 # =============================================================================
 
 #' Analyze a quality column to determine its type and properties

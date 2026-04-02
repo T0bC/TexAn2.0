@@ -6,7 +6,7 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/logic/lda/ld_plot[
     create_ld_plot, create_qda_plot,
     axis_label,

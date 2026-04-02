@@ -9,8 +9,8 @@ box::use(
 )
 
 box::use(
-  app/logic/data_utils,
-  app/logic/error_handling,
+  app/logic/shared/data_utils,
+  app/logic/shared/error_handling,
   app/logic/plotting/assumption_checks,
   app/logic/plotting/data_processing,
   app/logic/preprocessing/normalize,

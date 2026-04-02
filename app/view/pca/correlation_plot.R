@@ -4,7 +4,7 @@ box::use(
 )
 
 box::use(
-  app/logic/error_handling,
+  app/logic/shared/error_handling,
   app/logic/pca/correlation_plot[
     create_correlation_ggplot,
     render_correlation_girafe,

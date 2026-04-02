@@ -4,13 +4,13 @@ box::use(
 )
 
 box::use(
-  app/logic/load_data,
+  app/logic/load_data/load_data,
 )
 
 #' Directory containing bundled example datasets.
-#' box::file() resolves relative to this module's own location (app/logic/),
-#' so we navigate up to app/ then into static/example_data/.
-example_dir <- box::file("../static/example_data")
+#' box::file() resolves relative to this module's own location (app/logic/load_data/),
+#' so we navigate up two levels to app/ then into static/example_data/.
+example_dir <- box::file("../../static/example_data")
 
 #' Pretty-print a filename as a display name
 #' @param filename Character, e.g. "iris.xlsx"
