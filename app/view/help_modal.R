@@ -1,5 +1,6 @@
 box::use(
   bsicons,
+  bslib,
   shiny,
 )
 
@@ -26,10 +27,14 @@ panel <- function(id) {
 
   shiny$tags$div(
     id = ns("help_panel"),
-    class = "offcanvas offcanvas-end",
+    class = "offcanvas offcanvas-end help-offcanvas-resizable",
     tabindex = "-1",
     `data-bs-scroll` = "true",
     `data-bs-backdrop` = "false",
+    shiny$tags$div(
+      class = "help-resize-handle",
+      title = "Drag to resize"
+    ),
     shiny$tags$div(
       class = "offcanvas-header",
       shiny$tags$h5(class = "offcanvas-title", "Help"),
@@ -47,8 +52,9 @@ panel <- function(id) {
   )
 }
 
-# Help markdown files live in docs/help/{tab_value}.md
-# To add help for a new module, create docs/help/{tab_value}.md — no code changes needed.
+# Help markdown files live in docs/help/{tab_value}/{section}.md
+# Supported sections: overview.md, details.md, faq.md
+# Tabs are shown dynamically based on which files exist.
 
 #' @param id Character, module namespace id
 #' @param active_page Reactive string returning the currently selected tab value
@@ -74,20 +80,83 @@ server <- function(id, active_page) {
       )
     })
 
-    output$help_content <- shiny$renderUI({
-      tab <- active_page()
-      # Use box::file() to resolve path relative to this module's location
-      # Module is in app/view/, so docs/help is at ../../docs/help
-      help_file <- box::file("..", "..", "docs", "help", paste0(tab, ".md"))
+    get_help_file <- function(tab, section) {
+      box::file("..", "..", "docs", "help", tab, paste0(section, ".md"))
+    }
 
-      if (file.exists(help_file)) {
-        shiny$includeMarkdown(help_file)
+    render_section <- function(file_path) {
+      if (file.exists(file_path)) {
+        shiny$includeMarkdown(file_path)
       } else {
         shiny$tags$p(
           class = "text-muted",
-          paste0("No help available yet for this section.")
+          "No content available yet for this section."
         )
       }
+    }
+
+    output$help_content <- shiny$renderUI({
+      tab <- active_page()
+      if (is.null(tab) || tab == "") {
+        return(shiny$tags$p(class = "text-muted", "Select a tab to view help."))
+      }
+
+      overview_file <- get_help_file(tab, "overview")
+      details_file <- get_help_file(tab, "details")
+      faq_file <- get_help_file(tab, "faq")
+
+      has_overview <- file.exists(overview_file)
+      has_details <- file.exists(details_file)
+      has_faq <- file.exists(faq_file)
+
+      if (!has_overview && !has_details && !has_faq) {
+        return(shiny$tags$p(
+          class = "text-muted",
+          "No help available yet for this section."
+        ))
+      }
+
+      tab_panels <- list()
+
+      if (has_overview) {
+        tab_panels[["Overview"]] <- bslib$nav_panel(
+          title = shiny$tagList(bsicons$bs_icon("info-circle"), " Overview"),
+          value = "overview",
+          shiny$div(class = "help-section-content pt-3", render_section(overview_file))
+        )
+      }
+
+      if (has_details) {
+        tab_panels[["Details"]] <- bslib$nav_panel(
+          title = shiny$tagList(bsicons$bs_icon("book"), " Details"),
+          value = "details",
+          shiny$div(class = "help-section-content pt-3", render_section(details_file))
+        )
+      }
+
+      if (has_faq) {
+        tab_panels[["FAQ"]] <- bslib$nav_panel(
+          title = shiny$tagList(bsicons$bs_icon("question-circle"), " FAQ"),
+          value = "faq",
+          shiny$div(class = "help-section-content pt-3", render_section(faq_file))
+        )
+      }
+
+      if (length(tab_panels) == 1) {
+        file_to_show <- if (has_overview) {
+          overview_file
+        } else if (has_details) {
+          details_file
+        } else {
+          faq_file
+        }
+        return(shiny$div(class = "help-section-content", render_section(file_to_show)))
+      }
+
+      do.call(
+        bslib$navset_pill,
+        c(tab_panels, list(id = ns("help_tabs")))
+      )
     })
   })
 }
