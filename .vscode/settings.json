@@ -33,5 +33,11 @@
     },
     "terminal.integrated.env.windows": {
         "PYTHONIOENCODING": "utf-8"
+    },
+    "markdownlint.config": {
+        "MD032": false,
+        "MD033": false,
+        "MD041": false,
+        "MD060": false
     }
 }
