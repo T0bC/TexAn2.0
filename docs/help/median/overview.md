@@ -26,25 +26,9 @@ Optionally filter out low-quality measurements before median calculation:
 After configuration, the main panel displays:
 
 - **Processing Summary**: Grouping columns applied, any columns removed, and quality filter status
-- **Median Results Table**: Interactive table with median values per group, featuring:
-  - **Excel-style column filters**: Dropdown filters on each metadata column to select specific groups (e.g., filter `SEX` to "Male" only, or select specific `SAMPLE_ID`s)
-  - **"Select All" links**: Quick selection controls above each filter dropdown
+- **Median Results Table**: Interactive table with median values per group, featuring Excel-style column filters on metadata columns (e.g., select specific `SAMPLE_ID`s or filter `SEX` to "Male" only)
 - **Download**: Export the filtered/median-aggregated data as an XLSX file
 
-**Analysis Pipeline**: Filters applied in the results table affect downstream modules — use column filters to subset data (e.g., remove specific individuals or select only certain groups) before proceeding to analysis.
+**Analysis Pipeline**: Column filters applied in the results table happen after median calculation and affect the data passed to downstream modules — use them to subset data before proceeding to analysis.
 
 Columns that vary within groups (e.g., measurement-specific metadata) are automatically removed during aggregation and listed in the summary.
-
-##### Excel-Style Column Filtering
-
-The results table includes interactive column filters that function like Excel's AutoFilter:
-
-- **Metadata columns** (grouping columns, constant descriptive columns): Multi-select dropdowns to include/exclude specific values
-- **Use cases**:
-  - Remove specific individuals by deselecting `SAMPLE_ID` values
-  - Filter to specific groups (e.g., `SEX` = "Male" only, or `SITE` = "Site_A")
-  - Create custom subsets for downstream analysis
-- **Propagation**: Active filters affect the data passed to downstream modules — only visible rows are included in the analysis pipeline
-- **Convenience**: Click **All** above any filter to quickly select all values; individual items can then be unchecked
-
-This filtering is independent of the quality filter and applies after median calculation, allowing flexible data subsetting without reprocessing.
