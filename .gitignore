@@ -9,10 +9,5 @@ node_modules/
 
 # Log files
 logs/
-texan.log
-
-# Legacy reference code (read-only, not part of new codebase)
-#legacy_texan2/
-
 
 .DS_Store
