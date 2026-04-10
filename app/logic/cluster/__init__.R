@@ -19,4 +19,8 @@ box::use(
     compute_optimal_clusters,
     create_optimal_clusters_ggplot,
   ],
+  app/logic/cluster/silhouette[
+    compute_silhouette_data,
+    create_silhouette_plot,
+  ],
 )
