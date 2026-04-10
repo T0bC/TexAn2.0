@@ -136,7 +136,7 @@ where $u_i$ are distances from random points to their nearest data point and $w_
 
 The sample fraction m used is 10% of n when n > 100, else 5% (minimum 1). The Hopkins statistic is most reliable with n > 100 and fewer than 10 dimensions. Interpret with caution for small datasets or high-dimensional data (warnings are shown automatically).
 
-**References**: Hopkins & Skellam (1954); Cross & Jain (1982); Lawson & Jurs (1990).
+**References**: Hopkins & Skellam (1954); Lawson & Jurs (1990).
 
 </details>
 
