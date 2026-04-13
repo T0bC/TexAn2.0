@@ -130,6 +130,8 @@ describe("validate_data", {
     result <- load_data$validate_data(df)
     expect_true(result$valid)
     expect_null(result$error)
+    expect_equal(nrow(result$data), 3)
+    expect_equal(length(result$renamed_cols), 0)
   })
 
   it("rejects an empty data.frame with structured error", {
@@ -150,5 +152,19 @@ describe("validate_data", {
     result <- load_data$validate_data(NULL)
     expect_false(result$valid)
     expect_true(error_handling$is_app_error(result$error))
+  })
+
+  it("replaces spaces in column names with underscores", {
+    df <- data.frame(
+      `BOP index` = 1:3,
+      `normal_col` = letters[1:3],
+      `Another Space` = 4:6,
+      check.names = FALSE
+    )
+    result <- load_data$validate_data(df)
+    expect_true(result$valid)
+    expect_equal(names(result$data), c("BOP_index", "normal_col", "Another_Space"))
+    expect_equal(length(result$renamed_cols), 2)
+    expect_equal(names(result$renamed_cols), c("BOP index", "Another Space"))
   })
 })
