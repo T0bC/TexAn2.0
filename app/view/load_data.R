@@ -161,18 +161,22 @@ server <- function(id) {
         return()
       }
 
+      # Use the validated (and possibly renamed) data
+      validated_data <- validation$data
+      renamed_cols <- validation$renamed_cols
+
       # Success — update reactives
       last_error(NULL)
       rhino$log$info(
         "Load complete: '{file_info$name}' "
       )
       data_version(data_version() + 1)
-      loaded_data(result$data)
+      loaded_data(validated_data)
       shiny$showNotification(
         paste0(
           "Data loaded successfully! (",
-          nrow(result$data), " rows, ",
-          ncol(result$data), " columns)"
+          nrow(validated_data), " rows, ",
+          ncol(validated_data), " columns)"
         ),
         type = "message",
         duration = 3
@@ -180,12 +184,15 @@ server <- function(id) {
 
       # Check column naming conventions
       col_validation <- column_utils$validate_column_naming(
-        result$data
+        validated_data
       )
-      if (!col_validation$valid) {
-        rhino$log$warn(
-          "Ambiguous columns: {paste(col_validation$ambiguous_cols, collapse = ', ')}"
-        )
+      col_validation$renamed_cols <- renamed_cols
+      if (!col_validation$valid || length(renamed_cols) > 0) {
+        if (!col_validation$valid) {
+          rhino$log$warn(
+            "Ambiguous columns: {paste(col_validation$ambiguous_cols, collapse = ', ')}"
+          )
+        }
         shiny$showModal(
           column_validation_modal$create_modal(
             col_validation
@@ -220,27 +227,34 @@ server <- function(id) {
         return()
       }
 
+      # Use the validated (and possibly renamed) data
+      validated_data <- validation$data
+      renamed_cols <- validation$renamed_cols
+
       last_error(NULL)
       rhino$log$info("Example dataset loaded: '{filename}'")
       data_version(data_version() + 1)
-      loaded_data(result$data)
+      loaded_data(validated_data)
       shiny$showNotification(
         paste0(
           "Example '", filename, "' loaded! (",
-          nrow(result$data), " rows, ",
-          ncol(result$data), " columns)"
+          nrow(validated_data), " rows, ",
+          ncol(validated_data), " columns)"
         ),
         type = "message",
         duration = 3
       )
 
       col_validation <- column_utils$validate_column_naming(
-        result$data
+        validated_data
       )
-      if (!col_validation$valid) {
-        rhino$log$warn(
-          "Ambiguous columns: {paste(col_validation$ambiguous_cols, collapse = ', ')}"
-        )
+      col_validation$renamed_cols <- renamed_cols
+      if (!col_validation$valid || length(renamed_cols) > 0) {
+        if (!col_validation$valid) {
+          rhino$log$warn(
+            "Ambiguous columns: {paste(col_validation$ambiguous_cols, collapse = ', ')}"
+          )
+        }
         shiny$showModal(
           column_validation_modal$create_modal(
             col_validation
