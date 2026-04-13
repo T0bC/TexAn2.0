@@ -1,6 +1,7 @@
 box::use(
   openxlsx,
   rhino,
+  stats[setNames],
   utils[read.csv],
   tools[file_ext],
 )
@@ -80,28 +81,28 @@ read_data_file <- function(path, ext, header = TRUE, delimiter = ",",
   list(success = TRUE, data = result$result, error = NULL)
 }
 
-#' Fix column names by replacing spaces with underscores
+#' Fix column names by replacing dots with underscores
 #' @param data A data.frame
 #' @return List with `data` (modified data.frame) and `renamed_cols` (named vector)
 #' @export
 fix_column_names <- function(data) {
   original_names <- names(data)
-  has_space <- grepl(" ", original_names)
+  has_dot <- grepl("\\.", original_names)
   
-  if (!any(has_space)) {
+  if (!any(has_dot)) {
     return(list(data = data, renamed_cols = character(0)))
   }
   
-  new_names <- gsub(" ", "_", original_names)
+  new_names <- gsub("\\.", "_", original_names)
   names(data) <- new_names
   
   renamed_cols <- setNames(
-    new_names[has_space],
-    original_names[has_space]
+    new_names[has_dot],
+    original_names[has_dot]
   )
   
   rhino$log$info(
-    "Renamed {length(renamed_cols)} column(s) with spaces: {paste(names(renamed_cols), collapse = ', ')}"
+    "Renamed {length(renamed_cols)} column(s) with dots: {paste(names(renamed_cols), collapse = ', ')}"
   )
   
   list(data = data, renamed_cols = renamed_cols)
