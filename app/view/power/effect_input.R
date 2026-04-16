@@ -222,7 +222,7 @@ tab_server <- function(input, output, session, design_reactive = NULL) {
       list(
         effect_type = "raw",
         group_means = means,
-        group_sd = mean(sds),
+        group_sd = sds,
         distribution = input$distribution %||% "normal"
       )
     }
