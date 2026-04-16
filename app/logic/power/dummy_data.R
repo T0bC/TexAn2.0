@@ -7,6 +7,9 @@ box::use(
   app/logic/shared/error_handling,
 )
 
+# Internal separator for multi-way group names (unlikely to appear in user input)
+GROUP_SEP <- ":::"
+
 #' Simulate group data for power analysis visualization
 #'
 #' @param group_means Named numeric vector of means per group
@@ -81,13 +84,17 @@ simulate_group_data <- function(group_means,
   # Parse factor structure from group names if multi-way
 
   if (!is.null(factor_structure) && length(factor_structure) > 1) {
-    # Group names are expected to be interaction terms like "A_X" or "A_X_1"
-    split_groups <- strsplit(df$.group, "_")
-    for (i in seq_along(factor_structure)) {
-      factor_name <- factor_structure[[i]]$name
-      df[[factor_name]] <- sapply(split_groups, function(x) {
-        if (length(x) >= i) x[i] else NA
-      })
+    # Build a lookup table: group_name -> list of factor levels
+    level_lists <- lapply(factor_structure, function(f) f$levels)
+    grid <- expand.grid(level_lists, stringsAsFactors = FALSE)
+    # Name the grid columns by factor names
+    names(grid) <- sapply(factor_structure, function(f) f$name)
+    # Create the combined group names using internal separator
+    grid$.group_key <- apply(grid, 1, paste, collapse = GROUP_SEP)
+
+    # Match each row's .group to the grid and extract factor levels
+    for (factor_name in names(grid)[names(grid) != ".group_key"]) {
+      df[[factor_name]] <- grid[[factor_name]][match(df$.group, grid$.group_key)]
     }
     df$.group <- NULL
   } else if (!is.null(factor_structure) && length(factor_structure) == 1) {
