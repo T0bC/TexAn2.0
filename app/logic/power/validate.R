@@ -9,6 +9,7 @@ box::use(
 #' Sanitize a factor or level name for safe use in R operations
 #'
 #' Removes or replaces problematic characters while preserving readability.
+#' Underscores are removed to avoid conflicts with nested axis parsing.
 #' @param name Character string to sanitize
 #' @return Sanitized character string
 #' @export
@@ -18,25 +19,14 @@ sanitize_name <- function(name) {
 
   sanitized <- trimws(name)
 
-  # Replace spaces and dots with underscores
+  # Remove all special characters, spaces, dots, and underscores
+  # Only keep alphanumeric characters
 
-  sanitized <- gsub("[[:space:].]+", "_", sanitized)
+  sanitized <- gsub("[^[:alnum:]]", "", sanitized)
 
-  # Remove special characters except underscores and alphanumeric
-
-  sanitized <- gsub("[^[:alnum:]_]", "", sanitized)
-
-  # Remove leading/trailing underscores
-
-  sanitized <- gsub("^_+|_+$", "", sanitized)
-
-  # Collapse multiple underscores
-
-  sanitized <- gsub("_+", "_", sanitized)
-
-  # Ensure it doesn't start with a number (prefix with underscore)
+  # Ensure it doesn't start with a number (prefix with L)
   if (grepl("^[0-9]", sanitized)) {
-    sanitized <- paste0("L_", sanitized)
+    sanitized <- paste0("L", sanitized)
   }
 
   # If empty after sanitization, return placeholder
