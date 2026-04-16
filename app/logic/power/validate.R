@@ -2,6 +2,136 @@ box::use(
   app/logic/shared/error_handling,
 )
 
+# =============================================================================
+# Input Sanitization
+# =============================================================================
+
+#' Sanitize a factor or level name for safe use in R operations
+#'
+#' Removes or replaces problematic characters while preserving readability.
+#' @param name Character string to sanitize
+#' @return Sanitized character string
+#' @export
+sanitize_name <- function(name) {
+
+  if (is.null(name) || !is.character(name)) return("")
+
+  sanitized <- trimws(name)
+
+  # Replace spaces and dots with underscores
+
+  sanitized <- gsub("[[:space:].]+", "_", sanitized)
+
+  # Remove special characters except underscores and alphanumeric
+
+  sanitized <- gsub("[^[:alnum:]_]", "", sanitized)
+
+  # Remove leading/trailing underscores
+
+  sanitized <- gsub("^_+|_+$", "", sanitized)
+
+  # Collapse multiple underscores
+
+  sanitized <- gsub("_+", "_", sanitized)
+
+  # Ensure it doesn't start with a number (prefix with underscore)
+  if (grepl("^[0-9]", sanitized)) {
+    sanitized <- paste0("L_", sanitized)
+  }
+
+  # If empty after sanitization, return placeholder
+
+  if (nchar(sanitized) == 0) {
+    sanitized <- "unnamed"
+  }
+
+  sanitized
+}
+
+#' Sanitize factor structure and report changes
+#'
+#' @param factors List of factor definitions with name and levels
+#' @return List with sanitized factors and any warnings
+#' @export
+sanitize_factor_structure <- function(factors) {
+  if (is.null(factors) || length(factors) == 0) {
+    return(list(factors = list(), warnings = character(0)))
+  }
+
+  warnings <- character(0)
+  sanitized_factors <- lapply(seq_along(factors), function(i) {
+    f <- factors[[i]]
+
+    # Sanitize factor name
+    original_name <- f$name
+    sanitized_name <- sanitize_name(original_name)
+    if (sanitized_name != original_name) {
+      warnings <<- c(warnings, paste0(
+        "Factor '", original_name, "' renamed to '", sanitized_name, "'"
+      ))
+    }
+
+    # Sanitize levels
+    original_levels <- f$levels
+    sanitized_levels <- sapply(original_levels, sanitize_name, USE.NAMES = FALSE)
+
+    # Check for duplicates after sanitization
+    if (anyDuplicated(sanitized_levels)) {
+      # Make unique by appending index
+      dups <- duplicated(sanitized_levels)
+      for (j in which(dups)) {
+        sanitized_levels[j] <- paste0(sanitized_levels[j], "_", j)
+      }
+      warnings <<- c(warnings, paste0(
+        "Duplicate levels in '", sanitized_name, "' were made unique"
+      ))
+    }
+
+    # Report level changes
+    changed_levels <- which(sanitized_levels != original_levels)
+    if (length(changed_levels) > 0 && length(changed_levels) <= 3) {
+      for (j in changed_levels) {
+        warnings <<- c(warnings, paste0(
+          "Level '", original_levels[j], "' renamed to '", sanitized_levels[j], "'"
+        ))
+      }
+    } else if (length(changed_levels) > 3) {
+      warnings <<- c(warnings, paste0(
+        length(changed_levels), " levels in '", sanitized_name, "' were sanitized"
+      ))
+    }
+
+    list(
+      name = sanitized_name,
+      levels = sanitized_levels
+    )
+  })
+
+  # Check for duplicate factor names
+  factor_names <- sapply(sanitized_factors, function(f) f$name)
+  if (anyDuplicated(factor_names)) {
+    for (i in which(duplicated(factor_names))) {
+      sanitized_factors[[i]]$name <- paste0(factor_names[i], "_", i)
+    }
+    warnings <- c(warnings, "Duplicate factor names were made unique")
+  }
+
+  list(
+    factors = sanitized_factors,
+    warnings = warnings
+  )
+}
+
+#' Check if a name needs sanitization
+#'
+#' @param name Character string to check
+#' @return TRUE if name contains problematic characters
+#' @export
+needs_sanitization <- function(name) {
+  if (is.null(name) || !is.character(name)) return(TRUE)
+  sanitize_name(name) != trimws(name)
+}
+
 #' Validate power analysis input parameters
 #'
 #' @param params List with: solve_for, alpha, power_target, n_per_group,
