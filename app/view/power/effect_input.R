@@ -255,6 +255,9 @@ generate_effect_terms <- function(factors) {
   terms
 }
 
+# Internal separator for multi-way group names (must match dummy_data.R)
+GROUP_SEP <- ":::"
+
 # --- Helper: generate all group combinations ---
 generate_group_combinations <- function(factors) {
   if (is.null(factors) || length(factors) == 0) return(character(0))
@@ -265,5 +268,5 @@ generate_group_combinations <- function(factors) {
 
   level_lists <- lapply(factors, function(f) f$levels)
   grid <- expand.grid(level_lists, stringsAsFactors = FALSE)
-  apply(grid, 1, paste, collapse = "_")
+  apply(grid, 1, paste, collapse = GROUP_SEP)
 }
