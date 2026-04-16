@@ -400,7 +400,7 @@ describe("sanitize_factor_structure", {
     result <- validate$sanitize_factor_structure(factors)
 
     # Both become "Group_A", so second should be made unique
-    expect_false(anyDuplicated(result$factors[[1]]$levels))
+    expect_equal(anyDuplicated(result$factors[[1]]$levels), 0L)
     expect_true(any(grepl("duplicate", result$warnings, ignore.case = TRUE)))
   })
 
@@ -412,7 +412,7 @@ describe("sanitize_factor_structure", {
     result <- validate$sanitize_factor_structure(factors)
 
     factor_names <- sapply(result$factors, function(f) f$name)
-    expect_false(anyDuplicated(factor_names))
+    expect_equal(anyDuplicated(factor_names), 0L)
   })
 
   it("handles empty factors list", {
