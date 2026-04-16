@@ -63,6 +63,14 @@ tab_server <- function(input, output, session, input_data = NULL) {
         "3" = "Condition"
       )
 
+      # Unique default levels per factor to avoid collisions in multi-way designs
+      default_levels <- switch(
+        as.character(i),
+        "1" = "Mat_A, Mat_B",
+        "2" = "Treat_X, Treat_Y",
+        "3" = "Cond_1, Cond_2"
+      )
+
       shiny$tags$div(
         class = "mb-3 p-2 border rounded",
         shiny$tags$strong(
@@ -97,7 +105,7 @@ tab_server <- function(input, output, session, input_data = NULL) {
               )
             )
           ),
-          value = "Level_1, Level_2",
+          value = default_levels,
           placeholder = "Level_1, Level_2, Level_3"
         )
       )
