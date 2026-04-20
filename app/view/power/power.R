@@ -148,21 +148,56 @@ server <- function(id, input_data = NULL) {
       }
 
       # Run power analysis
-      result <- if (is_simulation) {
-        shiny$withProgress(
-          message = "Running simulation...",
-          detail = "Please wait while power is estimated.",
-          value = 0,
-          {
-            shiny$incProgress(0.1, detail = "Preparing simulation inputs...")
-            result <- power_calc$perform_power_analysis(params)
-            shiny$incProgress(0.9, detail = "Finalizing results...")
-            result
-          }
-        )
-      } else {
-        power_calc$perform_power_analysis(params)
+      power_exec <- error_handling$safe_execute(
+        expr = if (is_simulation) {
+          shiny$withProgress(
+            message = "Running simulation...",
+            detail = "Please wait while power is estimated.",
+            value = 0,
+            {
+              last_progress <- 0
+              progress_cb <- function(value, detail = NULL) {
+                value <- max(0, min(1, value))
+                delta <- value - last_progress
+                if (delta > 0) {
+                  shiny$incProgress(delta, detail = detail)
+                  last_progress <<- value
+                }
+              }
+
+              result <- power_calc$perform_power_analysis(
+                params,
+                progress_cb = progress_cb
+              )
+
+              if (last_progress < 1) {
+                shiny$incProgress(1 - last_progress, detail = "Finalizing results...")
+              }
+              result
+            }
+          )
+        } else {
+          power_calc$perform_power_analysis(params)
+        },
+        operation_name = "Power Analysis",
+        context = list(
+          solve_for = params$solve_for,
+          approach = params$approach,
+          n_groups = params$n_groups,
+          n_sim = params$n_sim,
+          distribution = params$distribution
+        ),
+        error_parser = error_handling$default_error_parser
+      )
+
+      if (!isTRUE(power_exec$success)) {
+        computation_status("error")
+        last_error(power_exec$error)
+        computation_results(NULL)
+        return()
       }
+
+      result <- power_exec$result
 
       if (error_handling$is_app_error(result)) {
         computation_status("error")
