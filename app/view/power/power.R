@@ -5,6 +5,7 @@ box::use(
   ggplot2,
   rhino,
   shiny,
+  stats[qnorm],
 )
 
 box::use(
@@ -118,8 +119,11 @@ server <- function(id, input_data = NULL) {
         n_per_group = opts$n_per_group,
         effect_type = effect$effect_type,
         effect_size = effect$effect_size,
+        input_mode = effect$input_mode %||% "mean_sd",
         group_means = effect$group_means,
         group_sd = effect$group_sd,
+        group_medians = effect$group_medians,
+        group_iqr = effect$group_iqr,
         n_groups = design_params$n_groups,
         n_ways = design_params$n_ways,
         approach = opts$approach,
@@ -127,14 +131,51 @@ server <- function(id, input_data = NULL) {
         distribution = effect$distribution
       )
 
+      distribution <- params$distribution %||% "normal"
+      is_simulation <- opts$approach != "parametric" ||
+        (distribution != "normal" && opts$approach == "parametric")
+
+      if (is_simulation) {
+        shiny$showNotification(
+          paste0(
+            "Starting Monte Carlo simulation (",
+            params$n_sim,
+            " iterations). This may take a moment."
+          ),
+          type = "message",
+          duration = 5
+        )
+      }
+
       # Run power analysis
-      result <- power_calc$perform_power_analysis(params)
+      result <- if (is_simulation) {
+        shiny$withProgress(
+          message = "Running simulation...",
+          detail = "Please wait while power is estimated.",
+          value = 0,
+          {
+            shiny$incProgress(0.1, detail = "Preparing simulation inputs...")
+            result <- power_calc$perform_power_analysis(params)
+            shiny$incProgress(0.9, detail = "Finalizing results...")
+            result
+          }
+        )
+      } else {
+        power_calc$perform_power_analysis(params)
+      }
 
       if (error_handling$is_app_error(result)) {
         computation_status("error")
         last_error(result)
         computation_results(NULL)
         return()
+      }
+
+      # Show any messages from power calculation (e.g., auto-switch to simulation)
+      if (!is.null(result$messages) && length(result$messages) > 0) {
+        for (msg in result$messages) {
+          shiny$showNotification(msg, type = "message", duration = 6)
+        }
       }
 
       # Generate dummy data for visualization
@@ -145,9 +186,21 @@ server <- function(id, input_data = NULL) {
       }
 
       if (effect$effect_type == "raw") {
+        # For raw mode, we need to get means/sd for dummy data
+        # If median_iqr mode, use the converted values from the result
+        if (effect$input_mode == "median_iqr") {
+          # Use group_means from normalized params in result
+          # For now, approximate by using medians as means (close for symmetric)
+          dummy_means <- effect$group_medians
+          dummy_sd <- effect$group_iqr / (2 * qnorm(0.75))  # IQR to SD for normal
+        } else {
+          dummy_means <- effect$group_means
+          dummy_sd <- effect$group_sd
+        }
+
         dummy_df <- dummy_data$simulate_group_data(
-          group_means = effect$group_means,
-          group_sd = effect$group_sd,
+          group_means = dummy_means,
+          group_sd = dummy_sd,
           n_per_group = n_for_dummy,
           distribution = effect$distribution,
           factor_structure = design_params$factors,
@@ -316,9 +369,38 @@ server <- function(id, input_data = NULL) {
     # --- Power curve plot ---
     output$power_curve_plot <- shiny$renderPlot({
       results <- computation_results()
-      shiny$req(results, results$power_curve_df)
+      shiny$req(results)
 
       df <- results$power_curve_df
+      has_required_cols <- is.data.frame(df) && all(c("n", "power") %in% names(df))
+      if (!has_required_cols) {
+        col_names <- if (is.null(names(df))) character(0) else names(df)
+        rhino$log$warn(
+          "Power curve anomaly: invalid payload shape. class={paste(class(df), collapse = ',')}, columns={paste(col_names, collapse = ',')}"
+        )
+      }
+      shiny$validate(shiny$need(
+        has_required_cols,
+        "Power curve data is unavailable. Please recompute analysis."
+      ))
+
+      df <- df[, c("n", "power"), drop = FALSE]
+      n_total <- nrow(df)
+      n_na <- sum(is.na(df$n))
+      power_na <- sum(is.na(df$power))
+      finite_mask <- is.finite(df$n) & is.finite(df$power)
+      n_finite <- sum(finite_mask)
+      df <- df[finite_mask, , drop = FALSE]
+      if (nrow(df) == 0) {
+        rhino$log$warn(
+          "Power curve anomaly: no plottable rows after finite filtering. rows_total={n_total}, rows_finite={n_finite}, n_na={n_na}, power_na={power_na}"
+        )
+      }
+      shiny$validate(shiny$need(
+        nrow(df) > 0,
+        "Power curve data contains no plottable values."
+      ))
+
       target_power <- results$params$power_target
       result_n <- if (results$result$type == "sample_size") {
         results$result$value
