@@ -125,20 +125,45 @@ needs_sanitization <- function(name) {
 #' Validate power analysis input parameters
 #'
 #' @param params List with: solve_for, alpha, power_target, n_per_group,
-#'   effect_size, effect_type, n_groups, group_means, group_sd, distribution
+#'   effect_size, effect_type, n_groups, group_means, group_sd, distribution,
+#'   input_mode, group_medians, group_iqr
 #' @return NULL if valid, or an app_error object
 #' @export
 validate_power_inputs <- function(params) {
-  # --- Alpha ---
-  if (is.null(params$alpha) || !is.numeric(params$alpha) ||
-      params$alpha <= 0 || params$alpha >= 1) {
-    return(error_handling$simple_error(
+  distribution <- params$distribution %||% "normal"
+  input_mode <- params$input_mode %||% "mean_sd"
 
-      message = "Alpha must be a number between 0 and 1 (exclusive).",
+  # --- Distribution validation ---
+  valid_distributions <- c("normal", "lognormal", "exponential")
+  if (!distribution %in% valid_distributions) {
+    return(error_handling$simple_error(
+      message = paste0(
+        "Invalid distribution. Must be one of: ",
+        paste(valid_distributions, collapse = ", ")
+      ),
       operation_name = "power_validate"
     ))
   }
 
+  # --- Standardized mode not allowed for non-normal ---
+  if (params$effect_type == "standardized" && distribution != "normal") {
+    return(error_handling$simple_error(
+      message = paste0(
+        "Standardized effect size (Cohen's f) is only valid for normal distributions. ",
+        "Please use raw distribution parameters for ", distribution, " data."
+      ),
+      operation_name = "power_validate"
+    ))
+  }
+
+  # --- Alpha ---
+  if (is.null(params$alpha) || !is.numeric(params$alpha) ||
+      params$alpha <= 0 || params$alpha >= 1) {
+    return(error_handling$simple_error(
+      message = "Alpha must be a number between 0 and 1 (exclusive).",
+      operation_name = "power_validate"
+    ))
+  }
 
   # --- Power target (required for sample_size and mde modes) ---
   if (params$solve_for %in% c("sample_size", "mde")) {
@@ -181,19 +206,57 @@ validate_power_inputs <- function(params) {
       ))
     }
   } else if (params$effect_type == "raw") {
-    # Raw mode: need group_means and group_sd
-    if (is.null(params$group_means) || length(params$group_means) < 2) {
-      return(error_handling$simple_error(
-        message = "Group means must be provided for all groups.",
-        operation_name = "power_validate"
-      ))
-    }
-    if (is.null(params$group_sd) || !is.numeric(params$group_sd) ||
-        any(params$group_sd <= 0)) {
-      return(error_handling$simple_error(
-        message = "Standard deviation must be positive for all groups.",
-        operation_name = "power_validate"
-      ))
+    # Raw mode validation depends on input_mode
+    if (input_mode == "mean_sd") {
+      if (is.null(params$group_means) || length(params$group_means) < 2) {
+        return(error_handling$simple_error(
+          message = "Group means must be provided for all groups.",
+          operation_name = "power_validate"
+        ))
+      }
+      if (is.null(params$group_sd) || !is.numeric(params$group_sd) ||
+          any(params$group_sd <= 0)) {
+        return(error_handling$simple_error(
+          message = "Standard deviation must be positive for all groups.",
+          operation_name = "power_validate"
+        ))
+      }
+      # Distribution-specific: lognormal/exponential require positive means
+      if (distribution %in% c("lognormal", "exponential")) {
+        if (any(params$group_means <= 0)) {
+          return(error_handling$simple_error(
+            message = paste0(
+              distribution, " distribution requires positive mean values."
+            ),
+            operation_name = "power_validate"
+          ))
+        }
+      }
+    } else if (input_mode == "median_iqr") {
+      if (is.null(params$group_medians) || length(params$group_medians) < 2) {
+        return(error_handling$simple_error(
+          message = "Group medians must be provided for all groups.",
+          operation_name = "power_validate"
+        ))
+      }
+      if (is.null(params$group_iqr) || !is.numeric(params$group_iqr) ||
+          any(params$group_iqr <= 0)) {
+        return(error_handling$simple_error(
+          message = "IQR must be positive for all groups.",
+          operation_name = "power_validate"
+        ))
+      }
+      # Distribution-specific: lognormal/exponential require positive medians
+      if (distribution %in% c("lognormal", "exponential")) {
+        if (any(params$group_medians <= 0)) {
+          return(error_handling$simple_error(
+            message = paste0(
+              distribution, " distribution requires positive median values."
+            ),
+            operation_name = "power_validate"
+          ))
+        }
+      }
     }
   }
 
