@@ -8,7 +8,7 @@ box::use(
   app/logic/shared/logging,
   app/logic/shared/settings,
   app/view/cluster,
-  app/view/help_modal,
+  app/view/shared/help_modal,
   app/view/lda,
   app/view/load_data,
   app/view/median,
