@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.0.4] - 2026-04-20
+
+### Added
+
+- **Power Analysis module** — New submodule for planning sample sizes and estimating statistical power for 1-way, 2-way, and 3-way factorial ANOVA designs
+- **Three solve modes** — Compute *Sample Size*, *Power*, or *Minimum Detectable Effect (MDE)* from the remaining two parameters
+- **Three statistical approaches** — Parametric (F-distribution via `pwr` package), Robust (Monte Carlo with trimmed means / Welch ANOVA), and Non-Parametric (Monte Carlo with Kruskal-Wallis rank test)
+- **Standardized and raw effect size input** — Enter Cohen's *f* directly or specify group means and SDs; the tool converts raw inputs to Cohen's *f* automatically
+- **Median + IQR input mode** — Alternative raw input using medians and IQRs, with distribution-aware conversion to mean/SD parameters for normal, log-normal, and exponential distributions
+- **Multi-distribution support** — Normal, log-normal, and exponential data-generating distributions for simulation; non-normal distributions automatically trigger Monte Carlo fallback
+- **Import from Data mode** — Load pilot or completed study data in the Load Data module and import its factor structure, group means, SDs, sample sizes, and Cohen's *f* directly into the power module; distribution shape auto-detected via Shapiro-Wilk test
+- **Three import workflows** — Pilot-to-full study planning (recommended sample size for full study), post-hoc power analysis (achieved power of a completed study), and sensitivity analysis (MDE given actual sample size)
+- **Power curve visualization** — Interactive plot showing power vs. sample size with target power and computed *n* markers; both parametric and simulation-based curve generation supported
+- **Simulated data preview** — Scatter plot of expected group data pattern based on configured parameters
+- **Design table output** — Summary of *N* per cell for 1-way designs and total *N* for factorial designs
+- **Binary search for sample size and MDE** — Efficient bisection algorithm (max n = 500, f range 0.01–2.0) with convergence warnings when target power is unachievable
+- **Progress reporting** — Scaled progress callbacks for long-running Monte Carlo computations
+- **Input validation** (`validate.R`) — Comprehensive checks for alpha, power target, group counts, effect size, distribution compatibility, and simulation parameters
+- **Factor name sanitization** — Strips special characters and ensures unique factor/level names to prevent R formula parsing errors
+- **Comprehensive help documentation** for Power Analysis module — Overview, Details (with import mode workflows, effect size guidance, statistical approach comparison, and best practices), and FAQ
+
 ## [2.0.3] - 2026-04-10
 
 ### Added
