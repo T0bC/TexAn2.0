@@ -13,6 +13,67 @@ CURVE_SIM_DIVISOR <- 10
 MAX_SEARCH_N <- 500
 MDE_SEARCH_RANGE <- c(0.01, 2.0)
 
+emit_progress <- function(progress_cb, value, detail = NULL) {
+  if (is.null(progress_cb)) {
+    return(invisible(NULL))
+  }
+
+  safe_value <- max(0, min(1, value))
+  try(progress_cb(safe_value, detail), silent = TRUE)
+  invisible(NULL)
+}
+
+make_scaled_progress <- function(progress_cb, start, end, default_detail = NULL) {
+  if (is.null(progress_cb)) {
+    return(NULL)
+  }
+
+  force(start)
+  force(end)
+  force(default_detail)
+
+  function(value, detail = NULL) {
+    local_value <- if (is.null(value)) 0 else value
+    scaled <- start + (end - start) * max(0, min(1, local_value))
+    local_detail <- if (is.null(detail)) default_detail else detail
+    emit_progress(progress_cb, scaled, local_detail)
+  }
+}
+
+simulate_power_with_step_progress <- function(
+    dist_params,
+    n,
+    n_sim,
+    alpha,
+    approach,
+    progress_cb,
+    step_idx,
+    max_steps,
+    step_label,
+    progress_detail) {
+  step_start <- min((step_idx - 1) / max_steps, 1)
+  step_end <- min(step_idx / max_steps, 1)
+  step_progress <- make_scaled_progress(progress_cb, step_start, step_end, step_label)
+
+  simulate_power(
+    dist_params,
+    n,
+    n_sim,
+    alpha,
+    approach,
+    progress_cb = step_progress,
+    progress_detail = progress_detail
+  )
+}
+
+build_effect_size_dist_params <- function(effect_size_f, pooled_sd, k, distribution) {
+  group_means <- seq(0, effect_size_f * sqrt(k) * pooled_sd, length.out = k)
+  group_means <- group_means - mean(group_means)
+  group_sds <- rep(pooled_sd, k)
+
+  build_dist_params(group_means, group_sds, distribution)
+}
+
 # =============================================================================
 # Public API
 # =============================================================================
@@ -36,9 +97,10 @@ MDE_SEARCH_RANGE <- c(0.01, 2.0)
 #'   - n_ways: 1, 2, or 3 (factorial design complexity)
 #'   - approach: "parametric", "robust", or "nonparametric"
 #'   - n_sim: number of simulations (for non-parametric/robust)
+#' @param progress_cb Optional callback function(value, detail) for progress updates
 #' @return List with: result, power_curve_df, design_table_df, messages
 #' @export
-perform_power_analysis <- function(params) {
+perform_power_analysis <- function(params, progress_cb = NULL) {
 
   # Validate inputs
   validation_error <- validate$validate_power_inputs(params)
@@ -85,7 +147,7 @@ perform_power_analysis <- function(params) {
   if (!use_simulation && distribution == "normal") {
     result <- parametric_power(params, effect_f)
   } else {
-    result <- simulation_power(params, effect_f, dist_params)
+    result <- simulation_power(params, effect_f, dist_params, progress_cb = progress_cb)
   }
 
   # Attach messages to result (merge with any from simulation_power)
@@ -440,8 +502,9 @@ parametric_power <- function(params, effect_f) {
 #' @param params Power analysis parameters
 #' @param effect_f Cohen's f effect size
 #' @param dist_params Normalized distribution parameters from normalize_distribution_params
+#' @param progress_cb Optional callback function(value, detail) for progress updates
 #' @return List with result, power_curve_df, design_table_df
-simulation_power <- function(params, effect_f, dist_params) {
+simulation_power <- function(params, effect_f, dist_params, progress_cb = NULL) {
   # Validate solve_for parameter
 
   valid_solve_for <- c("power", "sample_size", "mde")
@@ -462,10 +525,29 @@ simulation_power <- function(params, effect_f, dist_params) {
   distribution <- dist_params$distribution
   messages <- character(0)
 
+  if (!is.numeric(n_sim) || length(n_sim) != 1 ||
+      is.na(n_sim) || !is.finite(n_sim) || n_sim < 1) {
+    return(error_handling$simple_error(
+      message = "Number of simulations must be a finite number greater than or equal to 1.",
+      operation_name = "simulation_power",
+      context = list(n_sim = n_sim)
+    ))
+  }
+
+  n_sim <- as.integer(n_sim)
+  n_sim <- max(1L, n_sim)
+
+  result_progress <- make_scaled_progress(progress_cb, 0, 0.8)
+  curve_progress <- make_scaled_progress(progress_cb, 0.8, 1.0)
+
+  emit_progress(progress_cb, 0, "Preparing simulation...")
+
   if (params$solve_for == "power") {
     n <- params$n_per_group
     power_est <- simulate_power(
-      dist_params$dist_params, n, n_sim, alpha, approach
+      dist_params$dist_params, n, n_sim, alpha, approach,
+      progress_cb = result_progress,
+      progress_detail = "Estimating power"
     )
 
     result <- list(
@@ -479,7 +561,8 @@ simulation_power <- function(params, effect_f, dist_params) {
   } else if (params$solve_for == "sample_size") {
     search_result <- find_required_n(
       dist_params$dist_params, params$power_target,
-      n_sim, alpha, approach
+      n_sim, alpha, approach,
+      progress_cb = result_progress
     )
     n_required <- search_result$n
 
@@ -499,7 +582,8 @@ simulation_power <- function(params, effect_f, dist_params) {
   } else if (params$solve_for == "mde") {
     mde_result <- find_mde(
       params$n_per_group, dist_params$pooled_sd, params$power_target,
-      n_sim, alpha, approach, k, distribution
+      n_sim, alpha, approach, k, distribution,
+      progress_cb = result_progress
     )
     mde <- mde_result$f
 
@@ -519,8 +603,11 @@ simulation_power <- function(params, effect_f, dist_params) {
 
   # Generate power curve via simulation
   power_curve <- generate_simulation_power_curve(
-    dist_params$dist_params, alpha, approach, max(100, n_sim / CURVE_SIM_DIVISOR)
+    dist_params$dist_params, alpha, approach, max(100, n_sim / CURVE_SIM_DIVISOR),
+    progress_cb = curve_progress
   )
+
+  emit_progress(progress_cb, 1, "Finalizing results...")
 
   design_table <- generate_design_table(params, result$value)
 
@@ -563,11 +650,26 @@ generate_samples <- function(dist_param, n) {
 #' @param n_sim Number of simulations
 #' @param alpha Significance level
 #' @param approach "parametric", "robust", or "nonparametric"
+#' @param progress_cb Optional callback function(value, detail) for progress updates
+#' @param progress_detail Optional detail text prefix for progress updates
 #' @return Estimated power (proportion of significant results)
-simulate_power <- function(dist_params, n, n_sim, alpha, approach) {
+simulate_power <- function(dist_params, n, n_sim, alpha, approach,
+                           progress_cb = NULL, progress_detail = NULL) {
   k <- length(dist_params)
+  if (!is.numeric(n_sim) || length(n_sim) != 1 ||
+      is.na(n_sim) || !is.finite(n_sim)) {
+    n_sim <- 1L
+  } else {
+    n_sim <- as.integer(n_sim)
+  }
+  n_sim <- max(1L, n_sim)
+  update_every <- max(1, floor(n_sim / 50))
 
-  significant <- replicate(n_sim, {
+  significant <- logical(n_sim)
+
+  emit_progress(progress_cb, 0, progress_detail)
+
+  for (i in seq_len(n_sim)) {
     data_list <- lapply(seq_len(k), function(i) {
       data.frame(
         group = rep(paste0("G", i), n),
@@ -588,21 +690,45 @@ simulate_power <- function(dist_params, n, n_sim, alpha, approach) {
       }
     }, error = function(e) 1)
 
-    p_value < alpha
-  })
+    significant[i] <- p_value < alpha
+
+    if (!is.null(progress_cb) && (i %% update_every == 0 || i == n_sim)) {
+      detail <- if (!is.null(progress_detail)) {
+        paste0(progress_detail, " (", i, "/", n_sim, ")")
+      } else {
+        paste0("Running simulation ", i, "/", n_sim)
+      }
+      emit_progress(progress_cb, i / n_sim, detail)
+    }
+  }
 
   mean(significant)
 }
 
 #' Binary search for required sample size
 #' @return List with n (sample size) and optional warning message
-find_required_n <- function(dist_params, target_power, n_sim, alpha, approach) {
+find_required_n <- function(dist_params, target_power, n_sim, alpha, approach,
+                            progress_cb = NULL) {
   n_low <- 2
   n_high <- MAX_SEARCH_N
+  max_steps <- ceiling(log2(MAX_SEARCH_N - n_low)) + 1
+  step_idx <- 0
 
   while (n_high - n_low > 1) {
+    step_idx <- step_idx + 1
     n_mid <- floor((n_low + n_high) / 2)
-    power_est <- simulate_power(dist_params, n_mid, n_sim, alpha, approach)
+    power_est <- simulate_power_with_step_progress(
+      dist_params = dist_params,
+      n = n_mid,
+      n_sim = n_sim,
+      alpha = alpha,
+      approach = approach,
+      progress_cb = progress_cb,
+      step_idx = step_idx,
+      max_steps = max_steps,
+      step_label = paste0("Searching sample size (step ", step_idx, "/", max_steps, ")"),
+      progress_detail = paste0("Searching sample size (n=", n_mid, ")")
+    )
 
     if (power_est < target_power) {
       n_low <- n_mid
@@ -614,7 +740,19 @@ find_required_n <- function(dist_params, target_power, n_sim, alpha, approach) {
   # Check if target power is achievable at max N
   warning_msg <- NULL
   if (n_high == MAX_SEARCH_N) {
-    power_at_max <- simulate_power(dist_params, MAX_SEARCH_N, n_sim, alpha, approach)
+    step_idx <- step_idx + 1
+    power_at_max <- simulate_power_with_step_progress(
+      dist_params = dist_params,
+      n = MAX_SEARCH_N,
+      n_sim = n_sim,
+      alpha = alpha,
+      approach = approach,
+      progress_cb = progress_cb,
+      step_idx = step_idx,
+      max_steps = max_steps,
+      step_label = paste0("Checking upper bound n=", MAX_SEARCH_N),
+      progress_detail = paste0("Checking upper bound n=", MAX_SEARCH_N)
+    )
     if (power_at_max < target_power) {
       warning_msg <- paste0(
         "Target power (", round(target_power * 100), "%) may not be achievable ",
@@ -630,21 +768,29 @@ find_required_n <- function(dist_params, target_power, n_sim, alpha, approach) {
 #' Binary search for minimum detectable effect
 #' @return List with f (effect size) and optional warning message
 find_mde <- function(n, pooled_sd, target_power, n_sim, alpha, approach, k,
-                     distribution = "normal") {
+                     distribution = "normal", progress_cb = NULL) {
   f_low <- MDE_SEARCH_RANGE[1]
   f_high <- MDE_SEARCH_RANGE[2]
+  max_steps <- ceiling(log2((MDE_SEARCH_RANGE[2] - MDE_SEARCH_RANGE[1]) / 0.01)) + 1
+  step_idx <- 0
 
   while (f_high - f_low > 0.01) {
+    step_idx <- step_idx + 1
     f_mid <- (f_low + f_high) / 2
-    # Create means from effect size
-    group_means <- seq(0, f_mid * sqrt(k) * pooled_sd, length.out = k)
-    group_means <- group_means - mean(group_means)
-    group_sds <- rep(pooled_sd, k)
+    dist_params <- build_effect_size_dist_params(f_mid, pooled_sd, k, distribution)
 
-    # Build distribution params for this effect size
-    dist_params <- build_dist_params(group_means, group_sds, distribution)
-
-    power_est <- simulate_power(dist_params, n, n_sim, alpha, approach)
+    power_est <- simulate_power_with_step_progress(
+      dist_params = dist_params,
+      n = n,
+      n_sim = n_sim,
+      alpha = alpha,
+      approach = approach,
+      progress_cb = progress_cb,
+      step_idx = step_idx,
+      max_steps = max_steps,
+      step_label = paste0("Searching minimum detectable effect (step ", step_idx, "/", max_steps, ")"),
+      progress_detail = paste0("Searching minimum detectable effect (f=", round(f_mid, 3), ")")
+    )
 
     if (power_est < target_power) {
       f_low <- f_mid
@@ -656,12 +802,21 @@ find_mde <- function(n, pooled_sd, target_power, n_sim, alpha, approach, k,
   # Check if target power is achievable at max effect size
   warning_msg <- NULL
   if (abs(f_high - MDE_SEARCH_RANGE[2]) < 0.02) {
-    # Near upper bound - verify power
-    group_means <- seq(0, f_high * sqrt(k) * pooled_sd, length.out = k)
-    group_means <- group_means - mean(group_means)
-    group_sds <- rep(pooled_sd, k)
-    dist_params <- build_dist_params(group_means, group_sds, distribution)
-    power_at_max <- simulate_power(dist_params, n, n_sim, alpha, approach)
+    dist_params <- build_effect_size_dist_params(f_high, pooled_sd, k, distribution)
+
+    step_idx <- step_idx + 1
+    power_at_max <- simulate_power_with_step_progress(
+      dist_params = dist_params,
+      n = n,
+      n_sim = n_sim,
+      alpha = alpha,
+      approach = approach,
+      progress_cb = progress_cb,
+      step_idx = step_idx,
+      max_steps = max_steps,
+      step_label = "Checking upper effect-size bound",
+      progress_detail = "Checking upper effect-size bound"
+    )
 
     if (power_at_max < target_power) {
       warning_msg <- paste0(
@@ -677,12 +832,28 @@ find_mde <- function(n, pooled_sd, target_power, n_sim, alpha, approach, k,
 
 #' Generate power curve via simulation
 generate_simulation_power_curve <- function(dist_params, alpha, approach,
-                                            n_sim_per_point) {
+                                            n_sim_per_point,
+                                            progress_cb = NULL) {
   n_range <- seq(5, 100, by = 10)
+  n_points <- length(n_range)
 
-  power_values <- sapply(n_range, function(n) {
-    simulate_power(dist_params, n, n_sim_per_point, alpha, approach)
-  })
+  power_values <- vapply(seq_along(n_range), function(idx) {
+    n <- n_range[idx]
+    point_start <- (idx - 1) / n_points
+    point_end <- idx / n_points
+    point_progress <- make_scaled_progress(
+      progress_cb,
+      point_start,
+      point_end,
+      paste0("Generating power curve (", idx, "/", n_points, ")")
+    )
+
+    simulate_power(
+      dist_params, n, n_sim_per_point, alpha, approach,
+      progress_cb = point_progress,
+      progress_detail = paste0("Generating power curve at n=", n)
+    )
+  }, numeric(1))
 
   data.frame(
     n = n_range,
