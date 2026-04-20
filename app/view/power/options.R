@@ -31,6 +31,26 @@ tab_server <- function(input, output, session,
     if (!is.null(mode_reactive)) mode_reactive() else "manual"
   })
 
+  # Track previous mode to detect transitions
+  prev_mode <- shiny$reactiveVal("manual")
+
+  # --- Auto-select Power when switching to import mode ---
+  shiny$observe({
+    mode <- current_mode()
+    previous <- prev_mode()
+
+    # When switching from manual to import, auto-select Power
+    if (mode == "import" && previous == "manual") {
+      shiny$updateRadioButtons(
+        session = session,
+        inputId = "solve_for",
+        selected = "power"
+      )
+    }
+
+    prev_mode(mode)
+  })
+
   # --- Get observed N from effect params (import mode) ---
   observed_n <- shiny$reactive({
     mode <- current_mode()
