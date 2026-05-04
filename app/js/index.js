@@ -306,3 +306,140 @@ var TEXAN_DEBUG = false;
         }
     }, 100);
 })();
+
+// =============================================================================
+// Plot Card Drag-to-Resize Handle
+// Adds a draggable handle at the bottom of each .plot-card for height resizing.
+// Double-click resets to 35% of viewport height.
+// =============================================================================
+
+(function () {
+    var MIN_HEIGHT = 150;
+    var GRIP_CHAR = '⋯'; // Simple ellipsis as grip indicator
+
+    function getCardInfo(card) {
+        var output = card.querySelector('[id*="plot_"]');
+        if (output && output.id) {
+            // ID format: "namespace-plot_SafeId" e.g. "plotting-plot_SepalLength"
+            var match = output.id.match(/^(.+)-plot_(.+)$/);
+            if (match) {
+                return { namespace: match[1], safeId: match[2] };
+            }
+        }
+        return null;
+    }
+
+    function injectHandle(card) {
+        if (card.querySelector('.plot-resize-handle')) return;
+
+        var handle = document.createElement('div');
+        handle.className = 'plot-resize-handle';
+        handle.textContent = GRIP_CHAR;
+        handle.setAttribute('title', 'Drag to resize, double-click to reset');
+        card.style.position = 'relative';
+        card.appendChild(handle);
+
+        var startY = 0;
+        var startHeight = 0;
+        var responsivePlot = card.querySelector('.responsive-plot');
+
+        function onPointerDown(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            startY = e.clientY;
+            startHeight = responsivePlot ? responsivePlot.offsetHeight : 300;
+            handle.classList.add('dragging');
+            card.classList.add('resizing');
+            handle.setPointerCapture(e.pointerId);
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+        }
+
+        function onPointerMove(e) {
+            var delta = e.clientY - startY;
+            var newHeight = Math.max(MIN_HEIGHT, startHeight + delta);
+            if (responsivePlot) {
+                responsivePlot.style.height = newHeight + 'px';
+                responsivePlot.style.minHeight = newHeight + 'px';
+            }
+        }
+
+        function onPointerUp(e) {
+            handle.classList.remove('dragging');
+            card.classList.remove('resizing');
+            handle.releasePointerCapture(e.pointerId);
+            document.removeEventListener('pointermove', onPointerMove);
+            document.removeEventListener('pointerup', onPointerUp);
+
+            var finalHeight = responsivePlot ? responsivePlot.offsetHeight : 300;
+            sendHeightToShiny(card, finalHeight, true);
+        }
+
+        function onDoubleClick(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var defaultHeight = Math.round(window.innerHeight * 0.35);
+            if (responsivePlot) {
+                responsivePlot.style.height = '';
+                responsivePlot.style.minHeight = '';
+            }
+            sendHeightToShiny(card, defaultHeight, true);
+        }
+
+        handle.addEventListener('pointerdown', onPointerDown);
+        handle.addEventListener('dblclick', onDoubleClick);
+    }
+
+    function sendHeightToShiny(card, heightPx, forceRedraw) {
+        if (!window.Shiny || !Shiny.setInputValue) return;
+
+        var info = getCardInfo(card);
+        if (!info) return;
+
+        // Build namespaced input ID: "namespace-plot_height_SafeId"
+        var inputId = info.namespace + '-plot_height_' + info.safeId;
+        var payload = {
+            height: heightPx,
+            timestamp: Date.now()
+        };
+        Shiny.setInputValue(inputId, payload, { priority: 'event' });
+    }
+
+    function injectAllHandles() {
+        var cards = document.querySelectorAll('.plot-card');
+        for (var i = 0; i < cards.length; i++) {
+            injectHandle(cards[i]);
+        }
+    }
+
+    // Observe DOM for dynamically rendered plot cards (uiOutput)
+    var observer = new MutationObserver(function (mutations) {
+        for (var i = 0; i < mutations.length; i++) {
+            var added = mutations[i].addedNodes;
+            for (var j = 0; j < added.length; j++) {
+                var node = added[j];
+                if (node.nodeType !== 1) continue;
+                if (node.classList && node.classList.contains('plot-card')) {
+                    injectHandle(node);
+                } else if (node.querySelectorAll) {
+                    var cards = node.querySelectorAll('.plot-card');
+                    for (var k = 0; k < cards.length; k++) {
+                        injectHandle(cards[k]);
+                    }
+                }
+            }
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        injectAllHandles();
+    });
+
+    $(document).on('shiny:connected', function () {
+        setTimeout(injectAllHandles, 200);
+    });
+})();
