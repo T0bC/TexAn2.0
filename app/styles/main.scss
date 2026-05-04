@@ -214,6 +214,7 @@ body.bslib-page-navbar>.container-fluid {
 
 // Plot card — adaptive height, grows with content
 .plot-card {
+  position: relative;
   width: 100%;
   height: auto !important;
   max-height: none !important;
@@ -237,6 +238,13 @@ body.bslib-page-navbar>.container-fluid {
   overflow: visible !important;
   max-height: none !important;
   flex: 0 0 auto !important;
+}
+
+// Card footer (assumption results) floats above plot during resize
+.plot-card>.card-footer {
+  position: relative;
+  z-index: 5;
+  background: var(--bs-card-bg, #fff);
 }
 
 // Responsive plot container
@@ -461,7 +469,12 @@ details.app-error-details.mt-2 {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     margin-top: 1rem;
     margin-bottom: 0.5rem;
 
@@ -470,7 +483,8 @@ details.app-error-details.mt-2 {
     }
   }
 
-  h4, h5 {
+  h4,
+  h5 {
     color: #1a5f8a;
     font-weight: 600;
   }
@@ -479,7 +493,8 @@ details.app-error-details.mt-2 {
     margin-bottom: 0.75rem;
   }
 
-  ul, ol {
+  ul,
+  ol {
     margin-bottom: 0.75rem;
     padding-left: 1.5rem;
   }
@@ -519,4 +534,48 @@ details.app-error-details.mt-2 {
       vertical-align: -0.125em;
     }
   }
+}
+
+// =============================================================================
+// Plot Card: Drag-to-Resize Handle
+// =============================================================================
+
+// Resize handle at bottom of plot cards
+.plot-resize-handle {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  cursor: ns-resize !important;
+  user-select: none;
+  color: var(--bs-secondary);
+  opacity: 0.4;
+  font-size: 18px;
+  letter-spacing: 2px;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  z-index: 10;
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.03));
+}
+
+.plot-resize-handle:hover {
+  opacity: 1;
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.08));
+}
+
+// Active drag state
+.plot-resize-handle.dragging {
+  opacity: 1;
+  color: var(--bs-primary);
+  background: linear-gradient(to bottom, transparent, rgba(var(--bs-primary-rgb), 0.1));
+}
+
+// Dim sibling cards when one is being resized
+.plot-card.resizing~.plot-card {
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
 }
