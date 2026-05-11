@@ -6,6 +6,10 @@
 
 - **File upload limit**: Increased maximum upload size for `.xlsx` and `.csv` files from the previous limit to **600 MB**
 
+### Fixed
+
+- **Statistics module**: Added immediate UI feedback when clicking "Compute Statistics" — users now see a toast notification and progress bar regardless of which statistical approach is selected, preventing the app from appearing frozen during long computations
+
 ## [2.0.5] - 2026-05-05
 
 ### Changed
