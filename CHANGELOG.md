@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.6] - 2026-05-11
+
+### Changed
+
+- **File upload limit**: Increased maximum upload size for `.xlsx` and `.csv` files from the previous limit to **600 MB**
+
 ## [2.0.5] - 2026-05-05
 
 ### Changed
