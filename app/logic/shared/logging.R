@@ -10,32 +10,32 @@ box::use(
 #' token when called inside a Shiny reactive context. Outside of a reactive
 #' context (e.g. during app startup), the session field shows "global".
 #'
-#' This must be called once at app startup (e.g. in main.R server).
-#' No changes are needed to existing rhino$log$* calls — the layout
-#' reads the current session via shiny::getDefaultReactiveDomain().
+#' This must be called once per session (i.e. in main.R server()).
+#' rhino_log_file in config.yml must point to a **directory**, not a file.
+#' Each session writes to its own file: <log_dir>/YYYY_MM_DD_<sessid>.log
 #'
 #' Log output format:
 #'   LEVEL [timestamp] [sess_abc123] Message text
 #'
 #' @export
 configure_session_logging <- function() {
-  # Ensure the appender matches the current config.
-  # rhino's configure_logger() only sets a file appender when rhino_log_file
-  # is not NA, but never resets to console — so switching from production
-  # back to default in the same R session leaves the file appender active.
-  log_file <- config$get("rhino_log_file")
+  log_dir <- config$get("rhino_log_file")
   is_production <- identical(Sys.getenv("R_CONFIG_ACTIVE"), "production")
 
-  if (is.null(log_file) || is.na(log_file)) {
-    # No file configured: output to console only
+  if (is.null(log_dir) || is.na(log_dir) || log_dir == "") {
+    # No directory configured: output to console only
     logger$log_appender(logger$appender_stderr)
   } else {
-    # Ensure log directory exists
-    log_dir <- dirname(log_file)
     if (!dir.exists(log_dir)) dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
 
+    # Build per-session filename: YYYY_MM_DD_<sessid>.log
+    session <- shiny$getDefaultReactiveDomain()
+    sess_id <- if (!is.null(session)) substr(session$token, 1, 8) else "global"
+    date_str <- format(Sys.time(), "%Y_%m_%d")
+    log_file <- file.path(log_dir, paste0(date_str, "_", sess_id, ".log"))
+
     if (is_production) {
-      # Production: file only (for per-user debugging via session ID)
+      # Production: file only
       logger$log_appender(logger$appender_file(log_file))
     } else {
       # Local development: both console AND file
