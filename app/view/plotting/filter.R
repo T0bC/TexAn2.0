@@ -141,9 +141,19 @@ tab_server <- function(input, output, session, input_data,
 
     make_checkbox <- function(col) {
       ch <- data_utils$get_filter_choices(data[[col]])
+      sel <- get_selected(col, ch)
       shiny$checkboxGroupInput(
-        ns(col), label = col,
-        choices = ch, selected = get_selected(col, ch)
+        ns(col),
+        label = shiny$tags$div(
+          class = "d-flex justify-content-between align-items-center",
+          shiny$tags$span(col),
+          shiny$actionLink(
+            inputId = ns(paste0("toggle_all_", col)),
+            label = "All / None",
+            class = "small ms-2"
+          )
+        ),
+        choices = ch, selected = sel
       )
     }
 
@@ -159,6 +169,33 @@ tab_server <- function(input, output, session, input_data,
     } else {
       make_checkbox(cols)
     }
+  })
+
+  # Register "All / None" toggle observers whenever the set of filter cols changes
+  active_observers <- list()
+  shiny$observe({
+    cols <- filter_cols()
+    lapply(active_observers, function(obs) obs$destroy())
+    active_observers <<- lapply(cols, function(col) {
+      local({
+        local_col <- col
+        shiny$observeEvent(
+          input[[paste0("toggle_all_", local_col)]],
+          {
+            data <- shiny$isolate(input_data())
+            if (is.null(data)) return()
+            ch <- data_utils$get_filter_choices(data[[local_col]])
+            cur <- input[[local_col]]
+            new_sel <- if (length(cur) == length(ch)) character(0) else ch
+            shiny$updateCheckboxGroupInput(
+              session, local_col,
+              choices = ch, selected = new_sel
+            )
+          },
+          ignoreInit = TRUE
+        )
+      })
+    })
   })
 
   # Filtered data reactive
