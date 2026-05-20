@@ -579,3 +579,114 @@ details.app-error-details.mt-2 {
   opacity: 0.5;
   transition: opacity 0.15s ease;
 }
+
+// =============================================================================
+// Sortable: Factor Order & Color Tree
+// =============================================================================
+
+// Sortable list container
+.sortable-list,
+.sortable-nested-outer {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+// Sortable items
+.sortable-list .rank-list-item,
+.sortable-nested-outer .rank-list-item {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+// Drag handle cursor
+.drag-handle {
+  cursor: grab;
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+// Active dragging state
+.sortable-list .rank-list-item.sortable-chosen,
+.sortable-nested-outer .rank-list-item.sortable-chosen {
+  opacity: 0.9;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+// Ghost element (placeholder during drag)
+.sortable-list .rank-list-item.sortable-ghost,
+.sortable-nested-outer .rank-list-item.sortable-ghost {
+  opacity: 0.4;
+  background: var(--bs-primary-bg-subtle) !important;
+}
+
+// Nested group styling
+.nested-group {
+  transition: box-shadow 0.15s ease;
+
+  &:hover {
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  }
+}
+
+// Nested header (collapsible group title)
+.nested-header {
+  user-select: none;
+}
+
+// Inner sortable containers
+.inner-sortable {
+  padding-left: 4px;
+}
+
+// Leaf items (innermost level with color pickers)
+.leaf-item {
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: #f0f0f0 !important;
+  }
+}
+
+// Compact color picker styling inside sortable items
+.sortable-item .colourpicker-input-container,
+.leaf-item .colourpicker-input-container {
+  width: 32px !important;
+  height: 24px !important;
+}
+
+.sortable-item .colourpicker-input,
+.leaf-item .colourpicker-input {
+  width: 32px !important;
+  height: 24px !important;
+  padding: 0 !important;
+  border-radius: 4px !important;
+}
+
+// Hide the text input part of color picker (show only swatch)
+.sortable-item .colourpicker-input-addon,
+.leaf-item .colourpicker-input-addon {
+  display: none !important;
+}
+
+// Form group wrapper - remove margins
+.sortable-item .form-group,
+.leaf-item .form-group {
+  margin: 0 !important;
+}
+
+// Rank list default styling overrides
+.rank-list {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+.rank-list-container {
+  min-height: auto !important;
+}
