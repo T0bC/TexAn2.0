@@ -5,9 +5,11 @@
 #'
 #' @param df Data frame containing the columns
 #' @param cols Character vector of column names to combine
+#' @param factor_order Optional named list of custom factor level orderings.
+#'   Keys are column names, values are character vectors of ordered levels.
 #' @return Factor vector representing the interaction of all specified columns
 #' @export
-create_interaction <- function(df, cols) {
+create_interaction <- function(df, cols, factor_order = NULL) {
   if (length(cols) == 0) {
     stop("At least one column must be provided.")
   }
@@ -16,12 +18,44 @@ create_interaction <- function(df, cols) {
   factor_cols <- lapply(cols, function(col) {
     values <- df[[col]]
     values[is.na(values)] <- "NA"
-    as.factor(values)
+
+    # Apply custom ordering if provided
+    if (!is.null(factor_order) && col %in% names(factor_order)) {
+      custom_levels <- factor_order[[col]]
+      # Include any levels in data not in custom order (append at end)
+      data_levels <- unique(as.character(values))
+      all_levels <- c(custom_levels, setdiff(data_levels, custom_levels))
+      factor(values, levels = all_levels)
+    } else {
+      as.factor(values)
+    }
   })
 
   if (length(cols) == 1) return(factor_cols[[1]])
 
   interaction(factor_cols, drop = TRUE)
+}
+
+#' Get unique factor levels for each column
+#'
+#' Returns a named list where keys are column names and values are
+#' character vectors of unique levels (with NA converted to "NA" string).
+#'
+#' @param df Data frame containing the columns
+#' @param cols Character vector of column names
+#' @return Named list of character vectors
+#' @export
+get_factor_levels <- function(df, cols) {
+  if (length(cols) == 0) return(list())
+
+  result <- lapply(cols, function(col) {
+    if (!col %in% names(df)) return(character(0))
+    values <- df[[col]]
+    values[is.na(values)] <- "NA"
+    unique(as.character(values))
+  })
+  names(result) <- cols
+  result
 }
 
 #' Get unique choices for a filter column, with NA shown as "NA"
