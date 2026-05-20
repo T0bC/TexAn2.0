@@ -34,6 +34,8 @@ box::use(
 #' @param stat_line_style List: median_thickness, median_width,
 #'   sd_thickness, sd_width
 #' @param axis_style List: tick_length, line_thickness
+#' @param factor_order Optional named list of custom factor level orderings.
+#'   Keys are column names, values are character vectors of ordered levels.
 #' @return A ggplot2 object (ready for ggiraph::girafe)
 #' @export
 create_scatter_plot <- function(data,
@@ -46,7 +48,8 @@ create_scatter_plot <- function(data,
                                 processing = list(),
                                 grid_legend = list(),
                                 stat_line_style = list(),
-                                axis_style = list()) {
+                                axis_style = list(),
+                                factor_order = NULL) {
   # --- Validate inputs ---
   validation <- validate_plot_inputs(data, x_cols, y_col)
   if (!is.null(validation)) return(validation)
@@ -63,18 +66,18 @@ create_scatter_plot <- function(data,
   sls <- resolve_stat_line_style(stat_line_style)
   ax <- resolve_axis_style(axis_style)
 
-  # --- Prepare x-axis variable ---
-  x_prep <- prepare_x_axis(data, x_cols)
+  # --- Prepare x-axis variable (with custom factor ordering) ---
+  x_prep <- prepare_x_axis(data, x_cols, factor_order)
   data <- x_prep$data
   x_var <- x_prep$x_var
   x_label <- x_prep$x_label
 
-  # --- Prepare color grouping ---
+  # --- Prepare color grouping (with custom factor ordering) ---
   if (is.null(color_cols) || length(color_cols) == 0) {
     color_cols <- x_cols
   }
   data$.color_group <- as.character(
-    data_utils$create_interaction(data, color_cols)
+    data_utils$create_interaction(data, color_cols, factor_order)
   )
   color_legend_title <- paste(color_cols, collapse = " | ")
 
@@ -85,7 +88,7 @@ create_scatter_plot <- function(data,
   shape_legend_title <- shape_prep$legend_title
 
   # --- Process data: outliers + trimming ---
-  interaction_term <- data_utils$create_interaction(data, x_cols)
+  interaction_term <- data_utils$create_interaction(data, x_cols, factor_order)
   data <- apply_processing(data, y_col, interaction_term, proc)
 
   # --- Build tooltip ---
@@ -283,11 +286,11 @@ validate_plot_inputs <- function(data, x_cols, y_col) {
 }
 
 #' Prepare x-axis: single column or nested interaction
-prepare_x_axis <- function(data, x_cols) {
+prepare_x_axis <- function(data, x_cols, factor_order = NULL) {
   if (length(x_cols) > 1) {
     # Reverse for legendry: first selected = outer grouping
     x_nested <- data_utils$create_interaction(
-      data, base::rev(x_cols)
+      data, base::rev(x_cols), factor_order
     )
     data$.x_nested <- x_nested
     list(
@@ -296,6 +299,16 @@ prepare_x_axis <- function(data, x_cols) {
       x_label = paste(x_cols, collapse = " | ")
     )
   } else {
+    # Single column: apply factor ordering if provided
+    col <- x_cols[1]
+    if (!is.null(factor_order) && col %in% names(factor_order)) {
+      values <- data[[col]]
+      values[is.na(values)] <- "NA"
+      custom_levels <- factor_order[[col]]
+      data_levels <- unique(as.character(values))
+      all_levels <- c(custom_levels, setdiff(data_levels, custom_levels))
+      data[[col]] <- factor(values, levels = all_levels)
+    }
     list(
       data = data,
       x_var = x_cols,
