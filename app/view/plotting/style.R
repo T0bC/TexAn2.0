@@ -157,7 +157,7 @@ tab_server <- function(input, output, session, input_data,
     groups
   })
 
-  # Render nested sortable tree with color pickers
+  # Render nested sortable tree with color pickers and shape dropdowns
   output$colorOrderTree <- shiny$renderUI({
     xa <- input$xAxis
     fo <- factor_order()
@@ -170,12 +170,19 @@ tab_server <- function(input, output, session, input_data,
       ))
     }
 
-    # Get existing colors (isolate to avoid re-render loop)
+    # Get existing colors and shapes (isolate to avoid re-render loop)
     existing_colors <- shiny$isolate(collect_colors(input, groups))
+    existing_shapes <- shiny$isolate(collect_shapes(input, groups))
     defaults <- data_utils$default_palette(length(groups))
 
+    # Check if "Shape by" is active (disables custom shape selection)
+    shape_by_active <- !is.null(input$pointShape) && length(input$pointShape) > 0
+
     # Build nested tree UI
-    build_nested_color_tree(ns, xa, fo, groups, existing_colors, defaults)
+    build_nested_color_tree(
+      ns, xa, fo, groups, existing_colors, existing_shapes,
+      defaults, shape_by_active
+    )
   })
 
   # Observer for sortable input changes (per column)
@@ -209,8 +216,20 @@ tab_server <- function(input, output, session, input_data,
     collect_colors(input, groups)
   })
 
+  # Custom shape map reactive (only active when Shape by is not used)
+  shape_map <- shiny$reactive({
+    # If "Shape by" is active, return NULL (shapes driven by column mapping)
+    if (!is.null(input$pointShape) && length(input$pointShape) > 0) {
+      return(NULL)
+    }
+    groups <- color_groups()
+    if (length(groups) == 0) return(NULL)
+    collect_shapes(input, groups)
+  })
+
   list(
     color_map = color_map,
+    shape_map = shape_map,
     color_groups = color_groups,
     factor_order = factor_order
   )
@@ -221,6 +240,11 @@ tab_server <- function(input, output, session, input_data,
 # Sanitize group name to a valid Shiny input ID
 color_input_id <- function(group) {
   paste0("color_", gsub("[^[:alnum:]]", "_", group))
+}
+
+# Sanitize group name to a valid Shiny input ID for shapes
+shape_input_id <- function(group) {
+  paste0("shape_", gsub("[^[:alnum:]]", "_", group))
 }
 
 # Collect current color values from dynamic inputs
@@ -240,33 +264,60 @@ collect_colors <- function(input, groups) {
   colors
 }
 
+# Collect current shape values from dynamic inputs
+collect_shapes <- function(input, groups, default_shape = 19L) {
+  shapes <- vapply(groups, function(group) {
+    val <- input[[shape_input_id(group)]]
+    if (is.null(val)) NA_integer_ else as.integer(val)
+  }, integer(1))
+  names(shapes) <- groups
+
+  # Fill NAs with default shape
+  na_idx <- is.na(shapes)
+  if (any(na_idx)) {
+    shapes[na_idx] <- default_shape
+  }
+  shapes
+}
+
+# Generate shape dropdown choices (0-25 with visual labels)
+shape_choices <- function() {
+  stats::setNames(as.character(0:25), as.character(0:25))
+}
+
 # Build nested sortable tree with color pickers at leaf nodes
 # For single X-axis column: simple sortable list with color pickers
 # For multiple columns: nested structure with sortable at each level
 build_nested_color_tree <- function(ns, x_cols, factor_order, groups,
-                                    existing_colors, defaults) {
+                                    existing_colors, existing_shapes,
+                                    defaults, shape_by_active) {
   n_cols <- length(x_cols)
 
   if (n_cols == 1) {
     # Single column: simple sortable list with color pickers
     col <- x_cols[1]
     levels <- factor_order[[col]]
-    return(build_single_level_sortable(ns, col, levels, groups,
-                                       existing_colors, defaults))
+    return(build_single_level_sortable(
+      ns, col, levels, groups, existing_colors, existing_shapes,
+      defaults, shape_by_active
+    ))
   }
 
   # Multiple columns: build nested structure
   # Outer column is first in x_cols, inner columns follow
-  build_multi_level_tree(ns, x_cols, factor_order, groups,
-                         existing_colors, defaults)
+  build_multi_level_tree(
+    ns, x_cols, factor_order, groups, existing_colors, existing_shapes,
+    defaults, shape_by_active
+  )
 }
 
 # Build sortable list for a single X-axis column
 build_single_level_sortable <- function(ns, col, levels, groups,
-                                        existing_colors, defaults) {
+                                        existing_colors, existing_shapes,
+                                        defaults, shape_by_active) {
   input_id <- paste0("order_", make.names(col))
 
-  # Create list items with color pickers
+  # Create list items with color pickers and shape dropdowns
   labels <- lapply(seq_along(levels), function(i) {
     level <- levels[i]
     # Find matching group (for single column, group == level)
@@ -279,6 +330,13 @@ build_single_level_sortable <- function(ns, col, levels, groups,
       "#808080"
     }
 
+    # Get shape value (default 19 = filled circle)
+    shape <- if (level %in% names(existing_shapes)) {
+      existing_shapes[[level]]
+    } else {
+      19L
+    }
+
     shiny$tags$div(
       class = "d-flex align-items-center gap-2 sortable-item",
       style = "padding: 4px 8px; background: #f8f9fa; border-radius: 4px; margin: 2px 0;",
@@ -288,6 +346,17 @@ build_single_level_sortable <- function(ns, col, levels, groups,
         bsicons$bs_icon("grip-vertical")
       ),
       shiny$tags$span(class = "flex-grow-1 small", level),
+      shiny$tags$div(
+        class = "shape-select-wrapper",
+        title = if (shape_by_active) "Disabled: 'Shape by' is active" else NULL,
+        shiny$selectInput(
+          inputId = ns(shape_input_id(level)),
+          label = NULL,
+          choices = shape_choices(),
+          selected = as.character(shape),
+          width = "100%"
+        )
+      ),
       shiny$tags$div(
         class = "color-picker-wrapper",
         colourpicker$colourInput(
@@ -304,7 +373,7 @@ build_single_level_sortable <- function(ns, col, levels, groups,
   names(labels) <- levels
 
   shiny$tags$div(
-    class = "mb-2",
+    class = paste("mb-2", if (shape_by_active) "shape-disabled" else ""),
     shiny$tags$label(class = "form-label small fw-semibold", col),
     sortable$rank_list(
       text = NULL,
@@ -321,7 +390,8 @@ build_single_level_sortable <- function(ns, col, levels, groups,
 
 # Build multi-level nested tree for multiple X-axis columns
 build_multi_level_tree <- function(ns, x_cols, factor_order, groups,
-                                   existing_colors, defaults) {
+                                   existing_colors, existing_shapes,
+                                   defaults, shape_by_active) {
   # For nested structure, we need to:
   # 1. Create sortable for outer level (first column) with depth-0 handles
   # 2. For each outer level value, show inner levels with depth-1+ handles
@@ -338,7 +408,8 @@ build_multi_level_tree <- function(ns, x_cols, factor_order, groups,
     # Build inner content for this outer value (starting at depth 1)
     inner_content <- build_inner_levels(
       ns, inner_cols, factor_order, outer_val,
-      groups, existing_colors, defaults, depth = 1
+      groups, existing_colors, existing_shapes, defaults,
+      shape_by_active, depth = 1
     )
 
     shiny$tags$div(
@@ -399,7 +470,8 @@ build_multi_level_tree <- function(ns, x_cols, factor_order, groups,
 
 # Recursively build inner levels of the tree
 build_inner_levels <- function(ns, cols, factor_order, parent_prefix,
-                               groups, existing_colors, defaults, depth = 1) {
+                               groups, existing_colors, existing_shapes,
+                               defaults, shape_by_active, depth = 1) {
   if (length(cols) == 0) return(NULL)
 
   col <- cols[1]
@@ -416,7 +488,7 @@ build_inner_levels <- function(ns, cols, factor_order, parent_prefix,
     current_prefix <- paste(parent_prefix, level, sep = ".")
 
     if (is_leaf) {
-      # Leaf level: show color picker
+      # Leaf level: show color picker and shape dropdown
       group_idx <- which(groups == current_prefix)
       color <- if (length(group_idx) > 0 &&
                    current_prefix %in% names(existing_colors)) {
@@ -427,8 +499,18 @@ build_inner_levels <- function(ns, cols, factor_order, parent_prefix,
         "#808080"
       }
 
+      # Get shape value (default 19 = filled circle)
+      shape <- if (current_prefix %in% names(existing_shapes)) {
+        existing_shapes[[current_prefix]]
+      } else {
+        19L
+      }
+
       shiny$tags$div(
-        class = "d-flex align-items-center gap-2 leaf-item",
+        class = paste(
+          "d-flex align-items-center gap-2 leaf-item",
+          if (shape_by_active) "shape-disabled" else ""
+        ),
         style = paste(
           "padding: 3px 6px; background: #f8f9fa;",
           "border-radius: 4px; margin: 2px 0;"
@@ -439,6 +521,17 @@ build_inner_levels <- function(ns, cols, factor_order, parent_prefix,
           bsicons$bs_icon("grip-vertical")
         ),
         shiny$tags$span(class = "flex-grow-1 small", level),
+        shiny$tags$div(
+          class = "shape-select-wrapper",
+          title = if (shape_by_active) "Disabled: 'Shape by' is active" else NULL,
+          shiny$selectInput(
+            inputId = ns(shape_input_id(current_prefix)),
+            label = NULL,
+            choices = shape_choices(),
+            selected = as.character(shape),
+            width = "100%"
+          )
+        ),
         shiny$tags$div(
           class = "color-picker-wrapper",
           colourpicker$colourInput(
@@ -455,7 +548,8 @@ build_inner_levels <- function(ns, cols, factor_order, parent_prefix,
       # Non-leaf: recurse with incremented depth
       inner_content <- build_inner_levels(
         ns, remaining_cols, factor_order, current_prefix,
-        groups, existing_colors, defaults, depth + 1
+        groups, existing_colors, existing_shapes, defaults,
+        shape_by_active, depth + 1
       )
 
       shiny$tags$div(
