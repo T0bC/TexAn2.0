@@ -31,6 +31,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmagick++-dev \
     zlib1g-dev \
     libicu-dev \
+    libuv1-dev \
+    curl \
     pandoc \
     tcl8.6 \
     tk8.6 \
