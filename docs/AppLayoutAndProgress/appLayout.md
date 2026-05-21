@@ -6,7 +6,7 @@ flowchart TB
         subgraph LoadDataModule["📥 Load Data Module"]
             direction TB
             LD_UI["UI: File Upload / Example Data<br/>📦 DataExplorer · summarytools · DT"]
-            LD_Logic["Logic: validate_file_extension()<br/>read_data_file() · validate_data()<br/>fix_column_names()"]
+            LD_Logic["validate_file_extension()<br/>read_data_file() · validate_data()<br/>fix_column_names()"]
             LD_Packages["📦 openxlsx (XLSX read)<br/>📦 utils::read.csv (CSV read)<br/>📦 tools::file_ext"]
 
             LD_UI --> LD_Logic --> LD_Packages
@@ -17,8 +17,6 @@ flowchart TB
             direction TB
 
             MED_UI["UI: Grouping columns · Quality column<br/>📦 DT (interactive result table)<br/>📦 openxlsx (download handler)"]
-            MED_Logic["Logic Controller<br/>debounce(800ms) · fingerprint cache"]
-
             subgraph MED_Flow["Internal Data Flow"]
                 direction TB
                 MED_Branch{"Grouping selected?"}
@@ -29,7 +27,7 @@ flowchart TB
 
             MED_Packages["📦 stats (median, aggregate, setNames)<br/>📦 openxlsx (XLSX export)"]
 
-            MED_UI --> MED_Logic --> MED_Branch
+            MED_UI --> MED_Branch
             MED_Branch -->|No| MED_FilterOnly
             MED_Branch -->|Yes| MED_FilterGroup
             MED_FilterOnly --> MED_Quality
@@ -42,8 +40,6 @@ flowchart TB
             direction TB
 
             PL_UI["UI: 4 sidebar tabs<br/>Data Selection · Filter · Processing · Style<br/>📦 bslib · bsicons · ggiraph (interactive plots)"]
-            PL_Logic["Logic Controller<br/>debounce · per-column plot cache · fingerprinting"]
-
             subgraph PL_Flow["Internal Data Flow"]
                 direction TB
                 PL_Filter["filter.R: filter_data()<br/>📦 app/logic/shared/data_utils"]
@@ -56,7 +52,7 @@ flowchart TB
 
             PL_Packages["📦 ggplot2 (plots) · ggiraph (interactive)<br/>📦 openxlsx (data download)<br/>📦 car (Levene) · stats (shapiro.test)"]
 
-            PL_UI --> PL_Logic --> PL_Filter --> PL_Process --> PL_Normalize
+            PL_UI --> PL_Filter --> PL_Process --> PL_Normalize
             PL_Process --> PL_Skew
             PL_Normalize --> PL_Scatter
             PL_Skew --> PL_Scatter
@@ -68,10 +64,10 @@ flowchart TB
         subgraph SummaryModule["📋 Summary Module"]
             direction TB
             SUM_UI["UI: Descriptive summary table per measure x group"]
-            SUM_Logic["summary::compute_summary_table()<br/>Respects normalize_enabled + transform_info from Plotting"]
+            SUM_Compute["summary::compute_summary_table()<br/>Respects normalize_enabled + transform_info from Plotting"]
             SUM_Packages["📦 stats (mean, sd, median, IQR)<br/>📦 DT (interactive table) · 📦 openxlsx (export)"]
 
-            SUM_UI --> SUM_Logic --> SUM_Packages
+            SUM_UI --> SUM_Compute --> SUM_Packages
         end
 
         %% ==================== STATISTICS MODULE ====================
@@ -79,8 +75,6 @@ flowchart TB
             direction TB
 
             STAT_UI["UI: Test options · Adjustments · Bootstrap<br/>📦 DT · bslib"]
-            STAT_Logic["Logic Controller<br/>omnibus.R: auto-select test family"]
-
             subgraph STAT_Flow["Internal Flow"]
                 direction TB
                 STAT_Branch{"Test family"}
@@ -96,7 +90,7 @@ flowchart TB
 
             STAT_Packages["📦 stats · WRS2 · emmeans · multcomp<br/>📦 dunn.test · effsize · car"]
 
-            STAT_UI --> STAT_Logic --> STAT_Branch
+            STAT_UI --> STAT_Branch
             STAT_Branch -->|parametric| STAT_Param --> STAT_PostH_P
             STAT_Branch -->|nonparametric| STAT_NP --> STAT_PostH_NP
             STAT_Branch -->|robust| STAT_Rob --> STAT_PostH_R
@@ -111,8 +105,6 @@ flowchart TB
             direction TB
 
             PCA_UI["UI: Data Selection · Plotting Controls<br/>📦 bslib · ggiraph · plotly"]
-            PCA_Logic["Logic Controller<br/>Triggered by 'Compute PCA' button"]
-
             subgraph PCA_Flow["Internal Flow"]
                 direction TB
                 PCA_Clean["preprocessing/na_handling::clean_na_rows()<br/>📦 stats"]
@@ -129,7 +121,7 @@ flowchart TB
 
             PCA_Packages["📦 FactoMineR (PCA core) · factoextra (extraction/biplot)<br/>📦 psych (KMO, parallel) · plotly (3D biplot) · ggcorrplot"]
 
-            PCA_UI --> PCA_Logic --> PCA_Clean --> PCA_Skew --> PCA_Scale
+            PCA_UI --> PCA_Clean --> PCA_Skew --> PCA_Scale
             PCA_Scale --> PCA_KMO
             PCA_Scale --> PCA_Opt
             PCA_Scale --> PCA_Run
@@ -145,8 +137,6 @@ flowchart TB
             direction TB
 
             LDA_UI["UI: Data Selection · Analysis Settings · Plotting Controls<br/>📦 bslib · ggiraph"]
-            LDA_Logic["Logic Controller<br/>Triggered by 'Compute LDA/QDA/MDA' button"]
-
             subgraph LDA_Flow["Internal Flow"]
                 direction TB
                 LDA_Clean["na_handling::clean_na_rows() · 📦 stats"]
@@ -165,7 +155,7 @@ flowchart TB
 
             LDA_Packages["📦 MASS (lda, qda, predict) · mda (MDA)<br/>📦 caret · heplots (Box-M) · openxlsx"]
 
-            LDA_UI --> LDA_Logic --> LDA_Clean --> LDA_Skew --> LDA_Scale --> LDA_Split
+            LDA_UI --> LDA_Clean --> LDA_Skew --> LDA_Scale --> LDA_Split
             LDA_Split --> LDA_Branch
             LDA_Branch -->|LDA| LDA_LDA
             LDA_Branch -->|QDA| LDA_QDA
@@ -184,8 +174,6 @@ flowchart TB
             direction TB
 
             CL_UI["UI: Data Selection · Clustering Settings · Display Options<br/>📦 bslib · ggiraph · plotly"]
-            CL_Logic["Main Controller"]
-
             subgraph CL_Flow["Internal Flow"]
                 direction TB
                 CL_Source{"Data Source?"}
@@ -209,7 +197,7 @@ flowchart TB
 
             CL_Packages["📦 cluster (PAM, silhouette) · dbscan · NbClust<br/>📦 stats (kmeans, hclust) · pheatmap · factoextra"]
 
-            CL_UI --> CL_Logic --> CL_Source
+            CL_UI --> CL_Source
             CL_Source -->|raw| CL_Raw
             CL_Source -->|pca_scores| CL_PCA
             CL_Source -->|lda_scores| CL_LDA
@@ -230,8 +218,6 @@ flowchart TB
             direction TB
 
             PR_UI["UI: Upload new data · Plotting Controls · Results Display<br/>📦 bslib · DT"]
-            PR_Logic["Prediction Logic"]
-
             subgraph PR_Flow["Internal Flow"]
                 direction TB
                 PR_Load["bundle_io::load_bundle() · validate_bundle()<br/>Load saved LDA RDS bundle · 📦 base (readRDS)"]
@@ -242,7 +228,7 @@ flowchart TB
 
             PR_Packages["📦 MASS (predict.lda/qda) · ggplot2 · DT"]
 
-            PR_UI --> PR_Logic --> PR_Load --> PR_Valid --> PR_Classify --> PR_Plots --> PR_Packages
+            PR_UI --> PR_Load --> PR_Valid --> PR_Classify --> PR_Plots --> PR_Packages
         end
 
         %% ==================== POWER ANALYSIS MODULE ====================
@@ -250,8 +236,6 @@ flowchart TB
             direction TB
 
             PWR_UI["UI: Design · Effect Input · Options<br/>📦 bslib · ggplot2"]
-            PWR_Logic["Power Analysis Logic"]
-
             subgraph PWR_Flow["Internal Flow"]
                 direction TB
                 PWR_Valid["validate.R<br/>Validate effect size / alpha / n inputs"]
@@ -262,7 +246,7 @@ flowchart TB
 
             PWR_Packages["📦 pwr · WebPower · stats (power.t.test) · ggplot2"]
 
-            PWR_UI --> PWR_Logic --> PWR_Valid --> PWR_Dummy
+            PWR_UI --> PWR_Valid --> PWR_Dummy
             PWR_Valid --> PWR_Calc --> PWR_Plot --> PWR_Packages
         end
 
@@ -337,3 +321,4 @@ flowchart TB
     style CL_Algo fill:#ffcc80,stroke:#e65100
     style LDA_Branch fill:#ffcc80,stroke:#e65100
     style STAT_Branch fill:#ffcc80,stroke:#e65100
+    
