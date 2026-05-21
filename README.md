@@ -1,2 +1,49 @@
 # TexAn2.0
+
 Development Branch for TexAn version 2.0
+
+## Overview
+
+TexAn2.0 is an R/Shiny application for statistical analysis of measurement data, designed primarily for archaeological and anthropological research. The application provides a modular workflow from data import through exploratory visualization to advanced multivariate analysis and statistical testing.
+
+## Modules
+
+### Load Data
+
+Upload CSV or XLSX files with configurable parsing options (delimiter, quote character, header handling), or use built-in example datasets for testing. After loading, interactive data preview, missing values visualization, and data summary panels help assess data quality before proceeding to analysis.
+
+### Median
+
+Calculate median values for measurement columns with optional quality filtering and grouping. Select descriptive columns to aggregate data by sample structure, filter out low-quality measurements before calculation, and apply Excel-style column filters to subset data for downstream modules.
+
+### Plotting
+
+Visualize data with customizable scatter plots. Select descriptive and measurement columns to generate plots per measurement variable, with configurable X-axis groupings, data filtering, outlier detection, normalization, and styling options including custom colors, point aesthetics, and median/SD lines.
+
+### Summary
+
+Compute descriptive statistics (mean, median, variance, standard deviation, standard error, coefficient of variation) for each measurement column, grouped by metadata columns. Optional normality testing and support for transformed data when normalization is active in the Plotting module.
+
+### Statistics
+
+Run omnibus tests and pairwise post-hoc comparisons for 1-way, 2-way, or 3-way factorial designs. Choose between robust trimmed-means ANOVA, classical parametric ANOVA, or non-parametric approaches. Configure p-value adjustment methods, bootstrap options, and export HTML reports.
+
+### PCA
+
+Perform Principal Component Analysis to reduce data dimensionality. Supports data scaling options and normalization for skewed variables. Provides KMO suitability measure, optimal component recommendations, eigenvalue tables, and biplots with metadata grouping.
+
+### LDA
+
+Conduct supervised Discriminant Analysis (LDA, QDA, or MDA) to find linear combinations of variables that maximize separation between predefined groups. Includes scaling and normalization options, with LD scores plots showing group discrimination and proportion of trace tables.
+
+### Cluster
+
+Apply unsupervised cluster analysis to partition observations based on similarity. Supports raw measurements, PCA scores, or LDA scores as input. Algorithms include K-Means (Euclidean and PAM), Hierarchical, and DBSCAN. Provides cluster biplots, quality metrics, and cluster profile tables characterizing group differences.
+
+### Prediction
+
+Apply previously trained PCA, LDA, QDA, or MDA models to new unknown specimens. Upload a model bundle and unknown data to obtain predicted classifications, posterior probabilities, and overlay plots showing unknown samples projected onto the training data space.
+
+### Power Analysis
+
+Plan study sample sizes and estimate statistical power for 1-way, 2-way, and 3-way designs. Import pilot data to extract effect sizes automatically, or manually specify Cohen's f values. Calculate required sample size, achieved power, or minimum detectable effect using parametric, robust, or non-parametric methods.
