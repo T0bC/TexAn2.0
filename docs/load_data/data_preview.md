@@ -1,1 +1,0 @@
-The complete data set can be viewed here. It can be scrolled horizontally if it contains a large number of columns. You can search for individual variables.
