@@ -352,29 +352,77 @@ flowchart TB
         subgraph PCAModule["🔵 PCA Module"]
             direction TB
 
-            PCA_UI["UI: Data Selection · Plotting Controls<br/>📦 bslib · ggiraph · plotly"]
-            PCA_Clean["preprocessing/na_handling::clean_na_rows()<br/>📦 stats"]
-            PCA_Skew["preprocessing/skewness_transform.R<br/>detect + transform skewed variables<br/>📦 moments · bestNormalize"]
-            PCA_Scale["scaling::scale_data()<br/>📦 stats (scale)"]
-            PCA_KMO["kmo::calculate_kmo()<br/>Sampling adequacy · 📦 psych"]
-            PCA_Opt["optimal_components::calculate_optimal_components()<br/>Parallel analysis · Scree · MAP<br/>📦 psych · nFactors"]
-            PCA_Run["pca::run_pca()<br/>📦 FactoMineR (PCA) · factoextra (extract)"]
-            PCA_Corr["correlation_plot::compute_correlation_data()<br/>📦 stats (cor) · ggcorrplot"]
-            PCA_Biplot["biplot.R / biplot3d.R<br/>📦 factoextra · plotly (3D)"]
-            PCA_Eigen["eigencorplot.R<br/>Dim-metadata correlation · 📦 ggplot2 · ggiraph"]
-            PCA_Export["pca_export.R<br/>create_pca_excel() · create_pca_bundle()<br/>📦 openxlsx"]
+            subgraph PCA_Config["Configuration"]
+                direction LR
+                PCA_CfgData["Data Selection
+                ---
+                Measurement columns (numeric)
+                Metadata columns (descriptive)
+                Scale: scale_center · center_only · none
+                Skewness correction: on / off"]
+                PCA_CfgPlot["Plotting Controls
+                ---
+                Biplot layer: individuals · variables · combined
+                Group biplot: by metadata column(s)
+                    Convex hull / 95% ellipse
+                Point alpha: contribution · 0.25-1.0
+                Point size: contribution · 1-10
+                Dimensions: Dim.X · Dim.Y · Dim.Z
+                Export size: width · height (cm)"]
+            end
 
-            PCA_Packages["📦 FactoMineR (PCA core) · factoextra (extraction/biplot)<br/>📦 psych (KMO, parallel) · plotly (3D biplot) · ggcorrplot"]
+            PCA_InputBranch{"Data source"}
 
-            PCA_UI --> PCA_Clean --> PCA_Skew --> PCA_Scale
-            PCA_Scale --> PCA_KMO
-            PCA_Scale --> PCA_Opt
-            PCA_Scale --> PCA_Run
-            PCA_Run --> PCA_Corr
-            PCA_Run --> PCA_Biplot
-            PCA_Run --> PCA_Eigen
-            PCA_Run --> PCA_Export
-            PCA_Export --> PCA_Packages
+            PCA_FromRaw["Receive raw data from Load Data<br/>|input_data|"]
+            PCA_FromMedian["Receive median-aggregated data from Median Module<br/>|median_data|"]
+
+            PCA_Clean["Remove rows with missing values in measurement columns<br/>📦 stats"]
+            PCA_SkewDetect["Detect highly skewed variables (|skewness| > 2)<br/>📦 moments"]
+            PCA_SkewApply["Transform skewed variables via bestNormalize<br/>---<br/>📦 bestNormalize"]
+            PCA_SkewBranch{"Skewness correction enabled?"}
+
+            PCA_Scale["Scale and center selected measurement columns<br/>---<br/>Method: z-score standardization (scale_center) or center-only<br/>📦 stats"]
+
+            PCA_Out_Corr["Correlation Matrix<br/>---<br/>Variable correlation heatmap displayed in UI<br/>📦 stats · ggcorrplot"]
+            PCA_Out_KMO["KMO Sampling Adequacy<br/>---<br/>Overall measure with interpretation badge + per-variable adequacy table<br/>📦 psych"]
+            PCA_Out_Opt["Optimal Components Estimation<br/>---<br/>Parallel analysis · Kaiser · Elbow · MAP<br/>Scree plot with thresholds + methods comparison table<br/>📦 psych · nFactors"]
+
+            PCA_PCA["Execute PCA Computation<br/>---<br/>Eigenvalues · Variable coordinates/contrib/cos2 · Individual scores<br/>📦 FactoMineR · factoextra"]
+
+            PCA_Out_Results["PCA Results Tables<br/>---<br/>Eigenvalues & variance · Variable results (coord/contrib/cos2) · Individual results"]
+            PCA_Out_Biplot2D["2D Biplot<br/>---<br/>Interactive ggiraph plot with individuals/variables/both layers<br/>Group coloring · Convex hull or 95% ellipse"]
+            PCA_Out_Biplot3D["3D Biplot<br/>---<br/>Interactive plotly visualization (shown when ≥3 components)"]
+            PCA_Out_VarContrib["Variable Contributions<br/>---<br/>Jitter/strip plot per dimension with cos2 filtering"]
+            PCA_Out_IndContrib["Individual Contributions<br/>---<br/>Jitter/strip plot per dimension"]
+            PCA_Out_EigenCor["Dimension–Metadata Correlation<br/>---<br/>Heatmap of correlations between PC dimensions and metadata columns<br/>📦 ggplot2 · ggiraph"]
+
+            PCA_Export["Export Results<br/>---<br/>Excel: eigenvalues · variables · individuals · correlations<br/>RDS: full PCA object with raw data, transform params, settings<br/>📦 openxlsx"]
+            PCA_DownExcel["Download Excel file"]
+            PCA_DownRDS["Download RDS bundle"]
+
+            PCA_PassLDA["Pass PCA result downstream to LDA Module<br/>|pca_result|"]
+
+            PCA_Config --> PCA_InputBranch
+            PCA_InputBranch -->|raw| PCA_FromRaw
+            PCA_InputBranch -->|median| PCA_FromMedian
+            PCA_FromRaw --> PCA_Clean
+            PCA_FromMedian --> PCA_Clean
+            PCA_Clean --> PCA_SkewDetect --> PCA_SkewBranch
+            PCA_SkewBranch -->|yes| PCA_SkewApply --> PCA_Scale
+            PCA_SkewBranch -->|no| PCA_Scale
+            PCA_Scale --> PCA_Out_Corr
+            PCA_Scale --> PCA_Out_KMO
+            PCA_Scale --> PCA_Out_Opt
+            PCA_Scale --> PCA_PCA
+            PCA_PCA --> PCA_Out_Results
+            PCA_PCA --> PCA_Out_Biplot2D
+            PCA_PCA --> PCA_Out_Biplot3D
+            PCA_PCA --> PCA_Out_VarContrib
+            PCA_PCA --> PCA_Out_IndContrib
+            PCA_PCA --> PCA_Out_EigenCor
+            PCA_PCA --> PCA_Export --> PCA_DownExcel
+            PCA_Export --> PCA_DownRDS
+            PCA_PCA --> PCA_PassLDA
         end
 
         %% ==================== LDA MODULE ====================
@@ -554,4 +602,6 @@ flowchart TB
     style LDA_Branch fill:#ffcc80,stroke:#e65100
     style STAT_Omnibus fill:#ffcc80,stroke:#e65100
     style STAT_PostHoc fill:#ffcc80,stroke:#e65100
+    style PCA_InputBranch fill:#ffcc80,stroke:#e65100
+    style PCA_SkewBranch fill:#ffcc80,stroke:#e65100
     
