@@ -1,10 +1,8 @@
 # TexAn2.0
 
-Development Branch for TexAn version 2.0
-
 ## Overview
 
-TexAn2.0 is an R/Shiny application for statistical analysis of measurement data, designed primarily for archaeological and anthropological research. The application provides a modular workflow from data import through exploratory visualization to advanced multivariate analysis and statistical testing.
+TexAn2.0 is an R/Shiny application for statistical analysis of measurement data. The application provides a modular workflow from data import through exploratory visualization to advanced multivariate analysis and statistical testing.
 
 ## Modules
 
@@ -47,3 +45,22 @@ Apply previously trained PCA, LDA, QDA, or MDA models to new unknown specimens. 
 ### Power Analysis
 
 Plan study sample sizes and estimate statistical power for 1-way, 2-way, and 3-way designs. Import pilot data to extract effect sizes automatically, or manually specify Cohen's f values. Calculate required sample size, achieved power, or minimum detectable effect using parametric, robust, or non-parametric methods.
+
+## Getting Started
+
+Clone the repository and run locally with R:
+
+```bash
+git clone https://github.com/yourusername/TexAn2.0.git
+cd TexAn2.0
+```
+
+In R:
+
+```r
+if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
+renv::restore()  # Install dependencies
+shiny::runApp()  # Start the application
+```
+
+Requires R >= 4.1. Dependencies are managed via renv.
