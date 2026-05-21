@@ -1,0 +1,339 @@
+flowchart TB
+    subgraph TexAn["TexAn2.0 Application"]
+        direction TB
+
+        %% ==================== LOAD DATA MODULE ====================
+        subgraph LoadDataModule["📥 Load Data Module"]
+            direction TB
+            LD_UI["UI: File Upload / Example Data<br/>📦 DataExplorer · summarytools · DT"]
+            LD_Logic["Logic: validate_file_extension()<br/>read_data_file() · validate_data()<br/>fix_column_names()"]
+            LD_Packages["📦 openxlsx (XLSX read)<br/>📦 utils::read.csv (CSV read)<br/>📦 tools::file_ext"]
+
+            LD_UI --> LD_Logic --> LD_Packages
+        end
+
+        %% ==================== MEDIAN MODULE ====================
+        subgraph MedianModule["🔧 Median & Quality Filter Module"]
+            direction TB
+
+            MED_UI["UI: Grouping columns · Quality column<br/>📦 DT (interactive result table)<br/>📦 openxlsx (download handler)"]
+            MED_Logic["Logic Controller<br/>debounce(800ms) · fingerprint cache"]
+
+            subgraph MED_Flow["Internal Data Flow"]
+                direction TB
+                MED_Branch{"Grouping selected?"}
+                MED_FilterOnly["Path A: Quality Filter Only<br/>quality_filter::apply_quality_filter()"]
+                MED_FilterGroup["Path B: Filter + Group Median<br/>quality_filter + compute::compute_medians()"]
+                MED_Quality["quality_analysis::analyze_quality_column()<br/>📦 stats (median, aggregate)"]
+            end
+
+            MED_Packages["📦 stats (median, aggregate, setNames)<br/>📦 openxlsx (XLSX export)"]
+
+            MED_UI --> MED_Logic --> MED_Branch
+            MED_Branch -->|No| MED_FilterOnly
+            MED_Branch -->|Yes| MED_FilterGroup
+            MED_FilterOnly --> MED_Quality
+            MED_FilterGroup --> MED_Quality
+            MED_Quality --> MED_Packages
+        end
+
+        %% ==================== PLOTTING MODULE ====================
+        subgraph PlottingModule["📈 Plotting Module"]
+            direction TB
+
+            PL_UI["UI: 4 sidebar tabs<br/>Data Selection · Filter · Processing · Style<br/>📦 bslib · bsicons · ggiraph (interactive plots)"]
+            PL_Logic["Logic Controller<br/>debounce · per-column plot cache · fingerprinting"]
+
+            subgraph PL_Flow["Internal Data Flow"]
+                direction TB
+                PL_Filter["filter.R: filter_data()<br/>📦 app/logic/shared/data_utils"]
+                PL_Process["data_processing::process_data()<br/>trim · outlier (IQR/Grubbs/Bootstrap)<br/>📦 stats · car · bootstrap"]
+                PL_Normalize["preprocessing/normalize.R<br/>normalise per-group · 📦 stats"]
+                PL_Skew["preprocessing/skewness_transform.R<br/>detect_skewness() · transform_skewed()<br/>📦 moments · bestNormalize"]
+                PL_Scatter["scatter.R → ggplot2 objects<br/>📦 ggplot2 · ggiraph"]
+                PL_Assumptions["assumption_checks.R<br/>check_normality() (Shapiro-Wilk)<br/>check_levene() (Levene's test)<br/>📦 car · stats"]
+            end
+
+            PL_Packages["📦 ggplot2 (plots) · ggiraph (interactive)<br/>📦 openxlsx (data download)<br/>📦 car (Levene) · stats (shapiro.test)"]
+
+            PL_UI --> PL_Logic --> PL_Filter --> PL_Process --> PL_Normalize
+            PL_Process --> PL_Skew
+            PL_Normalize --> PL_Scatter
+            PL_Skew --> PL_Scatter
+            PL_Scatter --> PL_Assumptions
+            PL_Assumptions --> PL_Packages
+        end
+
+        %% ==================== SUMMARY MODULE ====================
+        subgraph SummaryModule["📋 Summary Module"]
+            direction TB
+            SUM_UI["UI: Descriptive summary table per measure x group"]
+            SUM_Logic["summary::compute_summary_table()<br/>Respects normalize_enabled + transform_info from Plotting"]
+            SUM_Packages["📦 stats (mean, sd, median, IQR)<br/>📦 DT (interactive table) · 📦 openxlsx (export)"]
+
+            SUM_UI --> SUM_Logic --> SUM_Packages
+        end
+
+        %% ==================== STATISTICS MODULE ====================
+        subgraph StatisticsModule["📊 Statistics Module"]
+            direction TB
+
+            STAT_UI["UI: Test options · Adjustments · Bootstrap<br/>📦 DT · bslib"]
+            STAT_Logic["Logic Controller<br/>omnibus.R: auto-select test family"]
+
+            subgraph STAT_Flow["Internal Flow"]
+                direction TB
+                STAT_Branch{"Test family"}
+                STAT_Param["parametric_tests.R<br/>ANOVA · t-test<br/>📦 stats (aov, t.test)"]
+                STAT_NP["nonparametric_tests.R<br/>Kruskal-Wallis · Mann-Whitney<br/>📦 stats (kruskal.test, wilcox.test)"]
+                STAT_Rob["robust_tests.R<br/>WRS2 equivalents<br/>📦 WRS2 · Rallfun-v43"]
+                STAT_PostH_P["parametric_posthoc.R<br/>Tukey HSD · emmeans<br/>📦 emmeans · multcomp"]
+                STAT_PostH_NP["nonparametric_posthoc.R<br/>Dunn test · pairwise Wilcoxon<br/>📦 dunn.test · stats"]
+                STAT_PostH_R["robust_posthoc.R<br/>📦 WRS2"]
+                STAT_Effect["cliff_delta.R<br/>Cliff's delta effect size<br/>📦 effsize"]
+                STAT_Report["report.R<br/>APA-style formatting"]
+            end
+
+            STAT_Packages["📦 stats · WRS2 · emmeans · multcomp<br/>📦 dunn.test · effsize · car"]
+
+            STAT_UI --> STAT_Logic --> STAT_Branch
+            STAT_Branch -->|parametric| STAT_Param --> STAT_PostH_P
+            STAT_Branch -->|nonparametric| STAT_NP --> STAT_PostH_NP
+            STAT_Branch -->|robust| STAT_Rob --> STAT_PostH_R
+            STAT_PostH_P --> STAT_Effect
+            STAT_PostH_NP --> STAT_Effect
+            STAT_PostH_R --> STAT_Effect
+            STAT_Effect --> STAT_Report --> STAT_Packages
+        end
+
+        %% ==================== PCA MODULE ====================
+        subgraph PCAModule["🔵 PCA Module"]
+            direction TB
+
+            PCA_UI["UI: Data Selection · Plotting Controls<br/>📦 bslib · ggiraph · plotly"]
+            PCA_Logic["Logic Controller<br/>Triggered by 'Compute PCA' button"]
+
+            subgraph PCA_Flow["Internal Flow"]
+                direction TB
+                PCA_Clean["preprocessing/na_handling::clean_na_rows()<br/>📦 stats"]
+                PCA_Skew["preprocessing/skewness_transform.R<br/>detect + transform skewed variables<br/>📦 moments · bestNormalize"]
+                PCA_Scale["scaling::scale_data()<br/>📦 stats (scale)"]
+                PCA_KMO["kmo::calculate_kmo()<br/>Sampling adequacy · 📦 psych"]
+                PCA_Opt["optimal_components::calculate_optimal_components()<br/>Parallel analysis · Scree · MAP<br/>📦 psych · nFactors"]
+                PCA_Run["pca::run_pca()<br/>📦 FactoMineR (PCA) · factoextra (extract)"]
+                PCA_Corr["correlation_plot::compute_correlation_data()<br/>📦 stats (cor) · ggcorrplot"]
+                PCA_Biplot["biplot.R / biplot3d.R<br/>📦 factoextra · plotly (3D)"]
+                PCA_Eigen["eigencorplot.R<br/>Dim-metadata correlation · 📦 ggplot2 · ggiraph"]
+                PCA_Export["pca_export.R<br/>create_pca_excel() · create_pca_bundle()<br/>📦 openxlsx"]
+            end
+
+            PCA_Packages["📦 FactoMineR (PCA core) · factoextra (extraction/biplot)<br/>📦 psych (KMO, parallel) · plotly (3D biplot) · ggcorrplot"]
+
+            PCA_UI --> PCA_Logic --> PCA_Clean --> PCA_Skew --> PCA_Scale
+            PCA_Scale --> PCA_KMO
+            PCA_Scale --> PCA_Opt
+            PCA_Scale --> PCA_Run
+            PCA_Run --> PCA_Corr
+            PCA_Run --> PCA_Biplot
+            PCA_Run --> PCA_Eigen
+            PCA_Run --> PCA_Export
+            PCA_Export --> PCA_Packages
+        end
+
+        %% ==================== LDA MODULE ====================
+        subgraph LDAModule["📊 LDA Module"]
+            direction TB
+
+            LDA_UI["UI: Data Selection · Analysis Settings · Plotting Controls<br/>📦 bslib · ggiraph"]
+            LDA_Logic["Logic Controller<br/>Triggered by 'Compute LDA/QDA/MDA' button"]
+
+            subgraph LDA_Flow["Internal Flow"]
+                direction TB
+                LDA_Clean["na_handling::clean_na_rows() · 📦 stats"]
+                LDA_Skew["skewness_transform.R<br/>📦 moments · bestNormalize"]
+                LDA_Scale["pca/scaling::scale_data() · 📦 stats (scale)"]
+                LDA_Split["data_splitting::create_stratified_split()<br/>Train / Test split · 📦 caret"]
+                LDA_Branch{"Method"}
+                LDA_LDA["run_lda() - Linear DA<br/>📦 MASS (lda)"]
+                LDA_QDA["run_qda() - Quadratic DA<br/>📦 MASS (qda)"]
+                LDA_MDA["run_mda() - Mixture DA<br/>📦 mda"]
+                LDA_Predict["run_predict() - posterior probs<br/>📦 MASS (predict.lda/qda)"]
+                LDA_Diag["lda_diagnostics.R<br/>Box-M · Mahalanobis · CV accuracy<br/>📦 heplots · stats"]
+                LDA_Plot["ld_plot.R · lda_var_contrib.R<br/>📦 ggplot2 · ggiraph"]
+                LDA_Export["lda_export.R<br/>create_lda_excel() · create_lda_bundle()<br/>📦 openxlsx"]
+            end
+
+            LDA_Packages["📦 MASS (lda, qda, predict) · mda (MDA)<br/>📦 caret · heplots (Box-M) · openxlsx"]
+
+            LDA_UI --> LDA_Logic --> LDA_Clean --> LDA_Skew --> LDA_Scale --> LDA_Split
+            LDA_Split --> LDA_Branch
+            LDA_Branch -->|LDA| LDA_LDA
+            LDA_Branch -->|QDA| LDA_QDA
+            LDA_Branch -->|MDA| LDA_MDA
+            LDA_LDA --> LDA_Predict
+            LDA_QDA --> LDA_Predict
+            LDA_MDA --> LDA_Predict
+            LDA_Predict --> LDA_Diag
+            LDA_Diag --> LDA_Plot
+            LDA_Diag --> LDA_Export
+            LDA_Export --> LDA_Packages
+        end
+
+        %% ==================== CLUSTER MODULE ====================
+        subgraph ClusterModule["🎯 Cluster Module"]
+            direction TB
+
+            CL_UI["UI: Data Selection · Clustering Settings · Display Options<br/>📦 bslib · ggiraph · plotly"]
+            CL_Logic["Main Controller"]
+
+            subgraph CL_Flow["Internal Flow"]
+                direction TB
+                CL_Source{"Data Source?"}
+                CL_Raw["Raw: na_handling + skewness_transform + scale_data<br/>📦 stats · moments · bestNormalize"]
+                CL_PCA["PCA Scores (skip preprocessing)<br/>Dim.1, Dim.2, ... from pca_result"]
+                CL_LDA["LDA Scores (skip preprocessing)<br/>LD1, LD2, ... from lda_result"]
+
+                CL_Hopkins["hopkins::compute_hopkins()<br/>Cluster tendency · 📦 clustertend"]
+                CL_Optimal["optimal_clusters.R<br/>Gap statistic · Elbow · NbClust<br/>📦 NbClust · cluster · stats"]
+                CL_Run["cluster::run_clustering()"]
+                CL_Algo{"Algorithm"}
+
+                CL_KMeans["K-Means / PAM<br/>📦 stats (kmeans) · cluster (pam)"]
+                CL_HClust["Hierarchical<br/>📦 stats (hclust, cutree, dist)"]
+                CL_DBSCAN["DBSCAN (auto eps)<br/>📦 dbscan"]
+
+                CL_Stats["Silhouette · BSS/TSS<br/>📦 cluster (silhouette)"]
+                CL_Heatmap["heatmap.R<br/>📦 pheatmap · ggplot2"]
+                CL_Biplot["cluster_biplot.R<br/>📦 factoextra · ggplot2 · ggiraph"]
+            end
+
+            CL_Packages["📦 cluster (PAM, silhouette) · dbscan · NbClust<br/>📦 stats (kmeans, hclust) · pheatmap · factoextra"]
+
+            CL_UI --> CL_Logic --> CL_Source
+            CL_Source -->|raw| CL_Raw
+            CL_Source -->|pca_scores| CL_PCA
+            CL_Source -->|lda_scores| CL_LDA
+            CL_Raw --> CL_Hopkins
+            CL_PCA --> CL_Hopkins
+            CL_LDA --> CL_Hopkins
+            CL_Hopkins --> CL_Optimal --> CL_Run --> CL_Algo
+            CL_Algo -->|kmeans/pam| CL_KMeans --> CL_Stats
+            CL_Algo -->|hierarchical| CL_HClust --> CL_Stats
+            CL_Algo -->|dbscan| CL_DBSCAN --> CL_Stats
+            CL_Stats --> CL_Heatmap
+            CL_Stats --> CL_Biplot
+            CL_Stats --> CL_Packages
+        end
+
+        %% ==================== PREDICTION MODULE ====================
+        subgraph PredictionModule["🔮 Prediction Module"]
+            direction TB
+
+            PR_UI["UI: Upload new data · Plotting Controls · Results Display<br/>📦 bslib · DT"]
+            PR_Logic["Prediction Logic"]
+
+            subgraph PR_Flow["Internal Flow"]
+                direction TB
+                PR_Load["bundle_io::load_bundle() · validate_bundle()<br/>Load saved LDA RDS bundle · 📦 base (readRDS)"]
+                PR_Valid["validation.R<br/>Check new data vs bundle schema"]
+                PR_Classify["predict.R::run_prediction()<br/>📦 MASS (predict.lda/qda)"]
+                PR_Plots["prediction_plots.R<br/>Posterior probability plots<br/>📦 ggplot2 · DT"]
+            end
+
+            PR_Packages["📦 MASS (predict.lda/qda) · ggplot2 · DT"]
+
+            PR_UI --> PR_Logic --> PR_Load --> PR_Valid --> PR_Classify --> PR_Plots --> PR_Packages
+        end
+
+        %% ==================== POWER ANALYSIS MODULE ====================
+        subgraph PowerModule["⚡ Power Analysis Module"]
+            direction TB
+
+            PWR_UI["UI: Design · Effect Input · Options<br/>📦 bslib · ggplot2"]
+            PWR_Logic["Power Analysis Logic"]
+
+            subgraph PWR_Flow["Internal Flow"]
+                direction TB
+                PWR_Valid["validate.R<br/>Validate effect size / alpha / n inputs"]
+                PWR_Dummy["dummy_data.R<br/>Generate illustrative dummy dataset<br/>📦 stats (rnorm, sample)"]
+                PWR_Calc["power_calc.R<br/>One-sample / Two-sample / ANOVA<br/>📦 pwr (pwr.t.test, pwr.anova.test) · WebPower"]
+                PWR_Plot["Power curve plot · 📦 ggplot2"]
+            end
+
+            PWR_Packages["📦 pwr · WebPower · stats (power.t.test) · ggplot2"]
+
+            PWR_UI --> PWR_Logic --> PWR_Valid --> PWR_Dummy
+            PWR_Valid --> PWR_Calc --> PWR_Plot --> PWR_Packages
+        end
+
+        %% ==================== SHARED INFRASTRUCTURE ====================
+        subgraph SharedInfra["🔧 Shared Infrastructure"]
+            direction TB
+            SH_Error["error_handling.R<br/>safe_execute() · create_app_error()<br/>📦 rlang"]
+            SH_Columns["column_utils.R<br/>get_measurement_cols() · get_descriptive_cols()"]
+            SH_DataUtils["data_utils.R<br/>create_interaction() · filter_data() · default_palette()"]
+            SH_Logging["logging.R<br/>configure_session_logging() · 📦 rhino (log)"]
+            SH_Settings["settings.R<br/>get_default_theme() · app_version()<br/>📦 bslib · config"]
+            SH_Preproc["preprocessing/<br/>na_handling · normalize · skewness_transform<br/>📦 moments · bestNormalize · stats"]
+        end
+    end
+
+    %% ==================== EXTERNAL PACKAGES SUMMARY ====================
+    subgraph ExternalPackages["📚 Key External R Packages"]
+        direction LR
+        PKG_UI["UI / Reactivity<br/>shiny · bslib · bsicons"]
+        PKG_Tables["Tables<br/>DT · summarytools · DataExplorer"]
+        PKG_Viz["Visualisation<br/>ggplot2 · ggiraph · plotly · pheatmap · ggcorrplot"]
+        PKG_IO["Data I/O<br/>openxlsx · utils (read.csv)"]
+        PKG_Multivar["Multivariate Analysis<br/>FactoMineR · factoextra · MASS · mda"]
+        PKG_Cluster["Clustering<br/>cluster · dbscan · NbClust · clustertend"]
+        PKG_Stats["Inference<br/>stats · WRS2 · emmeans · multcomp · dunn.test · effsize · car"]
+        PKG_Power["Power Analysis<br/>pwr · WebPower"]
+        PKG_Preproc["Preprocessing<br/>moments · bestNormalize · psych · caret"]
+    end
+
+    %% ==================== DATA FLOW ====================
+    LoadDataModule -.->|data + version| MedianModule
+    LoadDataModule -.->|raw data| PowerModule
+
+    MedianModule -.->|analysis_data median OR raw| PlottingModule
+    MedianModule -.->|analysis_data| PCAModule
+    MedianModule -.->|analysis_data| LDAModule
+    MedianModule -.->|analysis_data| ClusterModule
+
+    PlottingModule -.->|processed_data · x_axis · measure_cols · normalize_enabled · transform_info| SummaryModule
+    PlottingModule -.->|processed_data · x_axis · measure_cols · trim_percent · plot_objects · normalize_enabled · transform_info| StatisticsModule
+
+    PCAModule -.->|pca_result| LDAModule
+    PCAModule -.->|pca_result| ClusterModule
+    LDAModule -.->|lda_result| ClusterModule
+    LDAModule -.->|lda_bundle RDS| PredictionModule
+
+    MedianModule -.-> SharedInfra
+    PlottingModule -.-> SharedInfra
+    StatisticsModule -.-> SharedInfra
+    PCAModule -.-> SharedInfra
+    LDAModule -.-> SharedInfra
+    ClusterModule -.-> SharedInfra
+    PredictionModule -.-> SharedInfra
+    PowerModule -.-> SharedInfra
+
+    %% Styling
+    style LoadDataModule fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style MedianModule fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style PlottingModule fill:#e8eaf6,stroke:#3949ab,stroke-width:2px
+    style SummaryModule fill:#f1f8e9,stroke:#558b2f,stroke-width:2px
+    style StatisticsModule fill:#fbe9e7,stroke:#bf360c,stroke-width:2px
+    style PCAModule fill:#ede7f6,stroke:#4527a0,stroke-width:2px
+    style LDAModule fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style ClusterModule fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style PredictionModule fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style PowerModule fill:#fff8e1,stroke:#fbc02d,stroke-width:2px
+    style SharedInfra fill:#f5f5f5,stroke:#616161,stroke-width:2px
+    style ExternalPackages fill:#e0f7fa,stroke:#00838f,stroke-width:2px
+
+    style MED_Branch fill:#ffcc80,stroke:#e65100
+    style CL_Source fill:#ffcc80,stroke:#e65100
+    style CL_Algo fill:#ffcc80,stroke:#e65100
+    style LDA_Branch fill:#ffcc80,stroke:#e65100
+    style STAT_Branch fill:#ffcc80,stroke:#e65100
