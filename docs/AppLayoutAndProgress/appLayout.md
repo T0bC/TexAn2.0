@@ -7,26 +7,47 @@ flowchart TB
             direction TB
 
             LD_Source{"Input source"}
-            LD_Upload["User uploads a file<br/>Accepted: CSV · XLSX"]
-            LD_Example["User selects a built-in example dataset<br/>📦 openxlsx"]
 
-            subgraph LD_CSVOpts["CSV Parsing Options"]
-                direction LR
-                LD_CSV_Header["Has header row<br/>yes / no"]
-                LD_CSV_Delim["Delimiter<br/>comma · semicolon · tab"]
-                LD_CSV_Quote["Quote character<br/>none · double · single"]
-            end
+            LD_Upload["User uploads a file
+            ---
+            CSV · XLSX"]
 
-            LD_Read["Parse file into data frame<br/>📦 utils (CSV) · openxlsx (XLSX)"]
-            LD_Validate["Validate structure · fix column names<br/>Flag ambiguous / renamed columns<br/>📦 tools"]
+            LD_Example["Built-in example dataset
+            ---
+            📦 openxlsx"]
+
+            LD_CSVOpts["CSV Parsing Options
+            ---
+            Header row: yes / no
+            Delimiter: comma · semicolon · tab
+            Quote character: none · double · single"]
+
+            LD_Read["Parse file into data frame
+            ---
+            📦 utils · openxlsx"]
+
+            LD_Validate["Validate structure · fix column names
+            Flag ambiguous / renamed columns
+            ---
+            📦 tools"]
 
             LD_ColModal["Notify user of column renames"]
             LD_ErrDisplay["Display structured error on failure"]
-            LD_Log["Log load event · 📦 rhino"]
+            LD_Log["Log load event
+            ---
+            📦 rhino"]
 
-            LD_Preview["Interactive data table<br/>📦 DT"]
-            LD_Missing["Missing values bar chart<br/>📦 DataExplorer · ggplot2"]
-            LD_Summary["Descriptive data summary<br/>📦 summarytools"]
+            LD_Preview["Interactive data table
+            ---
+            📦 DT"]
+
+            LD_Missing["Missing values bar chart
+            ---
+            📦 DataExplorer · ggplot2"]
+
+            LD_Summary["Descriptive data summary
+            ---
+            📦 summarytools"]
 
             LD_Source -->|file| LD_Upload
             LD_Source -->|example| LD_Example
