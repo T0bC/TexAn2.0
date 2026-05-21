@@ -67,20 +67,70 @@ flowchart TB
         subgraph MedianModule["🔧 Median & Quality Filter Module"]
             direction TB
 
-            MED_UI["UI: Grouping columns · Quality column<br/>📦 DT (interactive result table)<br/>📦 openxlsx (download handler)"]
-            MED_Branch{"Grouping selected?"}
-            MED_FilterOnly["Path A: Quality Filter Only<br/>quality_filter::apply_quality_filter()"]
-            MED_FilterGroup["Path B: Filter + Group Median<br/>quality_filter + compute::compute_medians()"]
-            MED_Quality["quality_analysis::analyze_quality_column()<br/>📦 stats (median, aggregate)"]
+            subgraph MED_Config["Configuration"]
+                direction LR
+                MED_OptGrouping["Grouping columns
+                ---
+                None (filter whole dataset) · 1+ descriptive columns"]
+                MED_OptQuality["Quality column & threshold
+                ---
+                None · categorical bad-value list · numeric minimum threshold"]
+            end
 
-            MED_Packages["📦 stats (median, aggregate, setNames)<br/>📦 openxlsx (XLSX export)"]
+            MED_QualityFilter["Apply quality filter to raw data
+            ---
+            Without grouping: remove bad rows globally
+            With grouping: remove bad rows only from groups
+            that contain at least one good value;
+            groups where ALL values are bad are kept intact"]
 
-            MED_UI --> MED_Branch
-            MED_Branch -->|No| MED_FilterOnly
-            MED_Branch -->|Yes| MED_FilterGroup
-            MED_FilterOnly --> MED_Quality
-            MED_FilterGroup --> MED_Quality
-            MED_Quality --> MED_Packages
+            MED_GroupBranch{"Grouping selected?"}
+
+            MED_NoGroup["Pass quality-filtered rows as-is
+            ---
+            No median aggregation; quality column dropped"]
+
+            MED_Medians["Compute per-group medians
+            ---
+            Aggregate numeric measurement columns by grouping keys;
+            descriptive columns that vary within groups are dropped
+            📦 stats"]
+
+            MED_TableNoGroup["Interactive result table — raw rows
+            ---
+            Each row is one quality-filtered measurement;
+            Excel-style column filters remove individual rows
+            📦 DT"]
+
+            MED_TableGrouped["Interactive result table — median rows
+            ---
+            Each row is one aggregated group median;
+            Excel-style column filters remove whole group-median rows
+            📦 DT"]
+
+            MED_ExcelFilter["Apply active DT column filters
+            ---
+            Downstream modules and download receive only
+            the rows visible after the user's table filters"]
+
+            MED_Download["Export visible rows as XLSX
+            ---
+            📦 openxlsx"]
+
+            MED_Log["Log processing event
+            ---
+            📦 rhino"]
+
+            MED_Config --> MED_QualityFilter
+            MED_QualityFilter --> MED_GroupBranch
+            MED_GroupBranch -->|no grouping| MED_NoGroup
+            MED_GroupBranch -->|grouping| MED_Medians
+            MED_NoGroup --> MED_TableNoGroup
+            MED_Medians --> MED_TableGrouped
+            MED_TableNoGroup --> MED_ExcelFilter
+            MED_TableGrouped --> MED_ExcelFilter
+            MED_ExcelFilter --> MED_Download
+            MED_ExcelFilter --> MED_Log
         end
 
         %% ==================== PLOTTING MODULE ====================
@@ -341,7 +391,7 @@ flowchart TB
     style ExternalPackages fill:#e0f7fa,stroke:#00838f,stroke-width:2px
 
     style LD_Source fill:#ffcc80,stroke:#e65100
-    style MED_Branch fill:#ffcc80,stroke:#e65100
+    style MED_GroupBranch fill:#ffcc80,stroke:#e65100
     style CL_Source fill:#ffcc80,stroke:#e65100
     style CL_Algo fill:#ffcc80,stroke:#e65100
     style LDA_Branch fill:#ffcc80,stroke:#e65100
