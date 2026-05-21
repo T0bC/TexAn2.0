@@ -1,5 +1,23 @@
 # TexAn2.0
 
+## Table of Contents
+
+- [TexAn2.0](#texan20)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Modules](#modules)
+    - [Load Data](#load-data)
+    - [Median](#median)
+    - [Plotting](#plotting)
+    - [Summary](#summary)
+    - [Statistics](#statistics)
+    - [PCA](#pca)
+    - [LDA](#lda)
+    - [Cluster](#cluster)
+    - [Prediction](#prediction)
+    - [Power Analysis](#power-analysis)
+  - [Getting Started](#getting-started)
+
 ## Overview
 
 TexAn2.0 is an R/Shiny application for statistical analysis of measurement data. The application provides a modular workflow from data import through exploratory visualization to advanced multivariate analysis and statistical testing.
