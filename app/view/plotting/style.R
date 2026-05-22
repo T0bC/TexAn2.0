@@ -1057,18 +1057,24 @@ violin_panel <- function(ns) {
       ),
       shiny$column(
         6,
-        shiny$checkboxInput(
-          ns("violinTrim"),
-          bslib$tooltip(
-            shiny$tags$span(
-              "Trim ",
-              bsicons$bs_icon(
-                "info-circle", class = "text-muted"
-              )
-            ),
-            "Trim violin tails to data range"
+        # Only show outlier checkbox for pure violin (not violin_points)
+        shiny$conditionalPanel(
+          condition = paste0(
+            "input['", ns("plotType"), "'] == 'violin'"
           ),
-          value = TRUE
+          shiny$checkboxInput(
+            ns("showViolinOutliers"),
+            bslib$tooltip(
+              shiny$tags$span(
+                "Show Outliers ",
+                bsicons$bs_icon(
+                  "info-circle", class = "text-muted"
+                )
+              ),
+              "Show outliers detected by the configured algorithm as 'X' marks (requires outlier detection enabled in Processing)"
+            ),
+            value = FALSE
+          )
         )
       )
     ),
@@ -1090,6 +1096,19 @@ violin_panel <- function(ns) {
       ),
       choices = c("area", "count", "width"),
       selected = "width"
+    ),
+    shiny$checkboxInput(
+      ns("violinTrim"),
+      bslib$tooltip(
+        shiny$tags$span(
+          "Trim Tails ",
+          bsicons$bs_icon(
+            "info-circle", class = "text-muted"
+          )
+        ),
+        "Trim violin tails to data range"
+      ),
+      value = TRUE
     )
   )
 }
