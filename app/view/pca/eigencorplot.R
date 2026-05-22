@@ -74,6 +74,7 @@ render_output <- function(input, output, session,
       width_svg = width_svg,
       height_svg = height_svg,
       options = list(
+        ggiraph$opts_sizing(rescale = TRUE, width = 1),
         ggiraph$opts_hover(
           css = paste0(
             "fill-opacity:1;",
