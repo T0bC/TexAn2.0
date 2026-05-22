@@ -169,7 +169,11 @@ server <- function(id, input_data, data_version) {
         point_style   = list(
           size       = input$pointSize   %||% 4,
           spread     = input$pointSpread %||% 0.15,
-          alpha      = input$transparency %||% 0.6,
+          alpha      = if (plot_type %in% c("boxplot_points", "violin_points")) {
+            input$transparencyPoints %||% 0.6
+          } else {
+            input$transparency %||% 0.6
+          },
           shape_cols = input$pointShape
         ),
         processing    = list(
@@ -194,7 +198,9 @@ server <- function(id, input_data, data_version) {
           top_right_borders = "topRightBorders" %in% grid_opts,
           show_median       = "showMedian" %in% stat_opts,
           show_sd           = "showSD" %in% stat_opts,
-          aspect_ratio      = "aspectRatio" %in% stat_opts
+          aspect_ratio      = "aspectRatio" %in% stat_opts,
+          show_median_point = isTRUE(input$showMedianPoint),
+          show_mean_point   = isTRUE(input$showMeanPoint)
         ),
         stat_line_style = list(
           median_thickness = input$medianThickness %||% 0.5,
@@ -209,12 +215,14 @@ server <- function(id, input_data, data_version) {
         boxplot_style = list(
           box_width     = input$boxWidth       %||% 0.7,
           show_outliers = input$showBoxOutliers %||% FALSE,
-          notch         = input$boxNotch        %||% FALSE
+          notch         = input$boxNotch        %||% FALSE,
+          alpha         = input$transparencyBox %||% 0.6
         ),
         violin_style  = list(
           violin_width = input$violinWidth %||% 0.9,
           trim         = input$violinTrim  %||% TRUE,
-          scale        = input$violinScale %||% "width"
+          scale        = input$violinScale %||% "width",
+          alpha        = input$transparencyBox %||% 0.6
         ),
         black_points  = input$blackPoints %||% FALSE
       )
@@ -274,6 +282,8 @@ server <- function(id, input_data, data_version) {
         params$grid_legend$show_median,
         params$grid_legend$show_sd,
         params$grid_legend$aspect_ratio,
+        params$grid_legend$show_median_point %||% FALSE,
+        params$grid_legend$show_mean_point   %||% FALSE,
         params$stat_line_style$median_thickness,
         params$stat_line_style$median_width,
         params$stat_line_style$sd_thickness,
@@ -283,9 +293,11 @@ server <- function(id, input_data, data_version) {
         params$boxplot_style$box_width %||% 0.7,
         params$boxplot_style$show_outliers %||% FALSE,
         params$boxplot_style$notch %||% FALSE,
+        params$boxplot_style$alpha %||% 0.6,
         params$violin_style$violin_width %||% 0.9,
         params$violin_style$trim %||% TRUE,
         params$violin_style$scale %||% "width",
+        params$violin_style$alpha %||% 0.6,
         params$black_points %||% FALSE,
         data_nrow, data_ncol,
         sep = "|"
