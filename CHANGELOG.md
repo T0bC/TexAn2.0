@@ -9,10 +9,16 @@
 - **Plot type selector**: Dropdown to switch between scatter, boxplot, and violin plot types; appears when an X-axis grouping variable is selected
 - **Black points option**: Toggle to render overlaid scatter points in black (instead of group colors) for boxplot and violin plots, improving readability when color is already used for grouping
 - **Plot-type-specific settings panels**: Style and stat options panels now show only the controls relevant to the selected plot type
+- **Independent alpha controls**: When "Boxplot with points" or "Violin with points" is selected, the single Alpha input splits into separate "Alpha Points" and "Alpha Box" controls, allowing independent transparency for the scatter layer and the box/violin fill
+- **Median & Mean point markers**: New "Median Point" (◆) and "Mean Point" (⊕) checkboxes in the "Median & SD Lines" accordion overlay per-group summary markers on all plot types; markers are always black with fixed shapes (pch 18 / pch 13)
+- **Median & SD lines extended to box/violin+points**: The existing Median crossbar and SD errorbar overlays are now available for "Boxplot with points" and "Violin with points" in addition to scatter; line thickness/width controls are now visible for all plot types
+- **Stats legend**: When Legend Position is set to anything other than "none" and at least one stat overlay is active, a separate "Stats" legend box is rendered on the plot listing only the currently enabled overlays (Median line, SD, Median point, Mean point) with correct glyphs
 
 ### Changed
 
 - Scatter points are now rendered beneath boxplot and violin layers for improved visual clarity
+- **Statistics checkboxes unified**: The "Median" and "SD" checkboxes in Legend & Grid are now shown for all plot types (previously scatter-only); defaults are automatically set to Median + SD checked for scatter and violin+points, and unchecked for boxplot and boxplot+points
+- **Median & SD Lines accordion**: Thickness and width controls are no longer hidden for non-scatter plot types
 
 ## [2026.8] - 2026-05-20
 
