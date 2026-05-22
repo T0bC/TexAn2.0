@@ -45,11 +45,11 @@ tab_ui <- function(ns) {
         )
       ),
       choices = list(
-        "K-Means" = "kmeans",
         "Hierarchical" = "hierarchical",
+        "K-Means" = "kmeans",
         "DBSCAN" = "dbscan"
       ),
-      selected = "kmeans"
+      selected = "hierarchical"
     ),
     shiny$tags$hr(),
     # Clustering Metric
@@ -131,7 +131,7 @@ tab_server <- function(input, output, session,
     )
     shiny$updateSelectInput(
       session, "algorithm",
-      selected = "kmeans"
+      selected = "hierarchical"
     )
     shiny$updateSelectInput(
       session, "cluster_metric",
