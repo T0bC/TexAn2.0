@@ -7,6 +7,7 @@ box::use(
 
 box::use(
   app/logic/shared/column_utils,
+  app/logic/plotting/plot_factory,
   app/view/components/sidebar_tabs,
 )
 
@@ -125,6 +126,31 @@ tab_ui <- function(ns) {
               multiple = TRUE,
               options = list(placeholder = "Select...")
             )
+          )
+        ),
+        # Plot type selector (shown after X-Axis)
+        shiny$conditionalPanel(
+          condition = paste0(
+            "input['", ns("xAxis"), "'] && ",
+            "input['", ns("xAxis"), "'].length > 0"
+          ),
+          shiny$selectInput(
+            inputId = ns("plotType"),
+            label = shiny$tags$span(
+              "Plot Type ",
+              bslib$tooltip(
+                bsicons$bs_icon(
+                  "info-circle", class = "text-muted"
+                ),
+                paste(
+                  "Choose the visualization type.",
+                  "Scatter shows individual points,",
+                  "Boxplot/Violin show distributions."
+                )
+              )
+            ),
+            choices = plot_factory$get_plot_type_choices(),
+            selected = "scatter"
           )
         )
       )
