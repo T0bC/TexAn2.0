@@ -224,6 +224,45 @@ add_stat_overlays <- function(p, data, gl, sls) {
 }
 
 
+#' Add median and/or mean point markers per group
+#'
+#' @param p ggplot object
+#' @param data Data frame with .is_trimmed and .is_outlier columns
+#' @param gl Resolved grid/legend parameters (show_median_point, show_mean_point)
+#' @return ggplot object with stat point markers added
+#' @export
+add_stat_point_overlays <- function(p, data, gl) {
+  retained_idx <- which(!data[[".is_trimmed"]] & !data[[".is_outlier"]])
+  if (length(retained_idx) == 0) return(p)
+
+  rd <- data[retained_idx, , drop = FALSE]
+
+  if (isTRUE(gl$show_median_point)) {
+    p <- p + ggplot2$stat_summary(
+      data = rd,
+      fun = stats::median,
+      geom = "point",
+      shape = 18,
+      size = 3,
+      color = "black"
+    )
+  }
+
+  if (isTRUE(gl$show_mean_point)) {
+    p <- p + ggplot2$stat_summary(
+      data = rd,
+      fun = base::mean,
+      geom = "point",
+      shape = 13,
+      size = 3,
+      color = "black"
+    )
+  }
+
+  p
+}
+
+
 #' Build complete scatter plot layers
 #'
 #' Combines scatter points with optional stat overlays.
@@ -245,8 +284,11 @@ build_scatter_layers <- function(p, data, ps, gl, sls,
   # Add scatter points
   p <- add_scatter_layers(p, data, ps, use_shape, use_custom_shape, black_points)
 
-  # Add stat overlays (median/SD)
+  # Add stat overlays (median/SD lines)
   p <- add_stat_overlays(p, data, gl, sls)
+
+  # Add stat point markers (median/mean points)
+  p <- add_stat_point_overlays(p, data, gl)
 
   p
 }
