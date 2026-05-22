@@ -100,7 +100,7 @@ build_boxplot_layers <- function(p, data, bp, ps) {
 
 #' Build complete boxplot + points layers
 #'
-#' Combines boxplot with scatter points overlay.
+#' Combines boxplot with scatter points underneath.
 #'
 #' @param p ggplot object with base aesthetics
 #' @param data Prepared data frame
@@ -108,21 +108,23 @@ build_boxplot_layers <- function(p, data, bp, ps) {
 #' @param ps Resolved point style parameters
 #' @param use_shape Whether to use shape aesthetic
 #' @param use_custom_shape Whether to use custom shapes
+#' @param black_points Whether to force points to be black
 #' @return ggplot object with boxplot and scatter layers
 #' @export
 build_boxplot_points_layers <- function(p, data, bp, ps,
                                         use_shape = FALSE,
-                                        use_custom_shape = FALSE) {
-  # First add boxplot (without outliers since we'll show all points)
+                                        use_custom_shape = FALSE,
+                                        black_points = FALSE) {
+  # First add scatter points underneath
+  p <- scatter_builder$add_scatter_layers(
+    p, data, ps, use_shape, use_custom_shape, black_points
+  )
+
+  # Then add boxplot on top (without outliers since we'll show all points)
   bp_no_outliers <- bp
   bp_no_outliers$show_outliers <- FALSE
 
   p <- add_boxplot_layer_interactive(p, data, bp_no_outliers, ps)
-
-  # Then add scatter points on top
-  p <- scatter_builder$add_scatter_layers(
-    p, data, ps, use_shape, use_custom_shape
-  )
 
   p
 }
