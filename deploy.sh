@@ -18,7 +18,8 @@ echo ""
 # Pull latest code
 echo "[1/4] Pulling latest code..."
 cd "$APP_DIR"
-git pull
+git fetch origin
+git reset --hard origin/main
 
 # Build new image with timestamp tag + latest tag
 echo ""
