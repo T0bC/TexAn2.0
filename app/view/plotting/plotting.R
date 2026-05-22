@@ -215,7 +215,8 @@ server <- function(id, input_data, data_version) {
           violin_width = input$violinWidth %||% 0.9,
           trim         = input$violinTrim  %||% TRUE,
           scale        = input$violinScale %||% "width"
-        )
+        ),
+        black_points  = input$blackPoints %||% FALSE
       )
     })
 
@@ -285,6 +286,7 @@ server <- function(id, input_data, data_version) {
         params$violin_style$violin_width %||% 0.9,
         params$violin_style$trim %||% TRUE,
         params$violin_style$scale %||% "width",
+        params$black_points %||% FALSE,
         data_nrow, data_ncol,
         sep = "|"
       )
@@ -392,7 +394,8 @@ server <- function(id, input_data, data_version) {
             axis_style      = params$axis_style,
             boxplot_style   = params$boxplot_style,
             violin_style    = params$violin_style,
-            factor_order    = params$factor_order
+            factor_order    = params$factor_order,
+            black_points    = params$black_points
           ),
           operation_name = paste("Plot", y_col)
         ) -> exec_result
