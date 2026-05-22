@@ -8,6 +8,8 @@ box::use(
   app/logic/plotting/scatter_builder,
 )
 
+# Shared outlier/trimmed point layer functions are in plot_helpers
+
 # =============================================================================
 # Violin-specific layer builders
 # =============================================================================
@@ -96,6 +98,13 @@ add_violin_layer_interactive <- function(p, data, vp, ps) {
 #' @export
 build_violin_layers <- function(p, data, vp, ps, gl = list()) {
   p <- add_violin_layer_interactive(p, data, vp, ps)
+
+  # Add outlier and trimmed points if show_outliers is enabled
+  if (isTRUE(vp$show_outliers)) {
+    p <- plot_helpers$add_outlier_points_layer(p, data, ps)
+    p <- plot_helpers$add_trimmed_points_layer(p, data, ps)
+  }
+
   p <- scatter_builder$add_stat_point_overlays(p, data, gl)
   p
 }
