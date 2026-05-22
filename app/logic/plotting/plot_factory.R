@@ -55,7 +55,11 @@ shows_points <- function(plot_type) {
 #' @return Logical
 #' @export
 shows_stat_overlays <- function(plot_type) {
-  plot_type == PLOT_TYPES$SCATTER
+  plot_type %in% c(
+    PLOT_TYPES$SCATTER,
+    PLOT_TYPES$BOXPLOT_POINTS,
+    PLOT_TYPES$VIOLIN_POINTS
+  )
 }
 
 #' Check if plot type is boxplot variant
@@ -196,13 +200,13 @@ create_plot <- function(plot_type = "scatter",
       p, data, bp, ps, gl
     ),
     "boxplot_points" = boxplot_builder$build_boxplot_points_layers(
-      p, data, bp, ps, gl, use_shape, use_custom_shape, black_points
+      p, data, bp, ps, gl, sls, use_shape, use_custom_shape, black_points
     ),
     "violin" = violin_builder$build_violin_layers(
       p, data, vp, ps, gl
     ),
     "violin_points" = violin_builder$build_violin_points_layers(
-      p, data, vp, ps, gl, use_shape, use_custom_shape, black_points
+      p, data, vp, ps, gl, sls, use_shape, use_custom_shape, black_points
     ),
     # Default to scatter
     scatter_builder$build_scatter_layers(
@@ -230,7 +234,7 @@ create_plot <- function(plot_type = "scatter",
   p <- plot_helpers$apply_theme(p, x_cols, gl, ax)
 
   # --- Stats legend (separate from color legend) ---
-  p <- plot_helpers$add_stats_legend(p, gl, plot_type)
+  p <- plot_helpers$add_stats_legend(p, gl, plot_type, use_shape)
 
   # --- Nested axis ---
   if (length(x_cols) > 1) {
