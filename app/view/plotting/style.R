@@ -26,9 +26,31 @@ tab_ui <- function(ns) {
     bslib$accordion(
       id = ns("style_accordion"),
       open = "points",
-      points_panel(ns),
-      boxplot_panel(ns),
-      violin_panel(ns),
+      # Points & Colors: visible for scatter, boxplot+points, violin+points
+      shiny$conditionalPanel(
+        condition = paste0(
+          "input['", ns("plotType"), "'] == 'scatter' || ",
+          "input['", ns("plotType"), "'] == 'boxplot_points' || ",
+          "input['", ns("plotType"), "'] == 'violin_points'"
+        ),
+        points_panel(ns)
+      ),
+      # Boxplot Settings: visible for boxplot types
+      shiny$conditionalPanel(
+        condition = paste0(
+          "input['", ns("plotType"), "'] == 'boxplot' || ",
+          "input['", ns("plotType"), "'] == 'boxplot_points'"
+        ),
+        boxplot_panel(ns)
+      ),
+      # Violin Settings: visible for violin types
+      shiny$conditionalPanel(
+        condition = paste0(
+          "input['", ns("plotType"), "'] == 'violin' || ",
+          "input['", ns("plotType"), "'] == 'violin_points'"
+        ),
+        violin_panel(ns)
+      ),
       legend_grid_panel(ns),
       median_sd_panel(ns),
       axis_panel(ns),
@@ -633,59 +655,47 @@ build_inner_sortable_inputs <- function(ns, cols, factor_order) {
 # ---- Accordion panel helpers ----
 
 points_panel <- function(ns) {
-  # Condition for plot types that show points
-  points_condition <- paste0(
-    "input['", ns("plotType"), "'] == 'scatter' || ",
-    "input['", ns("plotType"), "'] == 'boxplot_points' || ",
-    "input['", ns("plotType"), "'] == 'violin_points'"
-  )
-
   bslib$accordion_panel(
     title = "Points & Colors",
     value = "points",
     icon = bsicons$bs_icon("circle-fill"),
-    # Point Size and Jitter - only for plot types with points
-    shiny$conditionalPanel(
-      condition = points_condition,
-      shiny$fluidRow(
-        shiny$column(
-          6,
-          shiny$numericInput(
-            ns("pointSize"),
-            bslib$tooltip(
-              shiny$tags$span(
-                "Size ",
-                bsicons$bs_icon(
-                  "info-circle", class = "text-muted"
-                )
-              ),
-              "Size of the plotted points"
-            ),
-            value = 4, min = 1, max = 20
-          )
-        ),
-        shiny$column(
-          6,
-          shiny$numericInput(
-            ns("pointSpread"),
-            bslib$tooltip(
-              shiny$tags$span(
-                "Jitter ",
-                bsicons$bs_icon(
-                  "info-circle", class = "text-muted"
-                )
-              ),
-              paste(
-                "Amount of horizontal spread",
-                "(jittering) applied to points"
+    shiny$fluidRow(
+      shiny$column(
+        6,
+        shiny$numericInput(
+          ns("pointSize"),
+          bslib$tooltip(
+            shiny$tags$span(
+              "Size ",
+              bsicons$bs_icon(
+                "info-circle", class = "text-muted"
               )
             ),
-            value = 0.15, step = 0.05, min = 0, max = 2
-          )
+            "Size of the plotted points"
+          ),
+          value = 4, min = 1, max = 20
+        )
+      ),
+      shiny$column(
+        6,
+        shiny$numericInput(
+          ns("pointSpread"),
+          bslib$tooltip(
+            shiny$tags$span(
+              "Jitter ",
+              bsicons$bs_icon(
+                "info-circle", class = "text-muted"
+              )
+            ),
+            paste(
+              "Amount of horizontal spread",
+              "(jittering) applied to points"
+            )
+          ),
+          value = 0.15, step = 0.05, min = 0, max = 2
         )
       )
     ),
-    # Alpha - always visible (applies to all plot types)
     shiny$numericInput(
       ns("transparency"),
       bslib$tooltip(
@@ -702,31 +712,26 @@ points_panel <- function(ns) {
       ),
       value = 0.6, step = 0.05, min = 0, max = 1
     ),
-    # Shape by - only for plot types with points
-    shiny$conditionalPanel(
-      condition = points_condition,
-      shiny$selectizeInput(
-        ns("pointShape"),
-        bslib$tooltip(
-          shiny$tags$span(
-            "Shape by ",
-            bsicons$bs_icon(
-              "info-circle", class = "text-muted"
-            )
-          ),
-          paste(
-            "Column(s) to determine point shapes",
-            "(max 6 unique combinations)"
+    shiny$selectizeInput(
+      ns("pointShape"),
+      bslib$tooltip(
+        shiny$tags$span(
+          "Shape by ",
+          bsicons$bs_icon(
+            "info-circle", class = "text-muted"
           )
         ),
-        choices = NULL,
-        multiple = TRUE,
-        options = list(
-          placeholder = "None", maxItems = 3
+        paste(
+          "Column(s) to determine point shapes",
+          "(max 6 unique combinations)"
         )
+      ),
+      choices = NULL,
+      multiple = TRUE,
+      options = list(
+        placeholder = "None", maxItems = 3
       )
     ),
-    # Color by - always visible (applies to all plot types)
     shiny$selectizeInput(
       ns("pointColor"),
       bslib$tooltip(
@@ -873,149 +878,117 @@ median_sd_panel <- function(ns) {
 }
 
 boxplot_panel <- function(ns) {
-  # Condition for boxplot types
-  boxplot_condition <- paste0(
-    "input['", ns("plotType"), "'] == 'boxplot' || ",
-    "input['", ns("plotType"), "'] == 'boxplot_points'"
-  )
-
   bslib$accordion_panel(
     title = "Boxplot Settings",
     value = "boxplot",
     icon = bsicons$bs_icon("bar-chart-fill"),
-    shiny$conditionalPanel(
-      condition = boxplot_condition,
-      shiny$fluidRow(
-        shiny$column(
-          6,
-          shiny$numericInput(
-            ns("boxWidth"),
-            bslib$tooltip(
-              shiny$tags$span(
-                "Box Width ",
-                bsicons$bs_icon(
-                  "info-circle", class = "text-muted"
-                )
-              ),
-              "Width of the boxplot boxes (0-1)"
+    shiny$fluidRow(
+      shiny$column(
+        6,
+        shiny$numericInput(
+          ns("boxWidth"),
+          bslib$tooltip(
+            shiny$tags$span(
+              "Box Width ",
+              bsicons$bs_icon(
+                "info-circle", class = "text-muted"
+              )
             ),
-            value = 0.7, min = 0.1, max = 1, step = 0.1
-          )
-        ),
-        shiny$column(
-          6,
-          shiny$checkboxInput(
-            ns("showBoxOutliers"),
-            bslib$tooltip(
-              shiny$tags$span(
-                "Show Outliers ",
-                bsicons$bs_icon(
-                  "info-circle", class = "text-muted"
-                )
-              ),
-              "Show outlier points on the boxplot"
-            ),
-            value = FALSE
-          )
+            "Width of the boxplot boxes (0-1)"
+          ),
+          value = 0.7, min = 0.1, max = 1, step = 0.1
         )
       ),
-      shiny$checkboxInput(
-        ns("boxNotch"),
-        bslib$tooltip(
-          shiny$tags$span(
-            "Notched ",
-            bsicons$bs_icon(
-              "info-circle", class = "text-muted"
-            )
+      shiny$column(
+        6,
+        shiny$checkboxInput(
+          ns("showBoxOutliers"),
+          bslib$tooltip(
+            shiny$tags$span(
+              "Show Outliers ",
+              bsicons$bs_icon(
+                "info-circle", class = "text-muted"
+              )
+            ),
+            "Show outlier points on the boxplot"
           ),
-          "Show notches for median confidence interval"
-        ),
-        value = FALSE
+          value = FALSE
+        )
       )
     ),
-    shiny$conditionalPanel(
-      condition = paste0("!(", boxplot_condition, ")"),
-      shiny$tags$p(
-        class = "text-muted small fst-italic",
-        "Select a Boxplot type to configure these settings."
-      )
+    shiny$checkboxInput(
+      ns("boxNotch"),
+      bslib$tooltip(
+        shiny$tags$span(
+          "Notched ",
+          bsicons$bs_icon(
+            "info-circle", class = "text-muted"
+          )
+        ),
+        "Show notches for median confidence interval"
+      ),
+      value = FALSE
     )
   )
 }
 
 violin_panel <- function(ns) {
-  # Condition for violin types
-  violin_condition <- paste0(
-    "input['", ns("plotType"), "'] == 'violin' || ",
-    "input['", ns("plotType"), "'] == 'violin_points'"
-  )
-
   bslib$accordion_panel(
     title = "Violin Settings",
     value = "violin",
     icon = bsicons$bs_icon("symmetry-vertical"),
-    shiny$conditionalPanel(
-      condition = violin_condition,
-      shiny$fluidRow(
-        shiny$column(
-          6,
-          shiny$numericInput(
-            ns("violinWidth"),
-            bslib$tooltip(
-              shiny$tags$span(
-                "Violin Width ",
-                bsicons$bs_icon(
-                  "info-circle", class = "text-muted"
-                )
-              ),
-              "Width of the violin plots (0-1)"
+    shiny$fluidRow(
+      shiny$column(
+        6,
+        shiny$numericInput(
+          ns("violinWidth"),
+          bslib$tooltip(
+            shiny$tags$span(
+              "Violin Width ",
+              bsicons$bs_icon(
+                "info-circle", class = "text-muted"
+              )
             ),
-            value = 0.9, min = 0.1, max = 1.5, step = 0.1
-          )
-        ),
-        shiny$column(
-          6,
-          shiny$checkboxInput(
-            ns("violinTrim"),
-            bslib$tooltip(
-              shiny$tags$span(
-                "Trim ",
-                bsicons$bs_icon(
-                  "info-circle", class = "text-muted"
-                )
-              ),
-              "Trim violin tails to data range"
-            ),
-            value = TRUE
-          )
+            "Width of the violin plots (0-1)"
+          ),
+          value = 0.9, min = 0.1, max = 1.5, step = 0.1
         )
       ),
-      shiny$selectInput(
-        ns("violinScale"),
-        bslib$tooltip(
-          shiny$tags$span(
-            "Scale ",
-            bsicons$bs_icon(
-              "info-circle", class = "text-muted"
-            )
+      shiny$column(
+        6,
+        shiny$checkboxInput(
+          ns("violinTrim"),
+          bslib$tooltip(
+            shiny$tags$span(
+              "Trim ",
+              bsicons$bs_icon(
+                "info-circle", class = "text-muted"
+              )
+            ),
+            "Trim violin tails to data range"
           ),
-          paste(
-            "How to scale violin widths:",
-            "area = equal areas,",
-            "count = proportional to n,",
-            "width = equal max widths"
-          )
-        ),
-        choices = c("area", "count", "width"),
-        selected = "width"
+          value = TRUE
+        )
       )
     ),
-    shiny$conditionalPanel(
-      condition = paste0("!(", violin_condition, ")"),
-      shiny$tags$p(
-        class = "text-muted small fst-italic",
-        "Select a Violin type to configure these settings."
-      )
+    shiny$selectInput(
+      ns("violinScale"),
+      bslib$tooltip(
+        shiny$tags$span(
+          "Scale ",
+          bsicons$bs_icon(
+            "info-circle", class = "text-muted"
+          )
+        ),
+        paste(
+          "How to scale violin widths:",
+          "area = equal areas,",
+          "count = proportional to n,",
+          "width = equal max widths"
+        )
+      ),
+      choices = c("area", "count", "width"),
+      selected = "width"
     )
   )
 }
