@@ -110,12 +110,14 @@ build_violin_layers <- function(p, data, vp, ps, gl = list()) {
 #' @param vp Resolved violin style parameters
 #' @param ps Resolved point style parameters
 #' @param gl Resolved grid/legend parameters (for stat point overlays)
+#' @param sls Resolved stat line style parameters (for median/SD lines)
 #' @param use_shape Whether to use shape aesthetic
 #' @param use_custom_shape Whether to use custom shapes
 #' @param black_points Whether to force points to be black
 #' @return ggplot object with violin and scatter layers
 #' @export
 build_violin_points_layers <- function(p, data, vp, ps, gl = list(),
+                                       sls = list(),
                                        use_shape = FALSE,
                                        use_custom_shape = FALSE,
                                        black_points = FALSE) {
@@ -126,6 +128,9 @@ build_violin_points_layers <- function(p, data, vp, ps, gl = list(),
 
   # Then add violin on top
   p <- add_violin_layer_interactive(p, data, vp, ps)
+
+  # Median/SD line overlays
+  p <- scatter_builder$add_stat_overlays(p, data, gl, sls)
 
   # Stat point overlays (median/mean markers) on top
   p <- scatter_builder$add_stat_point_overlays(p, data, gl)
