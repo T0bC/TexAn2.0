@@ -82,6 +82,34 @@ tab_server <- function(input, output, session, input_data,
   # Persistent state for factor ordering (per column)
   saved_factor_order <- shiny$reactiveVal(list())
 
+  # Set statOptions defaults when plot type changes
+  shiny$observeEvent(input$plotType, {
+    pt <- input$plotType %||% "scatter"
+    shows_lines <- pt %in% c("scatter", "violin_points")
+
+    if (shows_lines) {
+      shiny$updateCheckboxGroupInput(
+        session, "statOptions",
+        choices = c(
+          "Median" = "showMedian",
+          "SD"     = "showSD",
+          "Aspect Ratio" = "aspectRatio"
+        ),
+        selected = c("showMedian", "showSD")
+      )
+    } else {
+      shiny$updateCheckboxGroupInput(
+        session, "statOptions",
+        choices = c(
+          "Median" = "showMedian",
+          "SD"     = "showSD",
+          "Aspect Ratio" = "aspectRatio"
+        ),
+        selected = character(0)
+      )
+    }
+  }, ignoreNULL = TRUE)
+
   # Update pointShape choices from metaData (debounced)
   debounced_meta <- shiny$reactive({
     m <- input$metaData
@@ -824,11 +852,6 @@ points_panel <- function(ns) {
 }
 
 legend_grid_panel <- function(ns) {
-  # Condition for scatter plot (only type that shows median/SD)
-  scatter_condition <- paste0(
-    "input['", ns("plotType"), "'] == 'scatter'"
-  )
-
   bslib$accordion_panel(
     title = "Legend & Grid",
     value = "legend_grid",
@@ -859,30 +882,15 @@ legend_grid_panel <- function(ns) {
       ),
       shiny$column(
         6,
-        # Median/SD only for scatter, Aspect Ratio for all
-        shiny$conditionalPanel(
-          condition = scatter_condition,
-          shiny$checkboxGroupInput(
-            ns("statOptions"),
-            "Statistics",
-            choices = c(
-              "Median" = "showMedian",
-              "SD" = "showSD",
-              "Aspect Ratio" = "aspectRatio"
-            ),
-            selected = c("showMedian", "showSD")
-          )
-        ),
-        shiny$conditionalPanel(
-          condition = paste0("!(", scatter_condition, ")"),
-          shiny$checkboxGroupInput(
-            ns("statOptionsNonScatter"),
-            "Statistics",
-            choices = c(
-              "Aspect Ratio" = "aspectRatio"
-            ),
-            selected = character(0)
-          )
+        shiny$checkboxGroupInput(
+          ns("statOptions"),
+          "Statistics",
+          choices = c(
+            "Median" = "showMedian",
+            "SD" = "showSD",
+            "Aspect Ratio" = "aspectRatio"
+          ),
+          selected = character(0)
         )
       )
     )
@@ -890,59 +898,44 @@ legend_grid_panel <- function(ns) {
 }
 
 median_sd_panel <- function(ns) {
-  # Condition for scatter plot (only type that shows median/SD)
-  scatter_condition <- paste0(
-    "input['", ns("plotType"), "'] == 'scatter'"
-  )
-
   bslib$accordion_panel(
     title = "Median & SD Lines",
     value = "median_sd",
     icon = bsicons$bs_icon("dash-lg"),
-    shiny$conditionalPanel(
-      condition = scatter_condition,
-      shiny$fluidRow(
-        shiny$column(
-          6,
-          shiny$numericInput(
-            ns("medianThickness"),
-            "Median Thickness",
-            value = 0.5, min = 0.1, max = 5, step = 0.1
-          )
-        ),
-        shiny$column(
-          6,
-          shiny$numericInput(
-            ns("medianWidth"),
-            "Median Width",
-            value = 0.15, min = 0.1, max = 1, step = 0.1
-          )
+    shiny$fluidRow(
+      shiny$column(
+        6,
+        shiny$numericInput(
+          ns("medianThickness"),
+          "Median Thickness",
+          value = 0.5, min = 0.1, max = 5, step = 0.1
         )
       ),
-      shiny$fluidRow(
-        shiny$column(
-          6,
-          shiny$numericInput(
-            ns("sdThickness"),
-            "SD Thickness",
-            value = 0.5, min = 0.1, max = 5, step = 0.1
-          )
-        ),
-        shiny$column(
-          6,
-          shiny$numericInput(
-            ns("sdWidth"),
-            "SD Width",
-            value = 0.15, min = 0.1, max = 1, step = 0.1
-          )
+      shiny$column(
+        6,
+        shiny$numericInput(
+          ns("medianWidth"),
+          "Median Width",
+          value = 0.15, min = 0.1, max = 1, step = 0.1
         )
       )
     ),
-    shiny$conditionalPanel(
-      condition = paste0("!(", scatter_condition, ")"),
-      shiny$tags$p(
-        class = "text-muted small fst-italic",
-        "Median & SD lines are only available for Scatter plots."
+    shiny$fluidRow(
+      shiny$column(
+        6,
+        shiny$numericInput(
+          ns("sdThickness"),
+          "SD Thickness",
+          value = 0.5, min = 0.1, max = 5, step = 0.1
+        )
+      ),
+      shiny$column(
+        6,
+        shiny$numericInput(
+          ns("sdWidth"),
+          "SD Width",
+          value = 0.15, min = 0.1, max = 1, step = 0.1
+        )
       )
     ),
     shiny$tags$hr(class = "my-2"),
