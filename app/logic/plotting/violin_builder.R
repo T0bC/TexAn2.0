@@ -100,7 +100,7 @@ build_violin_layers <- function(p, data, vp, ps) {
 
 #' Build complete violin + points layers
 #'
-#' Combines violin with scatter points overlay.
+#' Combines violin with scatter points underneath.
 #'
 #' @param p ggplot object with base aesthetics
 #' @param data Prepared data frame
@@ -108,18 +108,20 @@ build_violin_layers <- function(p, data, vp, ps) {
 #' @param ps Resolved point style parameters
 #' @param use_shape Whether to use shape aesthetic
 #' @param use_custom_shape Whether to use custom shapes
+#' @param black_points Whether to force points to be black
 #' @return ggplot object with violin and scatter layers
 #' @export
 build_violin_points_layers <- function(p, data, vp, ps,
                                        use_shape = FALSE,
-                                       use_custom_shape = FALSE) {
-  # First add violin
-  p <- add_violin_layer_interactive(p, data, vp, ps)
-
-  # Then add scatter points on top
+                                       use_custom_shape = FALSE,
+                                       black_points = FALSE) {
+  # First add scatter points underneath
   p <- scatter_builder$add_scatter_layers(
-    p, data, ps, use_shape, use_custom_shape
+    p, data, ps, use_shape, use_custom_shape, black_points
   )
+
+  # Then add violin on top
+  p <- add_violin_layer_interactive(p, data, vp, ps)
 
   p
 }
