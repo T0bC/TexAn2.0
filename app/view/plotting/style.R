@@ -318,7 +318,7 @@ collect_colors <- function(input, groups) {
 }
 
 # Collect current shape values from dynamic inputs
-collect_shapes <- function(input, groups, default_shape = 19L) {
+collect_shapes <- function(input, groups, default_shape = 21L) {
   shapes <- vapply(groups, function(group) {
     val <- input[[shape_input_id(group)]]
     if (is.null(val)) NA_integer_ else as.integer(val)
@@ -333,9 +333,13 @@ collect_shapes <- function(input, groups, default_shape = 19L) {
   shapes
 }
 
-# Generate shape dropdown choices (0-25 with Unicode symbol previews)
+# Generate shape dropdown choices
+# Only exposes pch 0-14 (open/unfilled, color = stroke) and
+# pch 21-25 (dual-property, fill = interior, color = border).
+# Shapes 15-20 are omitted: they are solid-filled with no separate border,
+# making white-border discrimination impossible.
 shape_choices <- function() {
-  # Unicode approximations of R pch shapes
+  pch_values <- c(0:14, 21:25)
   symbols <- c(
     "\u25A1",
     "\u25CB",
@@ -353,18 +357,12 @@ shape_choices <- function() {
     "\u2A02",
     "\u25A0",
     "\u25CF",
-    "\u25B2",
-    "\u25BC",
-    "\u25C6",
-    "\u2B24",
-    "\u25CF",
-    "\u25CF",
     "\u25A0",
     "\u25C6",
     "\u25B2",
     "\u25BC"
   )
-  stats::setNames(as.character(0:25), symbols)
+  stats::setNames(as.character(pch_values), symbols)
 }
 
 # Build nested sortable tree with color pickers at leaf nodes
@@ -412,11 +410,10 @@ build_single_level_sortable <- function(ns, col, levels, groups,
       "#808080"
     }
 
-    # Get shape value (default 19 = filled circle)
     shape <- if (level %in% names(existing_shapes)) {
       existing_shapes[[level]]
     } else {
-      19L
+      21L
     }
 
     shiny$tags$div(
@@ -581,11 +578,10 @@ build_inner_levels <- function(ns, cols, factor_order, parent_prefix,
         "#808080"
       }
 
-      # Get shape value (default 19 = filled circle)
       shape <- if (current_prefix %in% names(existing_shapes)) {
         existing_shapes[[current_prefix]]
       } else {
-        19L
+        21L
       }
 
       shiny$tags$div(
