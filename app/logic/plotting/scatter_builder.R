@@ -19,12 +19,10 @@ box::use(
 #' @param use_shape Whether to use shape aesthetic from .shape_group
 #' @param use_custom_shape Whether to use custom shapes from .point_shape
 #' @param black_points Whether to force points to be black
-#' @param use_fillable_shapes Whether using fillable shapes (21-25) that need white borders
 #' @return ggplot object with scatter layers added
 #' @export
 add_scatter_layers <- function(p, data, ps, use_shape = FALSE,
-                               use_custom_shape = FALSE, black_points = FALSE,
-                               use_fillable_shapes = FALSE) {
+                               use_custom_shape = FALSE, black_points = FALSE) {
   is_trimmed <- data[[".is_trimmed"]]
   is_outlier <- data[[".is_outlier"]]
   retained_idx <- which(!is_trimmed & !is_outlier)
@@ -54,43 +52,26 @@ add_scatter_layers <- function(p, data, ps, use_shape = FALSE,
           alpha = ps$alpha, size = ps$size, color = "black", fill = "black"
         )
       } else {
-        # Color by column mapping (aesthetic)
-        # For fillable shapes, use white border to discriminate overlapping points
-        if (use_fillable_shapes) {
-          aes_map <- ggplot2$aes(
-            tooltip = .data[[".tooltip"]],
-            data_id = .data[[".data_id"]],
-            fill    = .data[[".color_group"]],
-            shape   = .data[[".shape_group"]]
-          )
-          p <- p + ggiraph$geom_jitter_interactive(
-            data = rd, mapping = aes_map,
-            hover_nearest = TRUE,
-            position = ggplot2$position_jitter(
-              width = ps$spread, height = 0, seed = 42L
-            ),
-            alpha = ps$alpha, size = ps$size, color = "white"
-          )
-        } else {
-          aes_map <- ggplot2$aes(
-            tooltip = .data[[".tooltip"]],
-            data_id = .data[[".data_id"]],
-            color   = .data[[".color_group"]],
-            fill    = .data[[".color_group"]],
-            shape   = .data[[".shape_group"]]
-          )
-          p <- p + ggiraph$geom_jitter_interactive(
-            data = rd, mapping = aes_map,
-            hover_nearest = TRUE,
-            position = ggplot2$position_jitter(
-              width = ps$spread, height = 0, seed = 42L
-            ),
-            alpha = ps$alpha, size = ps$size
-          )
-        }
+        # apply_shape_scale() always assigns shapes 21-25: fill = color group, border = white
+        aes_map <- ggplot2$aes(
+          tooltip = .data[[".tooltip"]],
+          data_id = .data[[".data_id"]],
+          fill    = .data[[".color_group"]],
+          shape   = .data[[".shape_group"]]
+        )
+        p <- p + ggiraph$geom_jitter_interactive(
+          data = rd, mapping = aes_map,
+          hover_nearest = TRUE,
+          position = ggplot2$position_jitter(
+            width = ps$spread, height = 0, seed = 42L
+          ),
+          alpha = ps$alpha, size = ps$size, color = "white"
+        )
       }
     } else if (use_custom_shape) {
-      # Custom shapes per group: pass shape as a vector (not aesthetic)
+      # Custom shapes per group: pass shape as a vector (not aesthetic).
+      # Split into two sub-layers: fillable (21-25) get white border;
+      # non-fillable (0-20) use color aesthetic normally.
       if (black_points) {
         # Fixed black color with custom shapes
         aes_map <- ggplot2$aes(
@@ -107,23 +88,10 @@ add_scatter_layers <- function(p, data, ps, use_shape = FALSE,
           alpha = ps$alpha, size = ps$size, color = "black", fill = "black"
         )
       } else {
-        # For fillable shapes, use white border to discriminate overlapping points
-        if (use_fillable_shapes) {
-          aes_map <- ggplot2$aes(
-            tooltip = .data[[".tooltip"]],
-            data_id = .data[[".data_id"]],
-            fill    = .data[[".color_group"]]
-          )
-          p <- p + ggiraph$geom_jitter_interactive(
-            data = rd, mapping = aes_map,
-            shape = rd$.point_shape,
-            hover_nearest = TRUE,
-            position = ggplot2$position_jitter(
-              width = ps$spread, height = 0, seed = 42L
-            ),
-            alpha = ps$alpha, size = ps$size, color = "white"
-          )
-        } else {
+        # Sub-layer A: non-fillable shapes — color maps to both border and fill
+        nf_idx <- which(!plot_helpers$is_fillable_shape(rd$.point_shape))
+        if (length(nf_idx) > 0) {
+          nf_rd <- rd[nf_idx, , drop = FALSE]
           aes_map <- ggplot2$aes(
             tooltip = .data[[".tooltip"]],
             data_id = .data[[".data_id"]],
@@ -131,8 +99,8 @@ add_scatter_layers <- function(p, data, ps, use_shape = FALSE,
             fill    = .data[[".color_group"]]
           )
           p <- p + ggiraph$geom_jitter_interactive(
-            data = rd, mapping = aes_map,
-            shape = rd$.point_shape,
+            data = nf_rd, mapping = aes_map,
+            shape = nf_rd$.point_shape,
             hover_nearest = TRUE,
             position = ggplot2$position_jitter(
               width = ps$spread, height = 0, seed = 42L
@@ -140,17 +108,36 @@ add_scatter_layers <- function(p, data, ps, use_shape = FALSE,
             alpha = ps$alpha, size = ps$size
           )
         }
+        # Sub-layer B: fillable shapes — fill = color group, border = white
+        f_idx <- which(plot_helpers$is_fillable_shape(rd$.point_shape))
+        if (length(f_idx) > 0) {
+          f_rd <- rd[f_idx, , drop = FALSE]
+          aes_map <- ggplot2$aes(
+            tooltip = .data[[".tooltip"]],
+            data_id = .data[[".data_id"]],
+            fill    = .data[[".color_group"]]
+          )
+          p <- p + ggiraph$geom_jitter_interactive(
+            data = f_rd, mapping = aes_map,
+            shape = f_rd$.point_shape,
+            hover_nearest = TRUE,
+            position = ggplot2$position_jitter(
+              width = ps$spread, height = 0, seed = 42L
+            ),
+            alpha = ps$alpha, size = ps$size, color = "white"
+          )
+        }
       }
     } else {
-      # Default: no shape variation
+      # Default: no shape variation — use shape 21 (filled circle, white border)
       if (black_points) {
-        # Fixed black color, no shape variation
         aes_map <- ggplot2$aes(
           tooltip = .data[[".tooltip"]],
           data_id = .data[[".data_id"]]
         )
         p <- p + ggiraph$geom_jitter_interactive(
           data = rd, mapping = aes_map,
+          shape = 21,
           hover_nearest = TRUE,
           position = ggplot2$position_jitter(
             width = ps$spread, height = 0, seed = 42L
@@ -158,38 +145,20 @@ add_scatter_layers <- function(p, data, ps, use_shape = FALSE,
           alpha = ps$alpha, size = ps$size, color = "black", fill = "black"
         )
       } else {
-        # Color by column mapping (aesthetic)
-        # For fillable shapes (21-25), use white border to discriminate overlapping points
-        if (use_fillable_shapes) {
-          aes_map <- ggplot2$aes(
-            tooltip = .data[[".tooltip"]],
-            data_id = .data[[".data_id"]],
-            fill    = .data[[".color_group"]]
-          )
-          p <- p + ggiraph$geom_jitter_interactive(
-            data = rd, mapping = aes_map,
-            hover_nearest = TRUE,
-            position = ggplot2$position_jitter(
-              width = ps$spread, height = 0, seed = 42L
-            ),
-            alpha = ps$alpha, size = ps$size, color = "white"
-          )
-        } else {
-          aes_map <- ggplot2$aes(
-            tooltip = .data[[".tooltip"]],
-            data_id = .data[[".data_id"]],
-            color   = .data[[".color_group"]],
-            fill    = .data[[".color_group"]]
-          )
-          p <- p + ggiraph$geom_jitter_interactive(
-            data = rd, mapping = aes_map,
-            hover_nearest = TRUE,
-            position = ggplot2$position_jitter(
-              width = ps$spread, height = 0, seed = 42L
-            ),
-            alpha = ps$alpha, size = ps$size
-          )
-        }
+        aes_map <- ggplot2$aes(
+          tooltip = .data[[".tooltip"]],
+          data_id = .data[[".data_id"]],
+          fill    = .data[[".color_group"]]
+        )
+        p <- p + ggiraph$geom_jitter_interactive(
+          data = rd, mapping = aes_map,
+          shape = 21,
+          hover_nearest = TRUE,
+          position = ggplot2$position_jitter(
+            width = ps$spread, height = 0, seed = 42L
+          ),
+          alpha = ps$alpha, size = ps$size, color = "white"
+        )
       }
     }
   }
@@ -330,16 +299,14 @@ add_stat_point_overlays <- function(p, data, gl) {
 #' @param use_shape Whether to use shape aesthetic
 #' @param use_custom_shape Whether to use custom shapes
 #' @param black_points Whether to force points to be black
-#' @param use_fillable_shapes Whether using fillable shapes (21-25) that need white borders
 #' @return ggplot object with all scatter layers
 #' @export
 build_scatter_layers <- function(p, data, ps, gl, sls,
                                  use_shape = FALSE,
                                  use_custom_shape = FALSE,
-                                 black_points = FALSE,
-                                 use_fillable_shapes = FALSE) {
+                                 black_points = FALSE) {
   # Add scatter points
-  p <- add_scatter_layers(p, data, ps, use_shape, use_custom_shape, black_points, use_fillable_shapes)
+  p <- add_scatter_layers(p, data, ps, use_shape, use_custom_shape, black_points)
 
   # Add stat overlays (median/SD lines)
   p <- add_stat_overlays(p, data, gl, sls)
