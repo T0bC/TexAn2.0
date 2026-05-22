@@ -662,9 +662,7 @@ server <- function(id, input_data, data_version) {
       ind_contrib_content <- if (
         !is.null(pca_res) && isTRUE(pca_res$success)
       ) {
-        ggiraph$girafeOutput(
-          ns("ind_contrib_plot"), height = "auto"
-        )
+        shiny$uiOutput(ns("ind_contrib_container"))
       }
 
       ind_contrib_panel <- if (
