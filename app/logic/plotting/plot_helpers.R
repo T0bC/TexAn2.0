@@ -439,21 +439,25 @@ apply_theme <- function(p, x_cols, gl, ax) {
 #' @param p ggplot object
 #' @param color_map Named character vector of colors
 #' @param color_legend_title Title for color legend
+#' @param skip_color_scale If TRUE, omit scale_color (use when all points use fill-only aesthetics)
 #' @return ggplot object with color scales applied
 #' @export
-apply_color_scales <- function(p, color_map, color_legend_title) {
+apply_color_scales <- function(p, color_map, color_legend_title,
+                               skip_color_scale = FALSE) {
   if (!is.null(color_map) && length(color_map) > 0) {
-    p <- p +
-      ggplot2$scale_color_manual(
-        values = color_map, name = color_legend_title
-      ) +
-      ggplot2$scale_fill_manual(
+    if (!skip_color_scale) {
+      p <- p + ggplot2$scale_color_manual(
         values = color_map, name = color_legend_title
       )
+    }
+    p <- p + ggplot2$scale_fill_manual(
+      values = color_map, name = color_legend_title
+    )
   } else {
-    p <- p +
-      ggplot2$scale_color_discrete(name = color_legend_title) +
-      ggplot2$scale_fill_discrete(name = color_legend_title)
+    if (!skip_color_scale) {
+      p <- p + ggplot2$scale_color_discrete(name = color_legend_title)
+    }
+    p <- p + ggplot2$scale_fill_discrete(name = color_legend_title)
   }
   p
 }
@@ -466,12 +470,16 @@ is_fillable_shape <- function(shapes) {
   shapes %in% c(21, 22, 23, 24, 25)
 }
 
-#' Check if any shape in a set is fillable
+
+#' Check if ALL shapes in a set are fillable (21-25)
 #' @param shapes Integer vector of shape values
-#' @return TRUE if any shape is fillable (21-25)
+#' @return TRUE only if every shape is fillable
 #' @export
-has_fillable_shapes <- function(shapes) {
-  any(shapes %in% c(21, 22, 23, 24, 25))
+all_fillable_shapes <- function(shapes) {
+  if (is.null(shapes) || length(shapes) == 0) return(FALSE)
+  shapes <- shapes[!is.na(shapes)]
+  if (length(shapes) == 0) return(FALSE)
+  all(shapes %in% c(21, 22, 23, 24, 25))
 }
 
 #' Apply shape scale to plot
