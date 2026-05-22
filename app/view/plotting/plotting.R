@@ -214,10 +214,11 @@ server <- function(id, input_data, data_version) {
           alpha         = input$transparencyBox %||% 0.6
         ),
         violin_style  = list(
-          violin_width = input$violinWidth %||% 0.9,
-          trim         = input$violinTrim  %||% TRUE,
-          scale        = input$violinScale %||% "width",
-          alpha        = input$transparencyBox %||% 0.6
+          violin_width  = input$violinWidth %||% 0.9,
+          trim          = input$violinTrim  %||% TRUE,
+          scale         = input$violinScale %||% "width",
+          alpha         = input$transparencyBox %||% 0.6,
+          show_outliers = input$showViolinOutliers %||% FALSE
         ),
         black_points  = input$blackPoints %||% FALSE
       )
@@ -293,6 +294,7 @@ server <- function(id, input_data, data_version) {
         params$violin_style$trim %||% TRUE,
         params$violin_style$scale %||% "width",
         params$violin_style$alpha %||% 0.6,
+        params$violin_style$show_outliers %||% FALSE,
         params$black_points %||% FALSE,
         data_nrow, data_ncol,
         sep = "|"
