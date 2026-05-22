@@ -699,9 +699,7 @@ server <- function(id, input_data, data_version) {
         isTRUE(pca_res$success) &&
         has_real_meta
       ) {
-        ggiraph$girafeOutput(
-          ns("eigencorplot"), height = "auto"
-        )
+        shiny$uiOutput(ns("eigencorplot_container"))
       }
 
       eigencor_panel <- if (
