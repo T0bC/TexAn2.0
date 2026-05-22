@@ -480,90 +480,74 @@ apply_shape_scale <- function(p, data, shape_legend_title) {
 #' @param p ggplot object
 #' @param gl Resolved grid/legend parameters
 #' @param plot_type Character string plot type
+#' @param use_shape Whether a shape scale is already in use (suppresses Stats shape scale)
 #' @return ggplot object with stats legend added (or unchanged if none active)
 #' @export
-add_stats_legend <- function(p, gl, plot_type) {
+add_stats_legend <- function(p, gl, plot_type, use_shape = FALSE) {
   if (gl$legend_position == "none") return(p)
 
-  is_scatter <- plot_type == "scatter"
+  shows_lines <- plot_type %in% c(
+    "scatter", "boxplot_points", "violin_points"
+  )
 
   active <- list()
 
-  if (is_scatter && isTRUE(gl$show_median)) {
-    active[["Median line"]] <- list(
-      shape = NA, linetype = "solid", linewidth = 1
-    )
+  if (shows_lines && isTRUE(gl$show_median)) {
+    active[["Median line"]] <- list(shape = 95L,  size = 5)
   }
-  if (is_scatter && isTRUE(gl$show_sd)) {
-    active[["SD"]] <- list(
-      shape = NA, linetype = "solid", linewidth = 0.5
-    )
+  if (shows_lines && isTRUE(gl$show_sd)) {
+    active[["SD"]]          <- list(shape = 124L, size = 5)
   }
   if (isTRUE(gl$show_median_point)) {
-    active[["Median"]] <- list(
-      shape = 18, linetype = NA, linewidth = NA
-    )
+    active[["Median"]]      <- list(shape = 18L,  size = 3)
   }
   if (isTRUE(gl$show_mean_point)) {
-    active[["Mean"]] <- list(
-      shape = 13, linetype = NA, linewidth = NA
-    )
+    active[["Mean"]]        <- list(shape = 13L,  size = 3)
   }
 
   if (length(active) == 0) return(p)
 
   labels <- names(active)
+  shape_values <- stats::setNames(
+    vapply(active, function(e) e$shape, integer(1)),
+    labels
+  )
+  size_values <- vapply(active, function(e) e$size, numeric(1))
 
-  dummy_seg_df <- data.frame(
+  dummy_df <- data.frame(
     .stat_label = factor(labels, levels = labels),
-    x    = NA_real_,
-    y    = NA_real_,
-    xend = NA_real_,
-    yend = NA_real_,
+    x = NA_real_,
+    y = NA_real_,
     stringsAsFactors = FALSE
   )
 
-  p <- p + ggplot2$geom_segment(
-    data = dummy_seg_df,
+  p <- p + ggplot2$geom_point(
+    data = dummy_df,
     ggplot2$aes(
-      x    = .data[["x"]],
-      y    = .data[["y"]],
-      xend = .data[["xend"]],
-      yend = .data[["yend"]],
-      linetype = .data[[".stat_label"]]
+      x     = .data[["x"]],
+      y     = .data[["y"]],
+      shape = .data[[".stat_label"]]
     ),
     na.rm = TRUE,
     inherit.aes = FALSE,
     color = "black",
-    alpha = 0
+    fill  = "black",
+    size  = 3
   )
 
-  shapes    <- vapply(active, function(e) e$shape,     numeric(1))
-  linetypes <- vapply(active, function(e) {
-    lt <- e$linetype
-    if (is.na(lt)) "blank" else lt
-  }, character(1))
-  linewidths <- vapply(active, function(e) {
-    lw <- e$linewidth
-    if (is.na(lw)) 0 else lw
-  }, numeric(1))
-
-  p <- p +
-    ggplot2$scale_linetype_manual(
+  if (!use_shape) {
+    p <- p + ggplot2$scale_shape_manual(
       name   = "Stats",
-      values = stats::setNames(
-        rep("blank", length(labels)), labels
-      ),
+      values = shape_values,
       guide  = ggplot2$guide_legend(
         override.aes = list(
-          shape     = shapes,
-          linetype  = linetypes,
-          linewidth = linewidths,
-          color     = "black",
-          size      = 3
+          color = "black",
+          fill  = "black",
+          size  = size_values
         )
       )
     )
+  }
 
   p
 }
