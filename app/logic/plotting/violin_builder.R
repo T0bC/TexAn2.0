@@ -123,16 +123,18 @@ build_violin_layers <- function(p, data, vp, ps, gl = list()) {
 #' @param use_shape Whether to use shape aesthetic
 #' @param use_custom_shape Whether to use custom shapes
 #' @param black_points Whether to force points to be black
+#' @param use_fillable_shapes Whether using fillable shapes (21-25) that need white borders
 #' @return ggplot object with violin and scatter layers
 #' @export
 build_violin_points_layers <- function(p, data, vp, ps, gl = list(),
                                        sls = list(),
                                        use_shape = FALSE,
                                        use_custom_shape = FALSE,
-                                       black_points = FALSE) {
+                                       black_points = FALSE,
+                                       use_fillable_shapes = FALSE) {
   # First add scatter points underneath
   p <- scatter_builder$add_scatter_layers(
-    p, data, ps, use_shape, use_custom_shape, black_points
+    p, data, ps, use_shape, use_custom_shape, black_points, use_fillable_shapes
   )
 
   # Then add violin on top
