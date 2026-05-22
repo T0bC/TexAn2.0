@@ -425,24 +425,105 @@ flowchart TB
         subgraph LDAModule["📊 LDA Module"]
             direction TB
 
-            LDA_UI["UI: Data Selection · Analysis Settings · Plotting Controls<br/>📦 bslib · ggiraph"]
-            LDA_Clean["na_handling::clean_na_rows() · 📦 stats"]
-            LDA_Skew["skewness_transform.R<br/>📦 moments · bestNormalize"]
-            LDA_Scale["pca/scaling::scale_data() · 📦 stats (scale)"]
-            LDA_Split["data_splitting::create_stratified_split()<br/>Train / Test split · 📦 caret"]
+            LDA_Input["Receive analysis data
+            ---
+            Raw from Median Module OR PCA scores from PCA Module"]
+
+            subgraph LDA_Config["Configuration"]
+                direction LR
+                LDA_CfgData["Data Selection
+                ---
+                Measurement columns (numeric)
+                Metadata columns (descriptive)
+                Grouping column (categorical)
+                Data source: raw · PCA scores"]
+                LDA_CfgModel["Analysis Settings
+                ---
+                Method: LDA · QDA · MDA
+                Prior: proportional · equal
+                Skewness correction: on / off
+                Scale: z-score · none
+                Evaluation: full model · LOO-CV · train/test split
+                MDA subclasses · train fraction"]
+                LDA_CfgPlot["Plotting Controls
+                ---
+                Axes: LD1 · LD2 · …
+                Overlay: diagnostics · decision boundaries
+                Export size: width · height (cm)"]
+            end
+
+            LDA_Clean["Remove rows with missing values in measurement columns"]
+            LDA_SkewDetect["Detect highly skewed variables (|skewness| > 2)
+            ---
+            📦 moments"]
+            LDA_SkewBranch{"Skewness correction enabled?"}
+            LDA_SkewApply["Transform skewed variables via bestNormalize
+            ---
+            📦 bestNormalize"]
+            LDA_Scale["Scale and center selected measurement columns
+            ---
+            Method: z-score standardization or none
+            📦 stats"]
+            LDA_Split["Stratified train / test split
+            ---
+            Proportional per-group sampling · configurable fraction"]
+            LDA_Validate["Validate inputs for selected method
+            ---
+            Column presence · group count · per-group sample size"]
             LDA_Branch{"Method"}
-            LDA_LDA["run_lda() - Linear DA<br/>📦 MASS (lda)"]
-            LDA_QDA["run_qda() - Quadratic DA<br/>📦 MASS (qda)"]
-            LDA_MDA["run_mda() - Mixture DA<br/>📦 mda"]
-            LDA_Predict["run_predict() - posterior probs<br/>📦 MASS (predict.lda/qda)"]
-            LDA_Diag["lda_diagnostics.R<br/>Box-M · Mahalanobis · CV accuracy<br/>📦 heplots · stats"]
-            LDA_Plot["ld_plot.R · lda_var_contrib.R<br/>📦 ggplot2 · ggiraph"]
-            LDA_Export["lda_export.R<br/>create_lda_excel() · create_lda_bundle()<br/>📦 openxlsx"]
+            LDA_LDA["Fit Linear Discriminant Analysis
+            ---
+            LD axes · scaling coefficients · proportion of trace
+            📦 MASS"]
+            LDA_QDA["Fit Quadratic Discriminant Analysis
+            ---
+            Separate per-group covariance · companion LDA for LD projection
+            📦 MASS"]
+            LDA_MDA["Fit Mixture Discriminant Analysis
+            ---
+            EM subclass fitting · discriminant coordinates
+            📦 mda"]
+            LDA_Predict["Predict classes on held-out / test data
+            ---
+            Posterior probabilities · confusion matrix"]
+            LDA_Diag["Assumption diagnostics
+            ---
+            Covariance ellipses · pooled ellipses · decision boundaries
+            📦 heplots · colorspace"]
 
-            LDA_Packages["📦 MASS (lda, qda, predict) · mda (MDA)<br/>📦 caret · heplots (Box-M) · openxlsx"]
+            LDA_Out_ScorePlot["LD Scores scatter plot
+            ---
+            Interactive 2D / 1D strip plot · group colouring
+            Optional: diagnostics overlay · boundary regions
+            📦 ggplot2 · ggiraph"]
+            LDA_Out_VarContrib["Variable contributions per LD axis
+            ---
+            Jitter plot reusing PCA contrib structure"]
+            LDA_Out_DimEval["Discriminant dimension evaluation
+            ---
+            One-way ANOVA per LD axis · F · p-value · R²"]
+            LDA_Out_Results["Classification results table
+            ---
+            Predicted class · posterior probabilities · confusion matrix
+            Per-class precision · recall · F1"]
 
-            LDA_UI --> LDA_Clean --> LDA_Skew --> LDA_Scale --> LDA_Split
-            LDA_Split --> LDA_Branch
+            LDA_Export["Export results
+            ---
+            Excel: LD scores · group means · coefficients · confusion matrix
+            RDS bundle: model · transform params · scale params · settings
+            📦 openxlsx"]
+            LDA_DownExcel["Download Excel file"]
+            LDA_DownRDS["Download RDS bundle"]
+
+            LDA_PassCluster["|lda_result|"]
+            LDA_PassPrediction["|lda_bundle|"]
+
+            LDA_Input --> LDA_Clean
+            LDA_Clean --> LDA_SkewDetect --> LDA_SkewBranch
+            LDA_SkewBranch -->|yes| LDA_SkewApply --> LDA_Scale
+            LDA_SkewBranch -->|no| LDA_Scale
+            LDA_Config --> LDA_Scale
+            LDA_Scale --> LDA_Split --> LDA_Validate --> LDA_Branch
             LDA_Branch -->|LDA| LDA_LDA
             LDA_Branch -->|QDA| LDA_QDA
             LDA_Branch -->|MDA| LDA_MDA
@@ -450,89 +531,243 @@ flowchart TB
             LDA_QDA --> LDA_Predict
             LDA_MDA --> LDA_Predict
             LDA_Predict --> LDA_Diag
-            LDA_Diag --> LDA_Plot
+            LDA_Predict --> LDA_Out_Results
+            LDA_Diag --> LDA_Out_ScorePlot
+            LDA_Diag --> LDA_Out_VarContrib
+            LDA_Diag --> LDA_Out_DimEval
             LDA_Diag --> LDA_Export
-            LDA_Export --> LDA_Packages
+            LDA_Export --> LDA_DownExcel
+            LDA_Export --> LDA_DownRDS
+            LDA_Export --> LDA_PassPrediction
+            LDA_Predict --> LDA_PassCluster
         end
 
         %% ==================== CLUSTER MODULE ====================
         subgraph ClusterModule["🎯 Cluster Module"]
             direction TB
 
-            CL_UI["UI: Data Selection · Clustering Settings · Display Options<br/>📦 bslib · ggiraph · plotly"]
-            CL_Source{"Data Source?"}
-            CL_Raw["Raw: na_handling + skewness_transform + scale_data<br/>📦 stats · moments · bestNormalize"]
-            CL_PCA["PCA Scores (skip preprocessing)<br/>Dim.1, Dim.2, ... from pca_result"]
-            CL_LDA["LDA Scores (skip preprocessing)<br/>LD1, LD2, ... from lda_result"]
-            CL_Hopkins["hopkins::compute_hopkins()<br/>Cluster tendency · 📦 clustertend"]
-            CL_Optimal["optimal_clusters.R<br/>Gap statistic · Elbow · NbClust<br/>📦 NbClust · cluster · stats"]
-            CL_Run["cluster::run_clustering()"]
-            CL_Algo{"Algorithm"}
-            CL_KMeans["K-Means / PAM<br/>📦 stats (kmeans) · cluster (pam)"]
-            CL_HClust["Hierarchical<br/>📦 stats (hclust, cutree, dist)"]
-            CL_DBSCAN["DBSCAN (auto eps)<br/>📦 dbscan"]
-            CL_Stats["Silhouette · BSS/TSS<br/>📦 cluster (silhouette)"]
-            CL_Heatmap["heatmap.R<br/>📦 pheatmap · ggplot2"]
-            CL_Biplot["cluster_biplot.R<br/>📦 factoextra · ggplot2 · ggiraph"]
+            CL_Source{"Data source?"}
+            CL_Raw["Preprocess raw data
+            ---
+            na_handling · skewness_transform · scale_data<br/>📦 stats · moments · bestNormalize"]
+            CL_PCA["Use PCA scores<br/>---<br/>Skip preprocessing · Dim.1, Dim.2, ..."]
+            CL_LDA["Use LDA scores<br/>---<br/>Skip preprocessing · LD1, LD2, ..."]
+            CL_Hopkins["Assess cluster tendency
+            ---
+            Hopkins statistic · 📦 hopkins"]
+            CL_Optimal["Determine optimal k
+            ---
+            Elbow · Silhouette · Gap statistic<br/>📦 cluster · NbClust"]
+            CL_Algo{"Algorithm?"}
+            CL_KMeans["K-Means / PAM<br/>---<br/>📦 stats · cluster"]
+            CL_HClust["Hierarchical clustering<br/>---<br/>📦 stats"]
+            CL_DBSCAN["DBSCAN<br/>---<br/>Auto eps estimation · 📦 dbscan"]
+            CL_Valid["Validate clustering<br/>---<br/>Silhouette · BSS/TSS<br/>📦 cluster"]
+            CL_Heatmap["Cluster heatmap<br/>---<br/>📦 heatmaply · plotly"]
+            CL_Biplot["Cluster biplot<br/>---<br/>Convex hulls · 📦 ggplot2 · ggiraph"]
 
-            CL_Packages["📦 cluster (PAM, silhouette) · dbscan · NbClust<br/>📦 stats (kmeans, hclust) · pheatmap · factoextra"]
-
-            CL_UI --> CL_Source
             CL_Source -->|raw| CL_Raw
             CL_Source -->|pca_scores| CL_PCA
             CL_Source -->|lda_scores| CL_LDA
             CL_Raw --> CL_Hopkins
             CL_PCA --> CL_Hopkins
             CL_LDA --> CL_Hopkins
-            CL_Hopkins --> CL_Optimal --> CL_Run --> CL_Algo
-            CL_Algo -->|kmeans/pam| CL_KMeans --> CL_Stats
-            CL_Algo -->|hierarchical| CL_HClust --> CL_Stats
-            CL_Algo -->|dbscan| CL_DBSCAN --> CL_Stats
-            CL_Stats --> CL_Heatmap
-            CL_Stats --> CL_Biplot
-            CL_Stats --> CL_Packages
+            CL_Hopkins --> CL_Optimal --> CL_Algo
+            CL_Algo -->|kmeans| CL_KMeans --> CL_Valid
+            CL_Algo -->|pam| CL_KMeans
+            CL_Algo -->|hclust| CL_HClust --> CL_Valid
+            CL_Algo -->|dbscan| CL_DBSCAN --> CL_Valid
+            CL_Valid --> CL_Heatmap
+            CL_Valid --> CL_Biplot
         end
 
         %% ==================== PREDICTION MODULE ====================
         subgraph PredictionModule["🔮 Prediction Module"]
             direction TB
 
-            PR_UI["UI: Upload new data · Plotting Controls · Results Display<br/>📦 bslib · DT"]
-            PR_Load["bundle_io::load_bundle() · validate_bundle()<br/>Load saved LDA RDS bundle · 📦 base (readRDS)"]
-            PR_Valid["validation.R<br/>Check new data vs bundle schema"]
-            PR_Classify["predict.R::run_prediction()<br/>📦 MASS (predict.lda/qda)"]
-            PR_Plots["prediction_plots.R<br/>Posterior probability plots<br/>📦 ggplot2 · DT"]
+            PR_BundleInput["Receive LDA/QDA/MDA/PCA bundle
+            ---
+            Upload saved RDS bundle file"]
+            PR_LoadBundle["Load and validate bundle structure
+            ---
+            Required fields · analysis type · model presence
+            📦 base"]
+            PR_DataInput["Receive unknown observations
+            ---
+            Upload new data file to classify"]
+            PR_ValidData["Validate unknown data against bundle schema
+            ---
+            Required measurement columns · numeric types
+            Range plausibility vs training data · metadata warnings"]
 
-            PR_Packages["📦 MASS (predict.lda/qda) · ggplot2 · DT"]
+            subgraph PR_Config["Plot &amp; prediction options"]
+                direction LR
+                PR_OptAxes["Plot axes
+                ---
+                Dim / LD axis: x · y"]
+                PR_OptMeta["Label column
+                ---
+                Metadata column for point labels"]
+                PR_OptOverlay["Overlay options
+                ---
+                Decision boundaries · diagnostics (LDA/MDA)"]
+            end
 
-            PR_UI --> PR_Load --> PR_Valid --> PR_Classify --> PR_Plots --> PR_Packages
+            PR_Preprocess["Apply stored preprocessing to unknowns
+            ---
+            Skewness transforms · center/scale (LDA/MDA/QDA)
+            PCA scaling handled by predict.prcomp"]
+            PR_Branch{"Analysis type?"}
+            PR_PCA["Project unknowns into PCA space
+            ---
+            PC scores via predict.prcomp · rename to Dim.1…n"]
+            PR_LDA["Classify via LDA
+            ---
+            Predicted class · posterior probabilities · LD scores
+            📦 MASS"]
+            PR_QDA["Classify via QDA
+            ---
+            Predicted class · posterior probabilities
+            Companion LDA projection for LD scores
+            📦 MASS"]
+            PR_MDA["Classify via MDA
+            ---
+            Predicted class · posterior probabilities · variate scores
+            📦 mda"]
+
+            PR_OverlayPlot["Prediction overlay plot
+            ---
+            Training data base plot + unknown triangles
+            Axis labels · tooltips · group colouring
+            📦 ggplot2 · ggiraph"]
+            PR_PostTable["Posterior probabilities table
+            ---
+            Per-observation predicted class + class probabilities
+            📦 DT"]
+            PR_RangeWarn["Range warnings display
+            ---
+            Columns where unknowns exceed training range"]
+            PR_LogEvent["Log bundle load and prediction events"]
+            PR_ErrorDisplay["Display validation or prediction errors"]
+
+            PR_BundleInput --> PR_LoadBundle
+            PR_DataInput --> PR_ValidData
+            PR_LoadBundle --> PR_ValidData
+            PR_ValidData --> PR_Preprocess
+            PR_Config --> PR_Preprocess
+            PR_Preprocess --> PR_Branch
+            PR_Branch -->|PCA| PR_PCA
+            PR_Branch -->|LDA| PR_LDA
+            PR_Branch -->|QDA| PR_QDA
+            PR_Branch -->|MDA| PR_MDA
+            PR_PCA --> PR_OverlayPlot
+            PR_LDA --> PR_OverlayPlot
+            PR_QDA --> PR_OverlayPlot
+            PR_MDA --> PR_OverlayPlot
+            PR_LDA --> PR_PostTable
+            PR_QDA --> PR_PostTable
+            PR_MDA --> PR_PostTable
+            PR_ValidData --> PR_RangeWarn
+            PR_LoadBundle --> PR_LogEvent
+            PR_Branch --> PR_LogEvent
+            PR_ValidData --> PR_ErrorDisplay
+            PR_LoadBundle --> PR_ErrorDisplay
         end
 
         %% ==================== POWER ANALYSIS MODULE ====================
         subgraph PowerModule["⚡ Power Analysis Module"]
             direction TB
 
-            PWR_UI["UI: Design · Effect Input · Options<br/>📦 bslib · ggplot2"]
-            PWR_Valid["validate.R<br/>Validate effect size / alpha / n inputs"]
-            PWR_Dummy["dummy_data.R<br/>Generate illustrative dummy dataset<br/>📦 stats (rnorm, sample)"]
-            PWR_Calc["power_calc.R<br/>One-sample / Two-sample / ANOVA<br/>📦 pwr (pwr.t.test, pwr.anova.test) · WebPower"]
-            PWR_Plot["Power curve plot · 📦 ggplot2"]
+            PWR_Input["Receive design parameters
+            ---
+            Effect size · alpha · target power · groups"]
+            PWR_Valid["Validate inputs
+            ---
+            Range checks · distribution compatibility"]
 
-            PWR_Packages["📦 pwr · WebPower · stats (power.t.test) · ggplot2"]
+            subgraph PWR_Config["Configuration options"]
+                direction LR
+                PWR_SolveMode["Solve for:
+                ---
+                sample_size · power · mde"]
+                PWR_EffectInput["Effect input:
+                ---
+                standardized · raw"]
+                PWR_InputMode{"Input mode?"}
+                PWR_MeanSD["Mean + SD"]
+                PWR_MedIQR["Median + IQR"]
+                PWR_Dist["Distribution:
+                ---
+                normal · lognormal · exponential"]
+                PWR_Approach["Approach:
+                ---
+                parametric · robust · nonparametric"]
+            end
 
-            PWR_UI --> PWR_Valid --> PWR_Dummy
-            PWR_Valid --> PWR_Calc --> PWR_Plot --> PWR_Packages
+            PWR_SimData["Simulate illustrative data
+            ---
+            Distribution-aware sampling<br/>📦 stats"]
+            PWR_Calc{"Calculation path?"}
+            PWR_Parametric["Parametric power analysis
+            ---
+            📦 pwr · stats"]
+            PWR_Simulation["Monte Carlo simulation
+            ---
+            Binary search for N or effect<br/>📦 stats"]
+
+            PWR_Out_Curve["Power curve data"]
+            PWR_Out_Design["Design table
+            ---
+            N per cell · total N"]
+            PWR_Out_Result["Power analysis result
+            ---
+                    Description · value · type"]
+            PWR_Out_Plot["Power curve plot
+            ---
+            📦 ggplot2"]
+            PWR_Out_Viz["Illustrative data plot"]
+
+            PWR_Error["Display validation errors"]
+
+            PWR_Input --> PWR_Valid
+            PWR_Valid -->|invalid| PWR_Error
+            PWR_Valid -->|valid| PWR_Config
+            PWR_Config --> PWR_SimData
+            PWR_InputMode -->|mean_sd| PWR_MeanSD
+            PWR_InputMode -->|median_iqr| PWR_MedIQR
+            PWR_Config --> PWR_Calc
+            PWR_Calc -->|normal + parametric| PWR_Parametric
+            PWR_Calc -->|simulation| PWR_Simulation
+            PWR_Parametric --> PWR_Out_Curve
+            PWR_Parametric --> PWR_Out_Design
+            PWR_Parametric --> PWR_Out_Result
+            PWR_Simulation --> PWR_Out_Curve
+            PWR_Simulation --> PWR_Out_Design
+            PWR_Simulation --> PWR_Out_Result
+            PWR_Out_Curve --> PWR_Out_Plot
+            PWR_SimData --> PWR_Out_Viz
         end
 
         %% ==================== SHARED INFRASTRUCTURE ====================
         subgraph SharedInfra["🔧 Shared Infrastructure"]
             direction TB
-            SH_Error["error_handling.R<br/>safe_execute() · create_app_error()<br/>📦 rlang"]
-            SH_Columns["column_utils.R<br/>get_measurement_cols() · get_descriptive_cols()"]
-            SH_DataUtils["data_utils.R<br/>create_interaction() · filter_data() · default_palette()"]
-            SH_Logging["logging.R<br/>configure_session_logging() · 📦 rhino (log)"]
-            SH_Settings["settings.R<br/>get_default_theme() · app_version()<br/>📦 bslib · config"]
-            SH_Preproc["preprocessing/<br/>na_handling · normalize · skewness_transform<br/>📦 moments · bestNormalize · stats"]
+            SH_Error["Safe execution wrapper
+---
+📦 rlang"]
+            SH_Columns["Column classification
+---
+Identify measurement vs descriptive columns"]
+            SH_DataUtils["Data transformation helpers
+---
+filter · interactions · color palettes"]
+            SH_Logging["Session event logging"]
+            SH_Settings["App configuration
+---
+theme · version · 📦 config"]
+            SH_Preproc["Data preprocessing
+---
+missing values · normalization · skewness
+📦 moments · bestNormalize · stats"]
         end
     end
 
@@ -577,26 +812,218 @@ flowchart TB
     PowerModule -.-> SharedInfra
 
     %% Styling
-    style LoadDataModule fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
-    style MedianModule fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    style PlottingModule fill:#e8eaf6,stroke:#3949ab,stroke-width:2px
-    style SummaryModule fill:#f1f8e9,stroke:#558b2f,stroke-width:2px
-    style StatisticsModule fill:#fbe9e7,stroke:#bf360c,stroke-width:2px
-    style PCAModule fill:#ede7f6,stroke:#4527a0,stroke-width:2px
-    style LDAModule fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style ClusterModule fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
-    style PredictionModule fill:#fce4ec,stroke:#c2185b,stroke-width:2px
-    style PowerModule fill:#fff8e1,stroke:#fbc02d,stroke-width:2px
-    style SharedInfra fill:#f5f5f5,stroke:#616161,stroke-width:2px
-    style ExternalPackages fill:#e0f7fa,stroke:#00838f,stroke-width:2px
+    %% Module base colors (from your palette)
+    style LoadDataModule fill:#8dd3c7,stroke:#5a968d,stroke-width:4px
+    style MedianModule fill:#ffffb3,stroke:#cccc8f,stroke-width:4px
+    style PlottingModule fill:#bebada,stroke:#8f8ba3,stroke-width:4px
+    style SummaryModule fill:#fb8072,stroke:#c9665b,stroke-width:4px
+    style StatisticsModule fill:#80b1d3,stroke:#668da9,stroke-width:4px
+    style PCAModule fill:#fdb462,stroke:#ca8f4e,stroke-width:4px
+    style LDAModule fill:#b3de69,stroke:#8fb154,stroke-width:4px
+    style ClusterModule fill:#fccde5,stroke:#c9a4b7,stroke-width:4px
+    style PredictionModule fill:#d9d9d9,stroke:#aeaeae,stroke-width:4px
+    style PowerModule fill:#bc80bd,stroke:#966697,stroke-width:4px
+    style SharedInfra fill:#f0f0f0,stroke:#999999,stroke-width:4px
+    style ExternalPackages fill:#f5f5f5,stroke:#cccccc,stroke-width:2px
 
-    style LD_Source fill:#ffcc80,stroke:#e65100
-    style MED_GroupBranch fill:#ffcc80,stroke:#e65100
-    style PL_XAxis fill:#ffcc80,stroke:#e65100
-    style CL_Source fill:#ffcc80,stroke:#e65100
-    style CL_Algo fill:#ffcc80,stroke:#e65100
-    style LDA_Branch fill:#ffcc80,stroke:#e65100
-    style STAT_Omnibus fill:#ffcc80,stroke:#e65100
-    style STAT_PostHoc fill:#ffcc80,stroke:#e65100
-    style PCA_SkewBranch fill:#ffcc80,stroke:#e65100
+    %% Internal nodes - lighter shades of parent module colors
+    style LD_Source fill:#c5ebe3,stroke:#5a968d
+    style MED_GroupBranch fill:#ffffe6,stroke:#cccc8f
+    style PL_XAxis fill:#ddd9eb,stroke:#8f8ba3
+    style CL_Source fill:#fde4f0,stroke:#c9a4b7
+    style CL_Algo fill:#fde4f0,stroke:#c9a4b7
+    style LDA_Branch fill:#d4eb9d,stroke:#8fb154
+    style LDA_SkewBranch fill:#d4eb9d,stroke:#8fb154
+    style STAT_Omnibus fill:#b0d0e6,stroke:#668da9
+    style STAT_PostHoc fill:#b0d0e6,stroke:#668da9
+    style PCA_SkewBranch fill:#fee09f,stroke:#ca8f4e
+    style PR_Branch fill:#d4eb9d,stroke:#8fb154
+    style PWR_InputMode fill:#e6c8e5,stroke:#966697
+    style PWR_Calc fill:#e6c8e5,stroke:#966697
+
+    %% Internal processing nodes - LoadDataModule (teal family)
+    style LD_Upload fill:#c5ebe3,stroke:#5a968d
+    style LD_Example fill:#c5ebe3,stroke:#5a968d
+    style LD_CSVOpts fill:#c5ebe3,stroke:#5a968d
+    style LD_Read fill:#c5ebe3,stroke:#5a968d
+    style LD_Validate fill:#c5ebe3,stroke:#5a968d
+    style LD_ColModal fill:#c5ebe3,stroke:#5a968d
+    style LD_ErrDisplay fill:#c5ebe3,stroke:#5a968d
+    style LD_Log fill:#c5ebe3,stroke:#5a968d
+    style LD_Preview fill:#c5ebe3,stroke:#5a968d
+    style LD_Missing fill:#c5ebe3,stroke:#5a968d
+    style LD_Summary fill:#c5ebe3,stroke:#5a968d
+
+    %% Internal processing nodes - MedianModule (yellow family)
+    style MED_Config fill:#ffffe6,stroke:#cccc8f
+    style MED_OptGrouping fill:#ffffe6,stroke:#cccc8f
+    style MED_OptQuality fill:#ffffe6,stroke:#cccc8f
+    style MED_QualityFilter fill:#ffffe6,stroke:#cccc8f
+    style MED_NoGroup fill:#ffffe6,stroke:#cccc8f
+    style MED_Medians fill:#ffffe6,stroke:#cccc8f
+    style MED_TableNoGroup fill:#ffffe6,stroke:#cccc8f
+    style MED_TableGrouped fill:#ffffe6,stroke:#cccc8f
+    style MED_ExcelFilter fill:#ffffe6,stroke:#cccc8f
+    style MED_Download fill:#ffffe6,stroke:#cccc8f
+    style MED_Log fill:#ffffe6,stroke:#cccc8f
+
+    %% Internal processing nodes - PlottingModule (lavender family)
+    style PL_Input fill:#ddd9eb,stroke:#8f8ba3
+    style PL_XConfig fill:#ddd9eb,stroke:#8f8ba3
+    style PL_Options fill:#ddd9eb,stroke:#8f8ba3
+    style PL_OptFilter fill:#ddd9eb,stroke:#8f8ba3
+    style PL_OptTrim fill:#ddd9eb,stroke:#8f8ba3
+    style PL_OptNormalize fill:#ddd9eb,stroke:#8f8ba3
+    style PL_OptOutlier fill:#ddd9eb,stroke:#8f8ba3
+    style PL_Plot fill:#ddd9eb,stroke:#8f8ba3
+    style PL_Custom fill:#ddd9eb,stroke:#8f8ba3
+    style PL_Assumptions fill:#ddd9eb,stroke:#8f8ba3
+
+    %% Internal processing nodes - SummaryModule (coral family)
+    style SUM_Input fill:#fdb4ac,stroke:#c9665b
+    style SUM_Config fill:#fdb4ac,stroke:#c9665b
+    style SUM_OptGroup fill:#fdb4ac,stroke:#c9665b
+    style SUM_OptShapiro fill:#fdb4ac,stroke:#c9665b
+    style SUM_OptTransform fill:#fdb4ac,stroke:#c9665b
+    style SUM_Compute fill:#fdb4ac,stroke:#c9665b
+    style SUM_Shapiro fill:#fdb4ac,stroke:#c9665b
+    style SUM_Tables fill:#fdb4ac,stroke:#c9665b
+    style SUM_DownloadSingle fill:#fdb4ac,stroke:#c9665b
+    style SUM_DownloadAll fill:#fdb4ac,stroke:#c9665b
+    style SUM_Log fill:#fdb4ac,stroke:#c9665b
+    style SUM_ErrDisplay fill:#fdb4ac,stroke:#c9665b
+
+    %% Internal processing nodes - StatisticsModule (blue family)
+    style STAT_Input fill:#b0d0e6,stroke:#668da9
+    style STAT_Config fill:#b0d0e6,stroke:#668da9
+    style STAT_OptApproach fill:#b0d0e6,stroke:#668da9
+    style STAT_OptOmnibus fill:#b0d0e6,stroke:#668da9
+    style STAT_OptAdjust fill:#b0d0e6,stroke:#668da9
+    style STAT_OptBootstrap fill:#b0d0e6,stroke:#668da9
+    style STAT_OmniParam fill:#b0d0e6,stroke:#668da9
+    style STAT_OmniNP fill:#b0d0e6,stroke:#668da9
+    style STAT_OmniRob fill:#b0d0e6,stroke:#668da9
+    style STAT_PostParam fill:#b0d0e6,stroke:#668da9
+    style STAT_PostNP fill:#b0d0e6,stroke:#668da9
+    style STAT_PostRob fill:#b0d0e6,stroke:#668da9
+    style STAT_Effect fill:#b0d0e6,stroke:#668da9
+    style STAT_Report fill:#b0d0e6,stroke:#668da9
+    style STAT_Download fill:#b0d0e6,stroke:#668da9
+    style STAT_Log fill:#b0d0e6,stroke:#668da9
+
+    %% Internal processing nodes - PCAModule (orange family)
+    style PCA_Input fill:#fee09f,stroke:#ca8f4e
+    style PCA_Config fill:#fee09f,stroke:#ca8f4e
+    style PCA_CfgData fill:#fee09f,stroke:#ca8f4e
+    style PCA_CfgPlot fill:#fee09f,stroke:#ca8f4e
+    style PCA_Clean fill:#fee09f,stroke:#ca8f4e
+    style PCA_SkewDetect fill:#fee09f,stroke:#ca8f4e
+    style PCA_SkewApply fill:#fee09f,stroke:#ca8f4e
+    style PCA_Scale fill:#fee09f,stroke:#ca8f4e
+    style PCA_Out_Corr fill:#fee09f,stroke:#ca8f4e
+    style PCA_Out_KMO fill:#fee09f,stroke:#ca8f4e
+    style PCA_Out_Opt fill:#fee09f,stroke:#ca8f4e
+    style PCA_PCA fill:#fee09f,stroke:#ca8f4e
+    style PCA_Out_Results fill:#fee09f,stroke:#ca8f4e
+    style PCA_Out_Biplot2D fill:#fee09f,stroke:#ca8f4e
+    style PCA_Out_Biplot3D fill:#fee09f,stroke:#ca8f4e
+    style PCA_Out_VarContrib fill:#fee09f,stroke:#ca8f4e
+    style PCA_Out_IndContrib fill:#fee09f,stroke:#ca8f4e
+    style PCA_Out_EigenCor fill:#fee09f,stroke:#ca8f4e
+    style PCA_Export fill:#fee09f,stroke:#ca8f4e
+    style PCA_DownExcel fill:#fee09f,stroke:#ca8f4e
+    style PCA_DownRDS fill:#fee09f,stroke:#ca8f4e
+    style PCA_PassLDA fill:#fee09f,stroke:#ca8f4e
+
+    %% Internal processing nodes - LDAModule (green family)
+    style LDA_Input fill:#d4eb9d,stroke:#8fb154
+    style LDA_Config fill:#d4eb9d,stroke:#8fb154
+    style LDA_CfgData fill:#d4eb9d,stroke:#8fb154
+    style LDA_CfgModel fill:#d4eb9d,stroke:#8fb154
+    style LDA_CfgPlot fill:#d4eb9d,stroke:#8fb154
+    style LDA_Clean fill:#d4eb9d,stroke:#8fb154
+    style LDA_SkewDetect fill:#d4eb9d,stroke:#8fb154
+    style LDA_SkewApply fill:#d4eb9d,stroke:#8fb154
+    style LDA_Scale fill:#d4eb9d,stroke:#8fb154
+    style LDA_Split fill:#d4eb9d,stroke:#8fb154
+    style LDA_Validate fill:#d4eb9d,stroke:#8fb154
+    style LDA_LDA fill:#d4eb9d,stroke:#8fb154
+    style LDA_QDA fill:#d4eb9d,stroke:#8fb154
+    style LDA_MDA fill:#d4eb9d,stroke:#8fb154
+    style LDA_Predict fill:#d4eb9d,stroke:#8fb154
+    style LDA_Diag fill:#d4eb9d,stroke:#8fb154
+    style LDA_Out_ScorePlot fill:#d4eb9d,stroke:#8fb154
+    style LDA_Out_VarContrib fill:#d4eb9d,stroke:#8fb154
+    style LDA_Out_DimEval fill:#d4eb9d,stroke:#8fb154
+    style LDA_Out_Results fill:#d4eb9d,stroke:#8fb154
+    style LDA_Export fill:#d4eb9d,stroke:#8fb154
+    style LDA_DownExcel fill:#d4eb9d,stroke:#8fb154
+    style LDA_DownRDS fill:#d4eb9d,stroke:#8fb154
+    style LDA_PassCluster fill:#d4eb9d,stroke:#8fb154
+    style LDA_PassPrediction fill:#d4eb9d,stroke:#8fb154
+
+    %% Internal processing nodes - ClusterModule (pink family)
+    style CL_Raw fill:#fde4f0,stroke:#c9a4b7
+    style CL_PCA fill:#fde4f0,stroke:#c9a4b7
+    style CL_LDA fill:#fde4f0,stroke:#c9a4b7
+    style CL_Hopkins fill:#fde4f0,stroke:#c9a4b7
+    style CL_Optimal fill:#fde4f0,stroke:#c9a4b7
+    style CL_KMeans fill:#fde4f0,stroke:#c9a4b7
+    style CL_HClust fill:#fde4f0,stroke:#c9a4b7
+    style CL_DBSCAN fill:#fde4f0,stroke:#c9a4b7
+    style CL_Valid fill:#fde4f0,stroke:#c9a4b7
+    style CL_Heatmap fill:#fde4f0,stroke:#c9a4b7
+    style CL_Biplot fill:#fde4f0,stroke:#c9a4b7
+
+    %% Internal processing nodes - PredictionModule (gray family)
+    style PR_BundleInput fill:#f0f0f0,stroke:#aeaeae
+    style PR_LoadBundle fill:#f0f0f0,stroke:#aeaeae
+    style PR_DataInput fill:#f0f0f0,stroke:#aeaeae
+    style PR_ValidData fill:#f0f0f0,stroke:#aeaeae
+    style PR_Config fill:#f0f0f0,stroke:#aeaeae
+    style PR_OptAxes fill:#f0f0f0,stroke:#aeaeae
+    style PR_OptMeta fill:#f0f0f0,stroke:#aeaeae
+    style PR_OptOverlay fill:#f0f0f0,stroke:#aeaeae
+    style PR_Preprocess fill:#f0f0f0,stroke:#aeaeae
+    style PR_PCA fill:#f0f0f0,stroke:#aeaeae
+    style PR_LDA fill:#f0f0f0,stroke:#aeaeae
+    style PR_QDA fill:#f0f0f0,stroke:#aeaeae
+    style PR_MDA fill:#f0f0f0,stroke:#aeaeae
+    style PR_OverlayPlot fill:#f0f0f0,stroke:#aeaeae
+    style PR_PostTable fill:#f0f0f0,stroke:#aeaeae
+    style PR_RangeWarn fill:#f0f0f0,stroke:#aeaeae
+    style PR_LogEvent fill:#f0f0f0,stroke:#aeaeae
+    style PR_ErrorDisplay fill:#f0f0f0,stroke:#aeaeae
+
+    %% Internal processing nodes - PowerModule (purple family)
+    style PWR_Input fill:#e6c8e5,stroke:#966697
+    style PWR_Valid fill:#e6c8e5,stroke:#966697
+    style PWR_Config fill:#e6c8e5,stroke:#966697
+    style PWR_SolveMode fill:#e6c8e5,stroke:#966697
+    style PWR_EffectInput fill:#e6c8e5,stroke:#966697
+    style PWR_InputMode fill:#e6c8e5,stroke:#966697
+    style PWR_MeanSD fill:#e6c8e5,stroke:#966697
+    style PWR_MedIQR fill:#e6c8e5,stroke:#966697
+    style PWR_Dist fill:#e6c8e5,stroke:#966697
+    style PWR_Approach fill:#e6c8e5,stroke:#966697
+    style PWR_SimData fill:#e6c8e5,stroke:#966697
+    style PWR_Calc fill:#e6c8e5,stroke:#966697
+    style PWR_Parametric fill:#e6c8e5,stroke:#966697
+    style PWR_Simulation fill:#e6c8e5,stroke:#966697
+    style PWR_Out_Curve fill:#e6c8e5,stroke:#966697
+    style PWR_Out_Design fill:#e6c8e5,stroke:#966697
+    style PWR_Out_Result fill:#e6c8e5,stroke:#966697
+    style PWR_Out_Plot fill:#e6c8e5,stroke:#966697
+    style PWR_Out_Viz fill:#e6c8e5,stroke:#966697
+    style PWR_Error fill:#e6c8e5,stroke:#966697
+
+    %% Edges colored by origin module - 12px thick
+    linkStyle 0,1 stroke:#8dd3c7,stroke-width:12px
+    linkStyle 2,3,4,5,12 stroke:#ffffb3,stroke-width:12px
+    linkStyle 6,7,13 stroke:#bebada,stroke-width:12px
+    linkStyle 8,9,15 stroke:#fdb462,stroke-width:12px
+    linkStyle 10,11,16 stroke:#b3de69,stroke-width:12px
+    linkStyle 17 stroke:#fccde5,stroke-width:12px
+    linkStyle 18 stroke:#d9d9d9,stroke-width:12px
+    linkStyle 19 stroke:#bc80bd,stroke-width:12px
     
