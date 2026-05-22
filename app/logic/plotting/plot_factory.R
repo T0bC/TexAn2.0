@@ -229,6 +229,9 @@ create_plot <- function(plot_type = "scatter",
   # --- Theme ---
   p <- plot_helpers$apply_theme(p, x_cols, gl, ax)
 
+  # --- Stats legend (separate from color legend) ---
+  p <- plot_helpers$add_stats_legend(p, gl, plot_type)
+
   # --- Nested axis ---
   if (length(x_cols) > 1) {
     p <- plot_helpers$add_nested_axis(p)
