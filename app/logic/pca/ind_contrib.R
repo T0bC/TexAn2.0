@@ -152,8 +152,11 @@ create_ind_contrib_plot <- function(pca_result,
         df$group <- factor("All")
       }
 
+      # Dummy x position for faceted strip layout
+      df$x_pos <- factor("")
+
       base_aes <- ggplot2$aes(
-        x = dim_label,
+        x = x_pos,
         y = contrib,
         fill = group,
         tooltip = tooltip,
@@ -175,18 +178,32 @@ create_ind_contrib_plot <- function(pca_result,
           color = "firebrick",
           linewidth = 0.5
         ) +
-        ggplot2$annotate(
-          "text",
-          x = 0.5,
-          y = threshold,
-          label = sprintf(
-            "Expected avg. (%.2f%%)", threshold
+        ggplot2$geom_text(
+          data = data.frame(
+            x_pos = factor(""),
+            contrib = threshold,
+            dim_label = factor(
+              df$dim_label[1],
+              levels = levels(df$dim_label)
+            )
           ),
-          hjust = 0,
+          ggplot2$aes(
+            x = x_pos, y = contrib,
+            label = sprintf(
+              "Avg. (%.2f%%)", threshold
+            )
+          ),
+          hjust = 0.5,
           vjust = -0.5,
           size = 3.2,
           color = "firebrick",
-          fontface = "italic"
+          fontface = "italic",
+          inherit.aes = FALSE
+        ) +
+        ggplot2$facet_wrap(
+          ~ dim_label,
+          nrow = 1,
+          scales = "free_y"
         ) +
         ggplot2$scale_y_continuous(
           labels = function(x) paste0(x, "%")
@@ -265,14 +282,24 @@ ind_contrib_theme <- function() {
       plot.title = ggplot2$element_text(
         hjust = 0.5, size = 14, face = "bold"
       ),
-      axis.title = ggplot2$element_text(size = 12),
-      axis.text.x = ggplot2$element_text(
-        size = 11, angle = 45, hjust = 1
-      ),
+      axis.title.x = ggplot2$element_blank(),
+      axis.text.x = ggplot2$element_blank(),
+      axis.ticks.x = ggplot2$element_blank(),
+      axis.title.y = ggplot2$element_text(size = 12),
       axis.text.y = ggplot2$element_text(size = 10),
+      strip.text = ggplot2$element_text(
+        size = 12, face = "bold"
+      ),
+      strip.background = ggplot2$element_rect(
+        fill = "grey95", color = NA
+      ),
+      panel.spacing = ggplot2$unit(0.15, "cm"),
       legend.position = "right",
+      legend.key.height = ggplot2$unit(1.2, "cm"),
+      legend.key.width = ggplot2$unit(0.4, "cm"),
       legend.title = ggplot2$element_text(size = 11),
       legend.text = ggplot2$element_text(size = 10),
-      panel.grid.minor = ggplot2$element_blank()
+      panel.grid.minor = ggplot2$element_blank(),
+      panel.grid.major.x = ggplot2$element_blank()
     )
 }
