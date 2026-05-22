@@ -696,21 +696,73 @@ points_panel <- function(ns) {
         )
       )
     ),
-    shiny$numericInput(
-      ns("transparency"),
-      bslib$tooltip(
-        shiny$tags$span(
-          "Alpha ",
-          bsicons$bs_icon(
-            "info-circle", class = "text-muted"
+    shiny$conditionalPanel(
+      condition = paste0(
+        "input['", ns("plotType"), "'] != 'boxplot_points' && ",
+        "input['", ns("plotType"), "'] != 'violin_points'"
+      ),
+      shiny$numericInput(
+        ns("transparency"),
+        bslib$tooltip(
+          shiny$tags$span(
+            "Alpha ",
+            bsicons$bs_icon(
+              "info-circle", class = "text-muted"
+            )
+          ),
+          paste(
+            "Transparency: 0 = fully transparent,",
+            "1 = fully opaque"
           )
         ),
-        paste(
-          "Transparency: 0 = fully transparent,",
-          "1 = fully opaque"
-        )
+        value = 0.6, step = 0.05, min = 0, max = 1
+      )
+    ),
+    shiny$conditionalPanel(
+      condition = paste0(
+        "input['", ns("plotType"), "'] == 'boxplot_points' || ",
+        "input['", ns("plotType"), "'] == 'violin_points'"
       ),
-      value = 0.6, step = 0.05, min = 0, max = 1
+      shiny$fluidRow(
+        shiny$column(
+          6,
+          shiny$numericInput(
+            ns("transparencyPoints"),
+            bslib$tooltip(
+              shiny$tags$span(
+                "Alpha Points ",
+                bsicons$bs_icon(
+                  "info-circle", class = "text-muted"
+                )
+              ),
+              paste(
+                "Transparency of data points:",
+                "0 = fully transparent, 1 = fully opaque"
+              )
+            ),
+            value = 0.6, step = 0.05, min = 0, max = 1
+          )
+        ),
+        shiny$column(
+          6,
+          shiny$numericInput(
+            ns("transparencyBox"),
+            bslib$tooltip(
+              shiny$tags$span(
+                "Alpha Box ",
+                bsicons$bs_icon(
+                  "info-circle", class = "text-muted"
+                )
+              ),
+              paste(
+                "Transparency of box/violin fill:",
+                "0 = fully transparent, 1 = fully opaque"
+              )
+            ),
+            value = 0.6, step = 0.05, min = 0, max = 1
+          )
+        )
+      )
     ),
     shiny$selectizeInput(
       ns("pointShape"),
@@ -891,6 +943,37 @@ median_sd_panel <- function(ns) {
       shiny$tags$p(
         class = "text-muted small fst-italic",
         "Median & SD lines are only available for Scatter plots."
+      )
+    ),
+    shiny$tags$hr(class = "my-2"),
+    shiny$fluidRow(
+      shiny$column(
+        6,
+        shiny$checkboxInput(
+          ns("showMedianPoint"),
+          bslib$tooltip(
+            shiny$tags$span(
+              "Median Point ",
+              bsicons$bs_icon("info-circle", class = "text-muted")
+            ),
+            "Overlay a median marker (\u25c6, pch 18) per group"
+          ),
+          value = FALSE
+        )
+      ),
+      shiny$column(
+        6,
+        shiny$checkboxInput(
+          ns("showMeanPoint"),
+          bslib$tooltip(
+            shiny$tags$span(
+              "Mean Point ",
+              bsicons$bs_icon("info-circle", class = "text-muted")
+            ),
+            "Overlay a mean marker (\u2295, pch 13) per group"
+          ),
+          value = FALSE
+        )
       )
     )
   )
