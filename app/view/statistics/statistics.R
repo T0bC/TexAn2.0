@@ -724,7 +724,10 @@ server <- function(id, input_data, data_version,
               tr_value = tr_val,
               use_bootstrap = params$use_bootstrap,
               boot_samples = params$boot_samples,
-              boot_sample_size = params$boot_sample_size
+              boot_sample_size = params$boot_sample_size,
+              is_rm = rm_active,
+              id_col = rm_id,
+              within_col = rm_within
             )
           } else {
             error_handling$simple_error(
@@ -761,7 +764,10 @@ server <- function(id, input_data, data_version,
               df = df_m,
               x_axis = x_cols,
               measure_col = m,
-              tr_value = tr_val
+              tr_value = tr_val,
+              is_rm = rm_active,
+              id_col = rm_id,
+              within_col = rm_within
             )
           } else {
             error_handling$simple_error(
@@ -799,7 +805,10 @@ server <- function(id, input_data, data_version,
               df = df_m,
               x_axis = x_cols,
               measure_col = m,
-              tr_value = tr_val
+              tr_value = tr_val,
+              is_rm = rm_active,
+              id_col = rm_id,
+              within_col = rm_within
             )
           } else {
             error_handling$simple_error(
