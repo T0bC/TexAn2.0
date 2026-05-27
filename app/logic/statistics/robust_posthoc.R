@@ -769,11 +769,11 @@ perform_combined_posthoc <- function(df, x_axis, measure_col,
 # Repeated Measures Robust Post-Hoc
 # =============================================================================
 
-#' Perform RM Robust Post-Hoc (Trimmed mean paired comparisons)
+#' Perform RM Robust Post-Hoc (Paired + Unpaired comparisons)
 #'
-#' For multi-way designs (e.g., TREATMENT × TIME), creates full
-#' interaction groups and performs paired trimmed-mean comparisons
-#' within each between-subject group.
+#' For multi-way designs (e.g., TREATMENT × TIME), returns both:
+#' - Paired comparisons (within-subject): same subjects across time
+#' - Unpaired comparisons (between-subject): different subjects at same time
 #'
 #' @param df Data frame (long format)
 #' @param x_axis Character vector of grouping columns
@@ -782,7 +782,7 @@ perform_combined_posthoc <- function(df, x_axis, measure_col,
 #' @param within_col Character, within-subject factor column name
 #' @param tr_value Numeric, trim proportion
 #' @param p_adjust_method Character, p-value adjustment method
-#' @return Data frame with RM robust posthoc results or app_error
+#' @return Data frame with paired and unpaired posthoc results or app_error
 #' @export
 perform_rm_robust_posthoc <- function(
     df, x_axis, measure_col,
@@ -826,10 +826,11 @@ perform_rm_robust_posthoc <- function(
       n_groups <- length(all_groups)
 
       if (n_groups < 2) {
-        stop("Paired post-hoc requires at least 2 groups.")
+        stop("Post-hoc requires at least 2 groups.")
       }
 
-      results <- list()
+      paired_results <- list()
+      unpaired_results <- list()
 
       # All pairwise comparisons between interaction groups
       for (i in 1:(n_groups - 1)) {
@@ -856,62 +857,103 @@ perform_rm_robust_posthoc <- function(
             }
           }
 
-          if (!between_match) {
-            # Skip: different between-subject groups
-            next
-          }
+          # Check if within-subject factor matches
+          within_match <- (g1_parts[within_idx] == g2_parts[within_idx])
 
           # Get data for each group
           g1_data <- df[
             df$interaction_group == g1_label,
-            c(id_col, measure_col)
+            c(id_col, measure_col),
+            drop = FALSE
           ]
           g2_data <- df[
             df$interaction_group == g2_label,
-            c(id_col, measure_col)
+            c(id_col, measure_col),
+            drop = FALSE
           ]
 
-          # Merge by ID to align pairs
-          paired <- merge(
-            g1_data, g2_data,
-            by = id_col, suffixes = c(".1", ".2")
-          )
+          if (between_match && !within_match) {
+            # PAIRED comparison: same between-group, different within-level
+            paired <- merge(
+              g1_data, g2_data,
+              by = id_col, suffixes = c(".1", ".2")
+            )
 
-          if (nrow(paired) < 2) {
-            next
+            if (nrow(paired) < 2) next
+
+            vals1 <- paired[[paste0(measure_col, ".1")]]
+            vals2 <- paired[[paste0(measure_col, ".2")]]
+
+            # Yuen's paired test for trimmed means
+            yuen_res <- WRS2$yuend(
+              x = vals1, y = vals2, tr = tr_value
+            )
+
+            paired_results[[length(paired_results) + 1]] <- data.frame(
+              Interaction = paste(g1_label, "vs.", g2_label),
+              Type = "Paired",
+              RM.Lincon.psihat = signif(yuen_res$diff, 3),
+              RM.Lincon.ci.lower = signif(yuen_res$conf.int[1], 3),
+              RM.Lincon.ci.upper = signif(yuen_res$conf.int[2], 3),
+              RM.Lincon.p.value = signif(yuen_res$p.value, 3),
+              stringsAsFactors = FALSE
+            )
+          } else if (!between_match && within_match) {
+            # UNPAIRED comparison: different between-group, same within-level
+            vals1 <- g1_data[[measure_col]]
+            vals2 <- g2_data[[measure_col]]
+
+            if (length(vals1) < 2 || length(vals2) < 2) next
+
+            # Yuen's independent test for trimmed means
+            yuen_res <- WRS2$yuen(
+              formula = stats$as.formula("value ~ group"),
+              data = data.frame(
+                value = c(vals1, vals2),
+                group = factor(c(
+                  rep("g1", length(vals1)),
+                  rep("g2", length(vals2))
+                ))
+              ),
+              tr = tr_value
+            )
+
+            unpaired_results[[length(unpaired_results) + 1]] <- data.frame(
+              Interaction = paste(g1_label, "vs.", g2_label),
+              Type = "Unpaired",
+              Lincon.psihat = signif(yuen_res$diff, 3),
+              Lincon.ci.lower = signif(yuen_res$conf.int[1], 3),
+              Lincon.ci.upper = signif(yuen_res$conf.int[2], 3),
+              Lincon.p.value = signif(yuen_res$p.value, 3),
+              stringsAsFactors = FALSE
+            )
           }
-
-          vals1 <- paired[[paste0(measure_col, ".1")]]
-          vals2 <- paired[[paste0(measure_col, ".2")]]
-
-          # Compute trimmed mean difference and Yuen's test
-          # Using WRS2::yuend for paired trimmed mean comparison
-          yuen_res <- WRS2$yuend(
-            x = vals1, y = vals2, tr = tr_value
-          )
-
-          results[[length(results) + 1]] <- data.frame(
-            Interaction = paste(g1_label, "vs.", g2_label),
-            RM.Lincon.psihat = signif(yuen_res$diff, 3),
-            RM.Lincon.ci.lower = signif(yuen_res$conf.int[1], 3),
-            RM.Lincon.ci.upper = signif(yuen_res$conf.int[2], 3),
-            RM.Lincon.p.value = signif(yuen_res$p.value, 3),
-            stringsAsFactors = FALSE
-          )
+          # Skip comparisons where both between AND within differ
         }
       }
 
-      if (length(results) == 0) {
-        stop("No valid paired comparisons found.")
+      # Combine results
+      all_results <- c(paired_results, unpaired_results)
+      if (length(all_results) == 0) {
+        stop("No valid comparisons found.")
       }
 
-      merged <- do.call(rbind, results)
+      merged <- do.call(rbind, all_results)
 
-      # Apply p-value adjustment
-      if (is.numeric(merged$RM.Lincon.p.value)) {
-        merged$RM.Lincon.p.adjusted <- stats$p.adjust(
-          merged$RM.Lincon.p.value,
-          method = p_adjust_method
+      # Apply p-value adjustment (separately for paired and unpaired)
+      paired_mask <- merged$Type == "Paired"
+      unpaired_mask <- merged$Type == "Unpaired"
+
+      if (any(paired_mask) && "RM.Lincon.p.value" %in% names(merged)) {
+        merged$RM.Lincon.p.adjusted <- NA_real_
+        merged$RM.Lincon.p.adjusted[paired_mask] <- stats$p.adjust(
+          merged$RM.Lincon.p.value[paired_mask], method = p_adjust_method
+        )
+      }
+      if (any(unpaired_mask) && "Lincon.p.value" %in% names(merged)) {
+        merged$Lincon.p.adjusted <- NA_real_
+        merged$Lincon.p.adjusted[unpaired_mask] <- stats$p.adjust(
+          merged$Lincon.p.value[unpaired_mask], method = p_adjust_method
         )
       }
 
@@ -920,6 +962,10 @@ perform_rm_robust_posthoc <- function(
       merged[numeric_cols] <- lapply(
         merged[numeric_cols], function(x) signif(x, 3)
       )
+
+      # Sort: Paired first, then Unpaired
+      merged <- merged[order(merged$Type, merged$Interaction), ]
+      rownames(merged) <- NULL
 
       merged
     },
