@@ -590,10 +590,22 @@ perform_combined_posthoc <- function(df, x_axis, measure_col,
                                      boot_sample_size = NULL,
                                      p_adjust_method = "bonferroni",
                                      filter_valid = FALSE,
-                                     debug = FALSE) {
+                                     debug = FALSE,
+                                     is_rm = FALSE,
+                                     id_col = NULL,
+                                     within_col = NULL) {
   rhino$log$info(
-    "combined_posthoc: starting for measure='{measure_col}'"
+    "combined_posthoc: starting for measure='{measure_col}',",
+    " rm={is_rm}"
   )
+
+  if (isTRUE(is_rm) && !is.null(id_col) && !is.null(within_col)) {
+    return(perform_rm_robust_posthoc(
+      df = df, x_axis = x_axis, measure_col = measure_col,
+      id_col = id_col, within_col = within_col,
+      tr_value = tr_value, p_adjust_method = p_adjust_method
+    ))
+  }
 
   # For multi-way designs, run lincon on combined groups (1-way style)
   # to produce pairwise comparisons matching Cliff's Delta output.
@@ -750,4 +762,99 @@ perform_combined_posthoc <- function(df, x_axis, measure_col,
   )
 
   merged
+}
+
+
+# =============================================================================
+# Repeated Measures Robust Post-Hoc
+# =============================================================================
+
+#' Perform RM Robust Post-Hoc (WRS2::rmmcp)
+#'
+#' Uses WRS2::rmmcp for pairwise trimmed-mean comparisons on
+#' wide-format repeated measures data.
+#'
+#' @param df Data frame (long format)
+#' @param x_axis Character vector of grouping columns
+#' @param measure_col Character, measurement column name
+#' @param id_col Character, subject ID column name
+#' @param within_col Character, within-subject factor column name
+#' @param tr_value Numeric, trim proportion
+#' @param p_adjust_method Character, p-value adjustment method
+#' @return Data frame with RM robust posthoc results or app_error
+#' @export
+perform_rm_robust_posthoc <- function(
+    df, x_axis, measure_col,
+    id_col, within_col,
+    tr_value = 0.2,
+    p_adjust_method = "bonferroni") {
+  rhino$log$info(
+    "rm_robust_posthoc: starting for",
+    " measure='{measure_col}'"
+  )
+
+  error_context <- list(
+    measure = measure_col,
+    id_col = id_col,
+    within_col = within_col,
+    tr_value = tr_value,
+    test_type = "rm_robust_posthoc"
+  )
+
+  test_result <- error_handling$safe_execute(
+    expr = {
+      df[[id_col]] <- as.factor(df[[id_col]])
+      df[[within_col]] <- as.factor(df[[within_col]])
+
+      # WRS2::rmmcp: pairwise comparisons using trimmed means
+      # Long-format: y=response, groups=within-factor, blocks=ID
+      rmmcp_result <- WRS2$rmmcp(
+        y = df[[measure_col]],
+        groups = df[[within_col]],
+        blocks = df[[id_col]],
+        tr = tr_value
+      )
+
+      # rmmcp returns $comp matrix with columns:
+      # Group, Group, psihat, ci.lower, ci.upper, p.value, p.crit
+      comp <- as.data.frame(rmmcp_result$comp)
+
+      # Use fnames for level labels
+      level_names <- rmmcp_result$fnames
+      g1_labels <- level_names[comp[, 1]]
+      g2_labels <- level_names[comp[, 2]]
+
+      merged <- data.frame(
+        Interaction = paste(g1_labels, "vs.", g2_labels),
+        RM.Lincon.psihat = signif(comp$psihat, 3),
+        RM.Lincon.ci.lower = signif(comp$ci.lower, 3),
+        RM.Lincon.ci.upper = signif(comp$ci.upper, 3),
+        RM.Lincon.p.value = signif(comp$p.value, 3),
+        stringsAsFactors = FALSE
+      )
+
+      # Apply p-value adjustment
+      if (is.numeric(merged$RM.Lincon.p.value)) {
+        merged$RM.Lincon.p.adjusted <- stats$p.adjust(
+          merged$RM.Lincon.p.value,
+          method = p_adjust_method
+        )
+      }
+
+      # Round numeric columns
+      numeric_cols <- vapply(merged, is.numeric, logical(1))
+      merged[numeric_cols] <- lapply(
+        merged[numeric_cols], function(x) signif(x, 3)
+      )
+
+      merged
+    },
+    operation_name = "rm_robust_posthoc",
+    context = error_context,
+    error_parser = error_handling$stat_error_parser
+  )
+
+  if (!test_result$success) return(test_result$error)
+
+  test_result$result
 }
