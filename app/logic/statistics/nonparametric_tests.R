@@ -509,12 +509,22 @@ perform_art3way <- function(df, x_axis, measure_col,
                             tr_value = 0,
                             use_bootstrap = FALSE,
                             boot_samples = 599,
-                            boot_sample_size = NULL) {
+                            boot_sample_size = NULL,
+                            is_rm = FALSE,
+                            id_col = NULL,
+                            within_col = NULL) {
   rhino$log$info(
     "art3way: starting for measure='{measure_col}',",
     " factors='{x_axis[1]}' * '{x_axis[2]}'",
-    " * '{x_axis[3]}'"
+    " * '{x_axis[3]}', rm={is_rm}"
   )
+
+  if (isTRUE(is_rm) && !is.null(id_col) && !is.null(within_col)) {
+    return(perform_rm_nonparametric(
+      df = df, x_axis = x_axis, measure_col = measure_col,
+      id_col = id_col, within_col = within_col
+    ))
+  }
 
   # Force bootstrap off for non-parametric tests
   omnibus$run_omnibus_test(
