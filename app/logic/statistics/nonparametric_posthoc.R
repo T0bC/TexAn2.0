@@ -656,8 +656,9 @@ combine_multiway <- function(df, x_axis, measure_col,
 
 #' Perform RM Non-Parametric Post-Hoc (Paired Wilcoxon Signed-Rank)
 #'
-#' Computes pairwise paired Wilcoxon signed-rank tests for all
-#' pairs of within-subject factor levels.
+#' For multi-way designs (e.g., TREATMENT × TIME), creates full
+#' interaction groups and performs paired Wilcoxon signed-rank tests
+#' within each between-subject group.
 #'
 #' @param df Data frame (long format)
 #' @param x_axis Character vector of grouping columns
@@ -680,6 +681,7 @@ perform_rm_nonparametric_posthoc <- function(
     measure = measure_col,
     id_col = id_col,
     within_col = within_col,
+    x_axis = x_axis,
     test_type = "rm_nonparametric_posthoc"
   )
 
@@ -688,28 +690,66 @@ perform_rm_nonparametric_posthoc <- function(
       df[[id_col]] <- as.factor(df[[id_col]])
       df[[within_col]] <- as.factor(df[[within_col]])
 
-      levels_w <- levels(df[[within_col]])
-      n_levels <- length(levels_w)
+      # Identify between-subject factors (x_axis minus within_col)
+      between_factors <- setdiff(x_axis, within_col)
 
-      if (n_levels < 2) {
-        stop(paste0(
-          "Paired Wilcoxon post-hoc requires at least ",
-          "2 levels in '", within_col, "'."
-        ))
+      # Create interaction group column combining all x_axis factors
+      if (length(x_axis) > 1) {
+        df$interaction_group <- do.call(
+          paste, c(df[x_axis], sep = ".")
+        )
+      } else {
+        df$interaction_group <- as.character(df[[x_axis[1]]])
+      }
+      df$interaction_group <- as.factor(df$interaction_group)
+
+      # Get all unique interaction groups
+      all_groups <- levels(df$interaction_group)
+      n_groups <- length(all_groups)
+
+      if (n_groups < 2) {
+        stop("Paired post-hoc requires at least 2 groups.")
       }
 
       results <- list()
-      for (i in 1:(n_levels - 1)) {
-        for (j in (i + 1):n_levels) {
-          g1_label <- levels_w[i]
-          g2_label <- levels_w[j]
 
+      # All pairwise comparisons between interaction groups
+      for (i in 1:(n_groups - 1)) {
+        for (j in (i + 1):n_groups) {
+          g1_label <- all_groups[i]
+          g2_label <- all_groups[j]
+
+          # Parse group labels to extract factor levels
+          g1_parts <- strsplit(g1_label, ".", fixed = TRUE)[[1]]
+          g2_parts <- strsplit(g2_label, ".", fixed = TRUE)[[1]]
+
+          # Find which factor differs
+          within_idx <- which(x_axis == within_col)
+          between_idx <- which(x_axis != within_col)
+
+          # Check if between-subject factors match
+          between_match <- TRUE
+          if (length(between_idx) > 0) {
+            for (bi in between_idx) {
+              if (g1_parts[bi] != g2_parts[bi]) {
+                between_match <- FALSE
+                break
+              }
+            }
+          }
+
+          if (!between_match) {
+            # Skip: different between-subject groups
+            next
+          }
+
+          # Get data for each group
           g1_data <- df[
-            df[[within_col]] == g1_label,
+            df$interaction_group == g1_label,
             c(id_col, measure_col)
           ]
           g2_data <- df[
-            df[[within_col]] == g2_label,
+            df$interaction_group == g2_label,
             c(id_col, measure_col)
           ]
 
@@ -718,6 +758,11 @@ perform_rm_nonparametric_posthoc <- function(
             g1_data, g2_data,
             by = id_col, suffixes = c(".1", ".2")
           )
+
+          if (nrow(paired) < 2) {
+            next
+          }
+
           vals1 <- paired[[paste0(measure_col, ".1")]]
           vals2 <- paired[[paste0(measure_col, ".2")]]
 
@@ -728,9 +773,7 @@ perform_rm_nonparametric_posthoc <- function(
           )
 
           results[[length(results) + 1]] <- data.frame(
-            Interaction = paste(
-              g1_label, "vs.", g2_label
-            ),
+            Interaction = paste(g1_label, "vs.", g2_label),
             Paired.Wilcox.V = signif(
               wilcox_res$statistic[["V"]], 3
             ),
@@ -740,6 +783,10 @@ perform_rm_nonparametric_posthoc <- function(
             stringsAsFactors = FALSE
           )
         }
+      }
+
+      if (length(results) == 0) {
+        stop("No valid paired comparisons found.")
       }
 
       merged <- do.call(rbind, results)
