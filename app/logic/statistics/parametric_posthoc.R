@@ -475,12 +475,11 @@ perform_combined_parametric_posthoc <- function(
 # Repeated Measures Parametric Post-Hoc
 # =============================================================================
 
-#' Perform RM Parametric Post-Hoc (Paired t-tests + Paired Cohen's d)
+#' Perform RM Parametric Post-Hoc (Paired + Unpaired comparisons)
 #'
-#' Computes pairwise paired t-tests and paired Cohen's d.
-#' For multi-way designs (e.g., TREATMENT × TIME), creates full
-#' interaction groups and performs paired comparisons within
-#' each between-subject group.
+#' For multi-way designs (e.g., TREATMENT × TIME), returns both:
+#' - Paired comparisons (within-subject): same subjects across time
+#' - Unpaired comparisons (between-subject): different subjects at same time
 #'
 #' @param df Data frame (long format)
 #' @param x_axis Character vector of grouping columns
@@ -488,7 +487,7 @@ perform_combined_parametric_posthoc <- function(
 #' @param id_col Character, subject ID column name
 #' @param within_col Character, within-subject factor column name
 #' @param p_adjust_method Character, p-value adjustment method
-#' @return Data frame with paired posthoc results or app_error
+#' @return Data frame with paired and unpaired posthoc results or app_error
 #' @export
 perform_rm_parametric_posthoc <- function(
     df, x_axis, measure_col,
@@ -530,10 +529,11 @@ perform_rm_parametric_posthoc <- function(
       n_groups <- length(all_groups)
 
       if (n_groups < 2) {
-        stop("Paired post-hoc requires at least 2 groups.")
+        stop("Post-hoc requires at least 2 groups.")
       }
 
-      results <- list()
+      paired_results <- list()
+      unpaired_results <- list()
 
       # All pairwise comparisons between interaction groups
       for (i in 1:(n_groups - 1)) {
@@ -546,12 +546,10 @@ perform_rm_parametric_posthoc <- function(
           g2_parts <- strsplit(g2_label, ".", fixed = TRUE)[[1]]
 
           # Find which factor differs
-          # x_axis order determines part positions
           within_idx <- which(x_axis == within_col)
           between_idx <- which(x_axis != within_col)
 
           # Check if between-subject factors match
-          # (only compare within same between-subject group)
           between_match <- TRUE
           if (length(between_idx) > 0) {
             for (bi in between_idx) {
@@ -562,76 +560,118 @@ perform_rm_parametric_posthoc <- function(
             }
           }
 
-          if (!between_match) {
-            # Skip: different between-subject groups
-            # (not a valid paired comparison)
-            next
-          }
+          # Check if within-subject factor matches
+          within_match <- (g1_parts[within_idx] == g2_parts[within_idx])
 
           # Get data for each group
           g1_data <- df[
             df$interaction_group == g1_label,
-            c(id_col, measure_col)
+            c(id_col, measure_col),
+            drop = FALSE
           ]
           g2_data <- df[
             df$interaction_group == g2_label,
-            c(id_col, measure_col)
+            c(id_col, measure_col),
+            drop = FALSE
           ]
 
-          # Merge by ID to align pairs
-          paired <- merge(
-            g1_data, g2_data,
-            by = id_col, suffixes = c(".1", ".2")
-          )
+          if (between_match && !within_match) {
+            # PAIRED comparison: same between-group, different within-level
+            paired <- merge(
+              g1_data, g2_data,
+              by = id_col, suffixes = c(".1", ".2")
+            )
 
-          if (nrow(paired) < 2) {
-            # Skip if not enough paired observations
-            next
+            if (nrow(paired) < 2) next
+
+            vals1 <- paired[[paste0(measure_col, ".1")]]
+            vals2 <- paired[[paste0(measure_col, ".2")]]
+
+            # Paired t-test
+            t_res <- stats$t.test(vals1, vals2, paired = TRUE)
+
+            # Paired Cohen's d (dz = mean_diff / sd_diff)
+            diffs <- vals1 - vals2
+            mean_diff <- mean(diffs, na.rm = TRUE)
+            sd_diff <- stats$sd(diffs, na.rm = TRUE)
+            d_z <- mean_diff / sd_diff
+            n_pairs <- sum(!is.na(diffs))
+            se_d <- sqrt(1 / n_pairs + d_z^2 / (2 * n_pairs))
+            d_ci_lower <- d_z - 1.96 * se_d
+            d_ci_upper <- d_z + 1.96 * se_d
+
+            paired_results[[length(paired_results) + 1]] <- data.frame(
+              Interaction = paste(g1_label, "vs.", g2_label),
+              Type = "Paired",
+              Paired.t.statistic = signif(unname(t_res$statistic), 3),
+              Paired.t.p.value = signif(t_res$p.value, 3),
+              Paired.d = signif(d_z, 3),
+              Paired.d.ci.lower = signif(d_ci_lower, 3),
+              Paired.d.ci.upper = signif(d_ci_upper, 3),
+              stringsAsFactors = FALSE
+            )
+          } else if (!between_match && within_match) {
+            # UNPAIRED comparison: different between-group, same within-level
+            vals1 <- g1_data[[measure_col]]
+            vals2 <- g2_data[[measure_col]]
+
+            if (length(vals1) < 2 || length(vals2) < 2) next
+
+            # Independent t-test
+            t_res <- stats$t.test(vals1, vals2, var.equal = TRUE)
+
+            # Cohen's d (pooled SD)
+            mean1 <- mean(vals1, na.rm = TRUE)
+            mean2 <- mean(vals2, na.rm = TRUE)
+            sd1 <- stats$sd(vals1, na.rm = TRUE)
+            sd2 <- stats$sd(vals2, na.rm = TRUE)
+            n1 <- sum(!is.na(vals1))
+            n2 <- sum(!is.na(vals2))
+            pooled_sd <- sqrt(
+              ((n1 - 1) * sd1^2 + (n2 - 1) * sd2^2) / (n1 + n2 - 2)
+            )
+            d <- (mean1 - mean2) / pooled_sd
+            se_d <- sqrt((n1 + n2) / (n1 * n2) + d^2 / (2 * (n1 + n2)))
+            d_ci_lower <- d - 1.96 * se_d
+            d_ci_upper <- d + 1.96 * se_d
+
+            unpaired_results[[length(unpaired_results) + 1]] <- data.frame(
+              Interaction = paste(g1_label, "vs.", g2_label),
+              Type = "Unpaired",
+              Tukey.t.statistic = signif(unname(t_res$statistic), 3),
+              Tukey.p.value = signif(t_res$p.value, 3),
+              Cohen.d = signif(d, 3),
+              Cohen.ci.lower = signif(d_ci_lower, 3),
+              Cohen.ci.upper = signif(d_ci_upper, 3),
+              stringsAsFactors = FALSE
+            )
           }
-
-          vals1 <- paired[[paste0(measure_col, ".1")]]
-          vals2 <- paired[[paste0(measure_col, ".2")]]
-
-          # Paired t-test
-          t_res <- stats$t.test(
-            vals1, vals2, paired = TRUE
-          )
-
-          # Paired Cohen's d (dz = mean_diff / sd_diff)
-          diffs <- vals1 - vals2
-          mean_diff <- mean(diffs, na.rm = TRUE)
-          sd_diff <- stats$sd(diffs, na.rm = TRUE)
-          d_z <- mean_diff / sd_diff
-          n_pairs <- sum(!is.na(diffs))
-          se_d <- sqrt(1 / n_pairs + d_z^2 / (2 * n_pairs))
-          d_ci_lower <- d_z - 1.96 * se_d
-          d_ci_upper <- d_z + 1.96 * se_d
-
-          results[[length(results) + 1]] <- data.frame(
-            Interaction = paste(g1_label, "vs.", g2_label),
-            Paired.t.statistic = signif(
-              t_res$statistic[["t"]], 3
-            ),
-            Paired.t.p.value = signif(t_res$p.value, 3),
-            Paired.d = signif(d_z, 3),
-            Paired.d.ci.lower = signif(d_ci_lower, 3),
-            Paired.d.ci.upper = signif(d_ci_upper, 3),
-            stringsAsFactors = FALSE
-          )
+          # Skip comparisons where both between AND within differ
         }
       }
 
-      if (length(results) == 0) {
-        stop("No valid paired comparisons found.")
+      # Combine results
+      all_results <- c(paired_results, unpaired_results)
+      if (length(all_results) == 0) {
+        stop("No valid comparisons found.")
       }
 
-      merged <- do.call(rbind, results)
+      merged <- do.call(rbind, all_results)
 
-      # Apply p-value adjustment
-      if ("Paired.t.p.value" %in% names(merged) &&
-          is.numeric(merged$Paired.t.p.value)) {
-        merged$Paired.t.p.adjusted <- stats$p.adjust(
-          merged$Paired.t.p.value, method = p_adjust_method
+      # Apply p-value adjustment (separately for paired and unpaired)
+      paired_mask <- merged$Type == "Paired"
+      unpaired_mask <- merged$Type == "Unpaired"
+
+      if (any(paired_mask) && "Paired.t.p.value" %in% names(merged)) {
+        merged$Paired.t.p.adjusted <- NA_real_
+        merged$Paired.t.p.adjusted[paired_mask] <- stats$p.adjust(
+          merged$Paired.t.p.value[paired_mask], method = p_adjust_method
+        )
+      }
+      if (any(unpaired_mask) && "Tukey.p.value" %in% names(merged)) {
+        merged$Tukey.p.adjusted <- NA_real_
+        merged$Tukey.p.adjusted[unpaired_mask] <- stats$p.adjust(
+          merged$Tukey.p.value[unpaired_mask], method = p_adjust_method
         )
       }
 
@@ -640,6 +680,10 @@ perform_rm_parametric_posthoc <- function(
       merged[numeric_cols] <- lapply(
         merged[numeric_cols], function(x) signif(x, 3)
       )
+
+      # Sort: Paired first, then Unpaired
+      merged <- merged[order(merged$Type, merged$Interaction), ]
+      rownames(merged) <- NULL
 
       merged
     },
