@@ -604,11 +604,14 @@ perform_rm_parametric_posthoc <- function(
             paired_results[[length(paired_results) + 1]] <- data.frame(
               Interaction = paste(g1_label, "vs.", g2_label),
               Type = "Paired",
-              statistic = signif(unname(t_res$statistic), 3),
-              p.value = signif(t_res$p.value, 3),
-              effect.size = signif(d_z, 3),
-              ci.lower = signif(d_ci_lower, 3),
-              ci.upper = signif(d_ci_upper, 3),
+              Tukey.diff = signif(mean_diff, 3),
+              Tukey.ci.lower = signif(mean_diff - 1.96 * sd_diff / sqrt(n_pairs), 3),
+              Tukey.ci.upper = signif(mean_diff + 1.96 * sd_diff / sqrt(n_pairs), 3),
+              Tukey.p.value = signif(t_res$p.value, 3),
+              Cohen.d = signif(d_z, 3),
+              Cohen.ci.lower = signif(d_ci_lower, 3),
+              Cohen.ci.upper = signif(d_ci_upper, 3),
+              Cohen.p.value = signif(t_res$p.value, 3),
               stringsAsFactors = FALSE
             )
           } else if (!between_match && within_match) {
@@ -639,11 +642,14 @@ perform_rm_parametric_posthoc <- function(
             unpaired_results[[length(unpaired_results) + 1]] <- data.frame(
               Interaction = paste(g1_label, "vs.", g2_label),
               Type = "Unpaired",
-              statistic = signif(unname(t_res$statistic), 3),
-              p.value = signif(t_res$p.value, 3),
-              effect.size = signif(d, 3),
-              ci.lower = signif(d_ci_lower, 3),
-              ci.upper = signif(d_ci_upper, 3),
+              Tukey.diff = signif(mean1 - mean2, 3),
+              Tukey.ci.lower = signif((mean1 - mean2) - 1.96 * pooled_sd * sqrt(1/n1 + 1/n2), 3),
+              Tukey.ci.upper = signif((mean1 - mean2) + 1.96 * pooled_sd * sqrt(1/n1 + 1/n2), 3),
+              Tukey.p.value = signif(t_res$p.value, 3),
+              Cohen.d = signif(d, 3),
+              Cohen.ci.lower = signif(d_ci_lower, 3),
+              Cohen.ci.upper = signif(d_ci_upper, 3),
+              Cohen.p.value = signif(t_res$p.value, 3),
               stringsAsFactors = FALSE
             )
           }
@@ -659,21 +665,17 @@ perform_rm_parametric_posthoc <- function(
 
       merged <- do.call(rbind, all_results)
 
-      # Apply p-value adjustment (separately for paired and unpaired)
-      paired_mask <- merged$Type == "Paired"
-      unpaired_mask <- merged$Type == "Unpaired"
+      # Apply p-value adjustment across ALL comparisons (paired + unpaired)
+      # This controls family-wise error rate for the total number of tests
+      merged$Tukey.p.adjusted <- stats$p.adjust(
+        merged$Tukey.p.value, method = p_adjust_method
+      )
+      merged$Cohen.p.adjusted <- stats$p.adjust(
+        merged$Cohen.p.value, method = p_adjust_method
+      )
 
-      merged$p.adjusted <- NA_real_
-      if (any(paired_mask)) {
-        merged$p.adjusted[paired_mask] <- stats$p.adjust(
-          merged$p.value[paired_mask], method = p_adjust_method
-        )
-      }
-      if (any(unpaired_mask)) {
-        merged$p.adjusted[unpaired_mask] <- stats$p.adjust(
-          merged$p.value[unpaired_mask], method = p_adjust_method
-        )
-      }
+      # Remove Type column - not needed for display
+      merged$Type <- NULL
 
       # Round numeric columns
       numeric_cols <- vapply(merged, is.numeric, logical(1))
@@ -681,8 +683,8 @@ perform_rm_parametric_posthoc <- function(
         merged[numeric_cols], function(x) signif(x, 3)
       )
 
-      # Sort: Paired first, then Unpaired
-      merged <- merged[order(merged$Type, merged$Interaction), ]
+      # Sort by Interaction
+      merged <- merged[order(merged$Interaction), ]
       rownames(merged) <- NULL
 
       merged

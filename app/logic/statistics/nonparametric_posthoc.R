@@ -813,21 +813,11 @@ perform_rm_nonparametric_posthoc <- function(
 
       merged <- do.call(rbind, all_results)
 
-      # Apply p-value adjustment (separately for paired and unpaired)
-      paired_mask <- merged$Type == "Paired"
-      unpaired_mask <- merged$Type == "Unpaired"
-
-      merged$p.adjusted <- NA_real_
-      if (any(paired_mask)) {
-        merged$p.adjusted[paired_mask] <- stats$p.adjust(
-          merged$p.value[paired_mask], method = p_adjust_method
-        )
-      }
-      if (any(unpaired_mask)) {
-        merged$p.adjusted[unpaired_mask] <- stats$p.adjust(
-          merged$p.value[unpaired_mask], method = p_adjust_method
-        )
-      }
+      # Apply p-value adjustment across ALL comparisons (paired + unpaired)
+      # This controls family-wise error rate for the total number of tests
+      merged$p.adjusted <- stats$p.adjust(
+        merged$p.value, method = p_adjust_method
+      )
 
       # Round numeric columns
       numeric_cols <- vapply(merged, is.numeric, logical(1))
