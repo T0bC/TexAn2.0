@@ -604,11 +604,11 @@ perform_rm_parametric_posthoc <- function(
             paired_results[[length(paired_results) + 1]] <- data.frame(
               Interaction = paste(g1_label, "vs.", g2_label),
               Type = "Paired",
-              Paired.t.statistic = signif(unname(t_res$statistic), 3),
-              Paired.t.p.value = signif(t_res$p.value, 3),
-              Paired.d = signif(d_z, 3),
-              Paired.d.ci.lower = signif(d_ci_lower, 3),
-              Paired.d.ci.upper = signif(d_ci_upper, 3),
+              statistic = signif(unname(t_res$statistic), 3),
+              p.value = signif(t_res$p.value, 3),
+              effect.size = signif(d_z, 3),
+              ci.lower = signif(d_ci_lower, 3),
+              ci.upper = signif(d_ci_upper, 3),
               stringsAsFactors = FALSE
             )
           } else if (!between_match && within_match) {
@@ -639,11 +639,11 @@ perform_rm_parametric_posthoc <- function(
             unpaired_results[[length(unpaired_results) + 1]] <- data.frame(
               Interaction = paste(g1_label, "vs.", g2_label),
               Type = "Unpaired",
-              Tukey.t.statistic = signif(unname(t_res$statistic), 3),
-              Tukey.p.value = signif(t_res$p.value, 3),
-              Cohen.d = signif(d, 3),
-              Cohen.ci.lower = signif(d_ci_lower, 3),
-              Cohen.ci.upper = signif(d_ci_upper, 3),
+              statistic = signif(unname(t_res$statistic), 3),
+              p.value = signif(t_res$p.value, 3),
+              effect.size = signif(d, 3),
+              ci.lower = signif(d_ci_lower, 3),
+              ci.upper = signif(d_ci_upper, 3),
               stringsAsFactors = FALSE
             )
           }
@@ -657,22 +657,21 @@ perform_rm_parametric_posthoc <- function(
         stop("No valid comparisons found.")
       }
 
-      merged <- dplyr$bind_rows(all_results)
+      merged <- do.call(rbind, all_results)
 
       # Apply p-value adjustment (separately for paired and unpaired)
       paired_mask <- merged$Type == "Paired"
       unpaired_mask <- merged$Type == "Unpaired"
 
-      if (any(paired_mask) && "Paired.t.p.value" %in% names(merged)) {
-        merged$Paired.t.p.adjusted <- NA_real_
-        merged$Paired.t.p.adjusted[paired_mask] <- stats$p.adjust(
-          merged$Paired.t.p.value[paired_mask], method = p_adjust_method
+      merged$p.adjusted <- NA_real_
+      if (any(paired_mask)) {
+        merged$p.adjusted[paired_mask] <- stats$p.adjust(
+          merged$p.value[paired_mask], method = p_adjust_method
         )
       }
-      if (any(unpaired_mask) && "Tukey.p.value" %in% names(merged)) {
-        merged$Tukey.p.adjusted <- NA_real_
-        merged$Tukey.p.adjusted[unpaired_mask] <- stats$p.adjust(
-          merged$Tukey.p.value[unpaired_mask], method = p_adjust_method
+      if (any(unpaired_mask)) {
+        merged$p.adjusted[unpaired_mask] <- stats$p.adjust(
+          merged$p.value[unpaired_mask], method = p_adjust_method
         )
       }
 

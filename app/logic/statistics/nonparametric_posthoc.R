@@ -776,8 +776,8 @@ perform_rm_nonparametric_posthoc <- function(
             paired_results[[length(paired_results) + 1]] <- data.frame(
               Interaction = paste(g1_label, "vs.", g2_label),
               Type = "Paired",
-              Paired.Wilcox.V = signif(unname(wilcox_res$statistic), 3),
-              Paired.Wilcox.p.value = signif(wilcox_res$p.value, 3),
+              statistic = signif(unname(wilcox_res$statistic), 3),
+              p.value = signif(wilcox_res$p.value, 3),
               stringsAsFactors = FALSE
             )
           } else if (!between_match && within_match) {
@@ -796,8 +796,8 @@ perform_rm_nonparametric_posthoc <- function(
             unpaired_results[[length(unpaired_results) + 1]] <- data.frame(
               Interaction = paste(g1_label, "vs.", g2_label),
               Type = "Unpaired",
-              Wilcox.W = signif(unname(wilcox_res$statistic), 3),
-              Wilcox.p.value = signif(wilcox_res$p.value, 3),
+              statistic = signif(unname(wilcox_res$statistic), 3),
+              p.value = signif(wilcox_res$p.value, 3),
               stringsAsFactors = FALSE
             )
           }
@@ -811,22 +811,21 @@ perform_rm_nonparametric_posthoc <- function(
         stop("No valid comparisons found.")
       }
 
-      merged <- dplyr$bind_rows(all_results)
+      merged <- do.call(rbind, all_results)
 
       # Apply p-value adjustment (separately for paired and unpaired)
       paired_mask <- merged$Type == "Paired"
       unpaired_mask <- merged$Type == "Unpaired"
 
-      if (any(paired_mask) && "Paired.Wilcox.p.value" %in% names(merged)) {
-        merged$Paired.Wilcox.p.adjusted <- NA_real_
-        merged$Paired.Wilcox.p.adjusted[paired_mask] <- stats$p.adjust(
-          merged$Paired.Wilcox.p.value[paired_mask], method = p_adjust_method
+      merged$p.adjusted <- NA_real_
+      if (any(paired_mask)) {
+        merged$p.adjusted[paired_mask] <- stats$p.adjust(
+          merged$p.value[paired_mask], method = p_adjust_method
         )
       }
-      if (any(unpaired_mask) && "Wilcox.p.value" %in% names(merged)) {
-        merged$Wilcox.p.adjusted <- NA_real_
-        merged$Wilcox.p.adjusted[unpaired_mask] <- stats$p.adjust(
-          merged$Wilcox.p.value[unpaired_mask], method = p_adjust_method
+      if (any(unpaired_mask)) {
+        merged$p.adjusted[unpaired_mask] <- stats$p.adjust(
+          merged$p.value[unpaired_mask], method = p_adjust_method
         )
       }
 
