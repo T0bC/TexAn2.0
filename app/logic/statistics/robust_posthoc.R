@@ -769,10 +769,11 @@ perform_combined_posthoc <- function(df, x_axis, measure_col,
 # Repeated Measures Robust Post-Hoc
 # =============================================================================
 
-#' Perform RM Robust Post-Hoc (WRS2::rmmcp)
+#' Perform RM Robust Post-Hoc (Trimmed mean paired comparisons)
 #'
-#' Uses WRS2::rmmcp for pairwise trimmed-mean comparisons on
-#' wide-format repeated measures data.
+#' For multi-way designs (e.g., TREATMENT × TIME), creates full
+#' interaction groups and performs paired trimmed-mean comparisons
+#' within each between-subject group.
 #'
 #' @param df Data frame (long format)
 #' @param x_axis Character vector of grouping columns
@@ -797,6 +798,7 @@ perform_rm_robust_posthoc <- function(
     measure = measure_col,
     id_col = id_col,
     within_col = within_col,
+    x_axis = x_axis,
     tr_value = tr_value,
     test_type = "rm_robust_posthoc"
   )
@@ -806,33 +808,104 @@ perform_rm_robust_posthoc <- function(
       df[[id_col]] <- as.factor(df[[id_col]])
       df[[within_col]] <- as.factor(df[[within_col]])
 
-      # WRS2::rmmcp: pairwise comparisons using trimmed means
-      # Long-format: y=response, groups=within-factor, blocks=ID
-      rmmcp_result <- WRS2$rmmcp(
-        y = df[[measure_col]],
-        groups = df[[within_col]],
-        blocks = df[[id_col]],
-        tr = tr_value
-      )
+      # Identify between-subject factors (x_axis minus within_col)
+      between_factors <- setdiff(x_axis, within_col)
 
-      # rmmcp returns $comp matrix with columns (positional):
-      # [1] Group, [2] Group, [3] psihat, [4] ci.lower,
-      # [5] ci.upper, [6] p.value, [7] p.crit
-      comp <- rmmcp_result$comp
+      # Create interaction group column combining all x_axis factors
+      if (length(x_axis) > 1) {
+        df$interaction_group <- do.call(
+          paste, c(df[x_axis], sep = ".")
+        )
+      } else {
+        df$interaction_group <- as.character(df[[x_axis[1]]])
+      }
+      df$interaction_group <- as.factor(df$interaction_group)
 
-      # Use fnames for level labels
-      level_names <- rmmcp_result$fnames
-      g1_labels <- level_names[comp[, 1]]
-      g2_labels <- level_names[comp[, 2]]
+      # Get all unique interaction groups
+      all_groups <- levels(df$interaction_group)
+      n_groups <- length(all_groups)
 
-      merged <- data.frame(
-        Interaction = paste(g1_labels, "vs.", g2_labels),
-        RM.Lincon.psihat = signif(comp[, 3], 3),
-        RM.Lincon.ci.lower = signif(comp[, 4], 3),
-        RM.Lincon.ci.upper = signif(comp[, 5], 3),
-        RM.Lincon.p.value = signif(comp[, 6], 3),
-        stringsAsFactors = FALSE
-      )
+      if (n_groups < 2) {
+        stop("Paired post-hoc requires at least 2 groups.")
+      }
+
+      results <- list()
+
+      # All pairwise comparisons between interaction groups
+      for (i in 1:(n_groups - 1)) {
+        for (j in (i + 1):n_groups) {
+          g1_label <- all_groups[i]
+          g2_label <- all_groups[j]
+
+          # Parse group labels to extract factor levels
+          g1_parts <- strsplit(g1_label, ".", fixed = TRUE)[[1]]
+          g2_parts <- strsplit(g2_label, ".", fixed = TRUE)[[1]]
+
+          # Find which factor differs
+          within_idx <- which(x_axis == within_col)
+          between_idx <- which(x_axis != within_col)
+
+          # Check if between-subject factors match
+          between_match <- TRUE
+          if (length(between_idx) > 0) {
+            for (bi in between_idx) {
+              if (g1_parts[bi] != g2_parts[bi]) {
+                between_match <- FALSE
+                break
+              }
+            }
+          }
+
+          if (!between_match) {
+            # Skip: different between-subject groups
+            next
+          }
+
+          # Get data for each group
+          g1_data <- df[
+            df$interaction_group == g1_label,
+            c(id_col, measure_col)
+          ]
+          g2_data <- df[
+            df$interaction_group == g2_label,
+            c(id_col, measure_col)
+          ]
+
+          # Merge by ID to align pairs
+          paired <- merge(
+            g1_data, g2_data,
+            by = id_col, suffixes = c(".1", ".2")
+          )
+
+          if (nrow(paired) < 2) {
+            next
+          }
+
+          vals1 <- paired[[paste0(measure_col, ".1")]]
+          vals2 <- paired[[paste0(measure_col, ".2")]]
+
+          # Compute trimmed mean difference and Yuen's test
+          # Using WRS2::yuend for paired trimmed mean comparison
+          yuen_res <- WRS2$yuend(
+            x = vals1, y = vals2, tr = tr_value
+          )
+
+          results[[length(results) + 1]] <- data.frame(
+            Interaction = paste(g1_label, "vs.", g2_label),
+            RM.Lincon.psihat = signif(yuen_res$diff, 3),
+            RM.Lincon.ci.lower = signif(yuen_res$conf.int[1], 3),
+            RM.Lincon.ci.upper = signif(yuen_res$conf.int[2], 3),
+            RM.Lincon.p.value = signif(yuen_res$p.value, 3),
+            stringsAsFactors = FALSE
+          )
+        }
+      }
+
+      if (length(results) == 0) {
+        stop("No valid paired comparisons found.")
+      }
+
+      merged <- do.call(rbind, results)
 
       # Apply p-value adjustment
       if (is.numeric(merged$RM.Lincon.p.value)) {
