@@ -572,11 +572,9 @@ describe("perform_rm_nonparametric (Friedman)", {
     subj_effect <- rnorm(n_subjects, mean = 0, sd = 0.5)
     subjects <- rep(paste0("S", seq_len(n_subjects)), each = 3)
     conditions <- rep(c("Low", "Mid", "High"), times = n_subjects)
-    values <- c(
-      rnorm(n_subjects, mean = 0, sd = 0.2) + subj_effect,
-      rnorm(n_subjects, mean = 3, sd = 0.2) + subj_effect,
-      rnorm(n_subjects, mean = 6, sd = 0.2) + subj_effect
-    )
+    values <- rep(subj_effect, each = 3) +
+      rep(c(0, 3, 6), times = n_subjects) +
+      rnorm(n_subjects * 3, mean = 0, sd = 0.2)
     df <- data.frame(
       id = subjects,
       time = conditions,
