@@ -424,6 +424,67 @@ make_rm_twoway_data <- function(n_subjects = 10) {
   grid
 }
 
+make_rm_oneway_data <- function(n_subjects = 15, n_times = 3) {
+  set.seed(42)
+  grid <- expand.grid(
+    ID = paste0("S", seq_len(n_subjects)),
+    TIME = paste0("T", seq_len(n_times)),
+    stringsAsFactors = FALSE
+  )
+  grid$measure <- rnorm(nrow(grid)) +
+    as.integer(factor(grid$TIME)) +
+    rep(rnorm(n_subjects, sd = 0.5), times = n_times)
+  grid
+}
+
+# =============================================================================
+# perform_rm_nonparametric_posthoc — 1-way RM (pure within, paired Wilcoxon)
+# =============================================================================
+
+describe("perform_rm_nonparametric_posthoc 1-way RM", {
+  it("returns Wilcox + Cliff columns (no ART) for pure within design", {
+    df <- make_rm_oneway_data(n_subjects = 15, n_times = 3)
+    result <- nonparametric_posthoc$perform_rm_nonparametric_posthoc(
+      df = df,
+      x_axis = "TIME",
+      measure_col = "measure",
+      id_col = "ID",
+      within_col = "TIME",
+      p_adjust_method = "bonferroni"
+    )
+    expect_true(is.data.frame(result))
+    expect_true("Interaction" %in% names(result))
+    expect_true("Wilcox.p.value" %in% names(result))
+    expect_true("Wilcox.p.adjusted" %in% names(result))
+    expect_true("Cliff.psihat" %in% names(result))
+    expect_false(any(grepl("^ART\\.", names(result))))
+  })
+
+  it("returns C(k,2) comparisons for k within-subject levels", {
+    df <- make_rm_oneway_data(n_subjects = 15, n_times = 3)
+    result <- nonparametric_posthoc$perform_rm_nonparametric_posthoc(
+      df = df,
+      x_axis = "TIME",
+      measure_col = "measure",
+      id_col = "ID",
+      within_col = "TIME"
+    )
+    expect_equal(nrow(result), 3)
+  })
+
+  it("produces Cliff's delta bounded in [-1, 1]", {
+    df <- make_rm_oneway_data(n_subjects = 15, n_times = 3)
+    result <- nonparametric_posthoc$perform_rm_nonparametric_posthoc(
+      df = df,
+      x_axis = "TIME",
+      measure_col = "measure",
+      id_col = "ID",
+      within_col = "TIME"
+    )
+    expect_true(all(result$Cliff.psihat >= -1 & result$Cliff.psihat <= 1))
+  })
+})
+
 # =============================================================================
 # perform_rm_nonparametric_posthoc — 2-way RM happy path
 # =============================================================================
@@ -568,6 +629,43 @@ describe("perform_rm_nonparametric_posthoc 2-way RM", {
     # With 4 comparisons, bonferroni should multiply by 4 (capped at 1)
     expected_adj <- pmin(rm_result$ART.p.value * 4, 1)
     expect_equal(rm_result$ART.p.adjusted, expected_adj, tolerance = 1e-3)
+  })
+
+  it("blanks ART-only columns and sets Cliff's delta for paired rows", {
+    df <- make_rm_twoway_data(n_subjects = 10)
+
+    rm_result <- nonparametric_posthoc$perform_rm_nonparametric_posthoc(
+      df = df,
+      x_axis = c("COMPOSITE", "TIME"),
+      measure_col = "measure",
+      id_col = "ID",
+      within_col = "TIME",
+      p_adjust_method = "none"
+    )
+
+    paired_interactions <- c("A.T1 vs. A.T2", "B.T1 vs. B.T2")
+    unpaired_interactions <- c("A.T1 vs. B.T1", "A.T2 vs. B.T2")
+
+    for (int in paired_interactions) {
+      row <- rm_result[rm_result$Interaction == int, ]
+      if (nrow(row) == 1) {
+        # ART-only statistics have no paired analog -> blanked
+        expect_true(is.na(row$ART.estimate))
+        expect_true(is.na(row$ART.t.ratio))
+        # Paired Cliff's delta is a real effect size in [-1, 1]
+        expect_false(is.na(row$ART.d))
+        expect_true(row$ART.d >= -1 && row$ART.d <= 1)
+      }
+    }
+
+    for (int in unpaired_interactions) {
+      row <- rm_result[rm_result$Interaction == int, ]
+      if (nrow(row) == 1) {
+        # Between-subject rows keep their ART-C statistics
+        expect_false(is.na(row$ART.estimate))
+        expect_false(is.na(row$ART.t.ratio))
+      }
+    }
   })
 })
 

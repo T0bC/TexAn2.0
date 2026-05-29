@@ -430,6 +430,39 @@ render_posthoc_result <- function(result, x_axis, params) {
         " (independent samples). Column headers are identical ",
         "for both test regimes."
       )
+    } else if (isTRUE(params$is_repeated_measures) &&
+               identical(params$test_approach, "nonparametric")) {
+      wn <- params$rm_within_col %||% "the within-subject factor"
+      if (length(x_axis) <= 1) {
+        # 1-way pure within: every comparison is paired
+        shiny$tags$p(
+          class = "text-muted small mb-2",
+          shiny$tags$strong("Repeated measures: "),
+          "all pairwise comparisons of ", shiny$tags$em(wn),
+          " levels were computed with ",
+          shiny$tags$strong("paired Wilcoxon signed-rank tests"),
+          " and ",
+          shiny$tags$strong("matched-pairs Cliff's delta"),
+          " (reported in the Cliff's Delta panel)."
+        )
+      } else {
+        shiny$tags$p(
+          class = "text-muted small mb-2",
+          shiny$tags$strong("Repeated measures: "),
+          "comparisons where the between-subject factor(s) are ",
+          "identical and only ", shiny$tags$em(wn),
+          " differs (e.g. A.T1 vs. A.T2) were computed with ",
+          shiny$tags$strong("paired Wilcoxon signed-rank tests"),
+          " and ", shiny$tags$strong("matched-pairs Cliff's delta"),
+          " (placed in the effect-size column; the ART estimate, SE, ",
+          "df and t-ratio cells are left blank for these rows as they ",
+          "have no paired analog). All remaining comparisons use ",
+          shiny$tags$strong("ART-C contrasts"), " and ",
+          shiny$tags$strong("ART Cohen's d"),
+          " (independent samples). Column headers are identical ",
+          "for both test regimes."
+        )
+      }
     } else {
       NULL
     }

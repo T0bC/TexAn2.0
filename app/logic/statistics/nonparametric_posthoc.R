@@ -654,14 +654,21 @@ combine_multiway <- function(df, x_axis, measure_col,
 # Repeated Measures Non-Parametric Post-Hoc
 # =============================================================================
 
-#' Compute paired Wilcoxon statistics
+#' Compute paired Wilcoxon signed-rank stats + paired Cliff's delta
+#'
+#' For within-subject (paired) comparisons. Returns the paired Wilcoxon
+#' signed-rank p-value and the matched-pairs Cliff's delta (dominance)
+#' effect size with a normal-approximation confidence interval. Generic
+#' column names are returned so callers can map them onto the relevant
+#' display columns (ART.* for multi-way, Cliff.* for one-way).
 #'
 #' @param df Data frame with interaction_group column
 #' @param g1_label First group label
 #' @param g2_label Second group label
 #' @param id_col Subject ID column
 #' @param measure_col Measurement column
-#' @return Data frame row with paired Wilcoxon stats, or NULL if insufficient data
+#' @return Data frame row (Interaction, p.value, d, d.ci.lower, d.ci.upper),
+#'   or NULL if fewer than 2 matched pairs
 #' @keywords internal
 compute_paired_wilcox_stats <- function(df, g1_label, g2_label, id_col, measure_col) {
   g1_data <- df[df$interaction_group == g1_label, c(id_col, measure_col), drop = FALSE]
@@ -676,9 +683,23 @@ compute_paired_wilcox_stats <- function(df, g1_label, g2_label, id_col, measure_
   # Paired Wilcoxon signed-rank test
   wilcox_res <- stats$wilcox.test(vals1, vals2, paired = TRUE, exact = FALSE)
 
+  # Matched-pairs Cliff's delta (dominance of g1 over g2), bounded [-1, 1].
+  # delta = (#(g1 > g2) - #(g1 < g2)) / n_pairs; ties contribute 0.
+  # SE from the variance of the per-pair signs; CI via normal approximation
+  # (consistent with the 1.96 * SE convention used for the unpaired effects).
+  signs <- sign(vals1 - vals2)
+  n_pairs <- length(signs)
+  delta <- mean(signs)
+  se_delta <- if (n_pairs > 1) stats$sd(signs) / sqrt(n_pairs) else NA_real_
+  ci_lower <- max(-1, delta - 1.96 * se_delta)
+  ci_upper <- min(1, delta + 1.96 * se_delta)
+
   data.frame(
     Interaction = paste(g1_label, "vs.", g2_label),
-    ART.p.value = wilcox_res$p.value,
+    p.value = wilcox_res$p.value,
+    d = delta,
+    d.ci.lower = ci_lower,
+    d.ci.upper = ci_upper,
     stringsAsFactors = FALSE
   )
 }
@@ -750,98 +771,166 @@ perform_rm_nonparametric_posthoc <- function(
       if (length(x_axis) > 1) {
         df$interaction_group <- interaction(df[x_axis], sep = ".")
       } else {
-        df$interaction_group <- df[[x_axis[1]]]
+        df$interaction_group <- as.factor(df[[x_axis[1]]])
       }
 
-      # Step 1: Get unpaired base results (no p-adjustment yet)
-      unpaired_base <- combine_multiway(
-        df = df,
-        x_axis = x_axis,
-        measure_col = measure_col,
-        p_adjust_method = "none",
-        filter_valid = TRUE
-      )
-
-      if (error_handling$is_app_error(unpaired_base)) {
-        stop(unpaired_base$message)
-      }
-
-      # Step 2: Classify each comparison and compute paired stats where needed
       all_groups <- levels(df$interaction_group)
-      paired_replacements <- list()
 
-      for (i in 1:(length(all_groups) - 1)) {
-        for (j in (i + 1):length(all_groups)) {
-          g1 <- all_groups[i]
-          g2 <- all_groups[j]
-
-          comp_type <- validation_utils$classify_rm_comparison(g1, g2, x_axis, within_col)
-
-          if (comp_type == "paired") {
-            paired_row <- compute_paired_wilcox_stats(
-              df, g1, g2, id_col, measure_col
+      if (length(x_axis) == 1) {
+        # -----------------------------------------------------------------
+        # One-way pure within-subject design.
+        # ARTool cannot fit a single-factor model, so ART contrasts are
+        # unavailable. Every pairwise comparison is within-subject (paired):
+        # use paired Wilcoxon signed-rank + paired Cliff's delta. Output uses
+        # the Wilcox/Cliff column scheme to match the 1-way unpaired headers.
+        # -----------------------------------------------------------------
+        rows <- list()
+        for (i in 1:(length(all_groups) - 1)) {
+          for (j in (i + 1):length(all_groups)) {
+            pr <- compute_paired_wilcox_stats(
+              df, all_groups[i], all_groups[j], id_col, measure_col
             )
-            if (!is.null(paired_row)) {
-              paired_replacements[[length(paired_replacements) + 1]] <- paired_row
+            if (!is.null(pr)) {
+              rows[[length(rows) + 1]] <- data.frame(
+                Interaction = pr$Interaction,
+                Wilcox.p.value = pr$p.value,
+                Cliff.psihat = pr$d,
+                Cliff.ci.lower = pr$d.ci.lower,
+                Cliff.ci.upper = pr$d.ci.upper,
+                stringsAsFactors = FALSE
+              )
             }
           }
         }
-      }
 
-      # Step 3: Replace unpaired p-values with paired p-values
-      if (length(paired_replacements) > 0) {
-        paired_df <- do.call(rbind, paired_replacements)
-
-        # Normalize interaction keys for matching
-        unpaired_norm <- validation_utils$normalize_interaction(unpaired_base)
-        paired_norm <- validation_utils$normalize_interaction(paired_df)
-
-        # For each paired row, find and replace p-value in unpaired_base
-        for (pk in paired_norm$InteractionKey) {
-          match_idx <- which(unpaired_norm$InteractionKey == pk)
-          if (length(match_idx) == 1) {
-            paired_row <- paired_norm[paired_norm$InteractionKey == pk, ]
-            # Replace p-value only (ART estimate/effect size remain from unpaired)
-            if ("ART.p.value" %in% names(unpaired_base) &&
-                "ART.p.value" %in% names(paired_row)) {
-              unpaired_base[match_idx, "ART.p.value"] <- paired_row$ART.p.value
-            }
-          }
+        if (length(rows) == 0) {
+          stop("No valid paired comparisons could be computed.")
         }
-      }
 
-      # Step 4: Apply p-value adjustment on final combined raw p-values
-      # Remove any existing p.adjusted column first
-      unpaired_base$ART.p.adjusted <- NULL
-
-      if ("ART.p.value" %in% names(unpaired_base)) {
-        unpaired_base$ART.p.adjusted <- stats$p.adjust(
-          unpaired_base$ART.p.value, method = p_adjust_method
+        result <- do.call(rbind, rows)
+        result$Wilcox.p.adjusted <- stats$p.adjust(
+          result$Wilcox.p.value, method = p_adjust_method
         )
+
+        desired_order <- c(
+          "Interaction",
+          "Wilcox.p.value", "Wilcox.p.adjusted",
+          "Cliff.psihat", "Cliff.ci.lower", "Cliff.ci.upper"
+        )
+        final_cols <- intersect(desired_order, names(result))
+        result <- result[, final_cols, drop = FALSE]
+
+        numeric_cols <- vapply(result, is.numeric, logical(1))
+        result[numeric_cols] <- lapply(
+          result[numeric_cols], function(x) signif(x, 3)
+        )
+        result <- result[order(result$Interaction), ]
+        rownames(result) <- NULL
+        result
+      } else {
+        # -----------------------------------------------------------------
+        # Multi-way mixed design (between x within).
+        # Hybrid: ART-C contrasts as the unpaired base, then replace the
+        # within-subject (paired) rows with paired Wilcoxon signed-rank
+        # p-values and paired Cliff's delta effect sizes. Between-subject
+        # rows keep their ART-C statistics. Headers stay identical to the
+        # unpaired ART table.
+        # -----------------------------------------------------------------
+
+        # Step 1: Get unpaired base results (no p-adjustment yet)
+        unpaired_base <- combine_multiway(
+          df = df,
+          x_axis = x_axis,
+          measure_col = measure_col,
+          p_adjust_method = "none",
+          filter_valid = TRUE
+        )
+
+        if (error_handling$is_app_error(unpaired_base)) {
+          stop(unpaired_base$message)
+        }
+
+        # Step 2: Compute paired stats for within-subject comparisons
+        paired_replacements <- list()
+        for (i in 1:(length(all_groups) - 1)) {
+          for (j in (i + 1):length(all_groups)) {
+            g1 <- all_groups[i]
+            g2 <- all_groups[j]
+            comp_type <- validation_utils$classify_rm_comparison(
+              g1, g2, x_axis, within_col
+            )
+            if (comp_type == "paired") {
+              paired_row <- compute_paired_wilcox_stats(
+                df, g1, g2, id_col, measure_col
+              )
+              if (!is.null(paired_row)) {
+                paired_replacements[[length(paired_replacements) + 1]] <- paired_row
+              }
+            }
+          }
+        }
+
+        # Step 3: Replace within-subject rows. Swap the p-value and effect
+        # size (paired Cliff's delta); blank the ART-only columns that have
+        # no paired analog so the two test regimes are not mixed in a row.
+        if (length(paired_replacements) > 0) {
+          paired_df <- do.call(rbind, paired_replacements)
+          unpaired_norm <- validation_utils$normalize_interaction(unpaired_base)
+          paired_norm <- validation_utils$normalize_interaction(paired_df)
+
+          for (pk in paired_norm$InteractionKey) {
+            match_idx <- which(unpaired_norm$InteractionKey == pk)
+            if (length(match_idx) == 1) {
+              pr <- paired_norm[paired_norm$InteractionKey == pk, ]
+              if ("ART.p.value" %in% names(unpaired_base)) {
+                unpaired_base[match_idx, "ART.p.value"] <- pr$p.value
+              }
+              if ("ART.d" %in% names(unpaired_base)) {
+                unpaired_base[match_idx, "ART.d"] <- pr$d
+              }
+              if ("ART.d.ci.lower" %in% names(unpaired_base)) {
+                unpaired_base[match_idx, "ART.d.ci.lower"] <- pr$d.ci.lower
+              }
+              if ("ART.d.ci.upper" %in% names(unpaired_base)) {
+                unpaired_base[match_idx, "ART.d.ci.upper"] <- pr$d.ci.upper
+              }
+              # ART-only statistics have no paired-Wilcoxon analog
+              for (col in c("ART.estimate", "ART.SE", "ART.df", "ART.t.ratio")) {
+                if (col %in% names(unpaired_base)) {
+                  unpaired_base[match_idx, col] <- NA_real_
+                }
+              }
+            }
+          }
+        }
+
+        # Step 4: Apply p-value adjustment on final combined raw p-values
+        unpaired_base$ART.p.adjusted <- NULL
+        if ("ART.p.value" %in% names(unpaired_base)) {
+          unpaired_base$ART.p.adjusted <- stats$p.adjust(
+            unpaired_base$ART.p.value, method = p_adjust_method
+          )
+        }
+
+        # Reorder columns
+        desired_order <- c(
+          "Interaction",
+          "ART.estimate", "ART.SE", "ART.df",
+          "ART.t.ratio", "ART.p.value", "ART.p.adjusted",
+          "ART.d", "ART.d.ci.lower", "ART.d.ci.upper"
+        )
+        final_cols <- intersect(desired_order, names(unpaired_base))
+        extra_cols <- setdiff(names(unpaired_base), desired_order)
+        result <- unpaired_base[, c(final_cols, extra_cols), drop = FALSE]
+
+        numeric_cols <- vapply(result, is.numeric, logical(1))
+        result[numeric_cols] <- lapply(
+          result[numeric_cols], function(x) signif(x, 3)
+        )
+        result <- result[order(result$Interaction), ]
+        rownames(result) <- NULL
+        result
       }
-
-      # Reorder columns
-      desired_order <- c(
-        "Interaction",
-        "ART.estimate", "ART.SE", "ART.df",
-        "ART.t.ratio", "ART.p.value", "ART.p.adjusted",
-        "ART.d", "ART.d.ci.lower", "ART.d.ci.upper"
-      )
-      final_cols <- intersect(desired_order, names(unpaired_base))
-      extra_cols <- setdiff(names(unpaired_base), desired_order)
-      result <- unpaired_base[, c(final_cols, extra_cols), drop = FALSE]
-
-      # Round numeric columns
-      numeric_cols <- vapply(result, is.numeric, logical(1))
-      result[numeric_cols] <- lapply(
-        result[numeric_cols], function(x) signif(x, 3)
-      )
-
-      # Sort by Interaction
-      result <- result[order(result$Interaction), ]
-      rownames(result) <- NULL
-
-      result
     },
     operation_name = "rm_nonparametric_posthoc",
     context = error_context,
