@@ -413,6 +413,27 @@ render_posthoc_result <- function(result, x_axis, params) {
       )
     }
 
+    rm_note <- if (isTRUE(params$is_repeated_measures) &&
+                   identical(params$test_approach, "parametric")) {
+      wn <- params$rm_within_col %||% "the within-subject factor"
+      shiny$tags$p(
+        class = "text-muted small mb-2",
+        shiny$tags$strong("Repeated measures: "),
+        "comparisons where the between-subject factor(s) are ",
+        "identical and only ", shiny$tags$em(wn),
+        " differs (e.g. A.T1 vs. A.T2) were computed with ",
+        shiny$tags$strong("paired t-tests"), " and ",
+        shiny$tags$strong("Cohen's dz"),
+        ". All remaining comparisons use ",
+        shiny$tags$strong("Tukey HSD"), " and ",
+        shiny$tags$strong("Cohen's d"),
+        " (independent samples). Column headers are identical ",
+        "for both test regimes."
+      )
+    } else {
+      NULL
+    }
+
     return(shiny$tags$div(
       class = "mt-3 px-2",
       shiny$tags$h6(
@@ -420,6 +441,7 @@ render_posthoc_result <- function(result, x_axis, params) {
         bsicons$bs_icon("table", class = "me-1"),
         "Pairwise Comparisons"
       ),
+      rm_note,
       shiny$tags$div(
         class = "d-flex gap-3",
         # Left panel
