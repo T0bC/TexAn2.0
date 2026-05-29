@@ -132,7 +132,7 @@ Several configurations produce specific behaviour:
 - **PCA bundle with many components**: all PC dimensions stored in the bundle are used for projection. The overlay plot defaults to `Dim.1` vs `Dim.2`; use the **X Axis / Y Axis** selectors in Plot Settings to explore other dimensions
 - **Bundle trained on PCA scores (two-stage PCA → LDA)**: the unknown data must already be structured as PCA score columns (e.g., `Dim.1`, `Dim.2`, …). Raw measurements cannot be directly used with such a bundle — they must first be projected through the same PCA model
 - **Column present but all values are NA**: the column passes the presence check but will be all-NA after reading. Validation does not detect this; the prediction will fail at the `predict()` call. Inspect the unknown file before uploading
-- **Bundle created by a different TexAn version**: the `app_version` field is checked for display only; older bundles are accepted as long as all required fields are present. If a field was added in a newer version and is absent, the relevant feature (e.g., range validation) silently degrades
+- **Bundle created by a different AnStatR version**: the `app_version` field is checked for display only; older bundles are accepted as long as all required fields are present. If a field was added in a newer version and is absent, the relevant feature (e.g., range validation) silently degrades
 
 </details>
 

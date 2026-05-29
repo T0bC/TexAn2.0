@@ -15,7 +15,7 @@ The bundle file must be an `.rds` object exported directly from the PCA, LDA, QD
 | `used_data` | Training data after preprocessing (used for overlay plots) |
 | `scale_params` | Center and scale vectors (LDA/MDA/QDA) or NULL (PCA) |
 | `transform_params` | Stored skewness transformation parameters or empty list |
-| `app_version` | Version of TexAn that created the bundle |
+| `app_version` | Version of AnStatR that created the bundle |
 | `created` | Timestamp of bundle creation |
 
 Bundles exported from external R sessions or other tools will not be accepted unless they conform to this structure. Bundles exported in cross-validation (CV) mode do not include a fitted model object and cannot be used for prediction.

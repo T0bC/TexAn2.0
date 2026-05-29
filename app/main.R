@@ -32,17 +32,17 @@ ui <- function(id) {
     id = ns("active_page"),
     title = shiny$tagList(
       shiny$tags$img(
-        src = "static/texan_icon.svg",
+        src = "static/anstatr_icon.svg",
         height = "28px",
         style = "margin-right: 6px; vertical-align: middle;"
       ),
-      "TexAn"
+      "AnStatR"
     ),
     theme = settings$get_default_theme(),
     fillable = FALSE,
     header = shiny$tagList(
       shiny$tags$head(
-        shiny$tags$link(rel = "icon", type = "image/svg+xml", href = "static/texan_icon.svg"),
+        shiny$tags$link(rel = "icon", type = "image/svg+xml", href = "static/anstatr_icon.svg"),
         shiny$tags$script(src = "static/js/disabled_tabs.js"),
         shiny$tags$script(src = "static/js/plot_resize.js"),
         shiny$tags$script(src = "static/js/help_resize.js")
