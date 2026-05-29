@@ -30,13 +30,11 @@ ui <- function(id) {
 
   bslib$page_navbar(
     id = ns("active_page"),
-    title = shiny$tagList(
-      shiny$tags$img(
-        src = "static/anstatr_icon.svg",
-        height = "28px",
-        style = "margin-right: 6px; vertical-align: middle;"
-      ),
-      "AnStatR"
+    title = shiny$tags$img(
+      src = "static/anstatr_logo.svg",
+      height = "32px",
+      alt = "AnStatR",
+      style = "vertical-align: middle;"
     ),
     theme = settings$get_default_theme(),
     fillable = FALSE,
