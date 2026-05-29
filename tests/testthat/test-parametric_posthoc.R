@@ -646,3 +646,176 @@ describe("perform_rm_parametric_posthoc hybrid approach", {
     expect_equal(rm_result$Tukey.p.adjusted, expected_adj, tolerance = 1e-3)
   })
 })
+
+# =============================================================================
+# Helpers: 1-way and 3-way repeated measures data
+# =============================================================================
+
+make_rm_oneway_data <- function(n_subjects = 12) {
+  set.seed(42)
+  grid <- expand.grid(
+    ID = paste0("S", seq_len(n_subjects)),
+    TIME = c("T1", "T2", "T3"),
+    stringsAsFactors = FALSE
+  )
+  grid$measure <- rnorm(nrow(grid)) +
+    ifelse(grid$TIME == "T2", 0.5, 0) +
+    ifelse(grid$TIME == "T3", 1.0, 0)
+  grid
+}
+
+make_rm_threeway_data <- function(n_subjects = 12) {
+  set.seed(42)
+  grid <- expand.grid(
+    ID = paste0("S", seq_len(n_subjects)),
+    COMPOSITE = c("A", "B"),
+    TREATMENT = c("C", "D"),
+    TIME = c("T1", "T2"),
+    stringsAsFactors = FALSE
+  )
+  grid$measure <- rnorm(nrow(grid)) +
+    ifelse(grid$COMPOSITE == "B", 1, 0) +
+    ifelse(grid$TREATMENT == "D", 0.4, 0) +
+    ifelse(grid$TIME == "T2", 0.5, 0)
+  grid
+}
+
+rm_posthoc_cols <- c(
+  "Interaction",
+  "Tukey.diff", "Tukey.ci.lower", "Tukey.ci.upper",
+  "Tukey.p.value", "Tukey.p.adjusted",
+  "Cohen.d", "Cohen.ci.lower", "Cohen.ci.upper",
+  "Cohen.p.value", "Cohen.p.adjusted"
+)
+
+# =============================================================================
+# perform_rm_parametric_posthoc — 1-way RM (all comparisons paired)
+# =============================================================================
+
+describe("perform_rm_parametric_posthoc 1-way RM", {
+  it("keeps identical column structure to unpaired output", {
+    df <- make_rm_oneway_data(n_subjects = 12)
+    result <- parametric_posthoc$perform_rm_parametric_posthoc(
+      df = df,
+      x_axis = "TIME",
+      measure_col = "measure",
+      id_col = "ID",
+      within_col = "TIME",
+      p_adjust_method = "bonferroni"
+    )
+    expect_true(is.data.frame(result))
+    expect_equal(names(result), rm_posthoc_cols)
+    # C(3,2) = 3 comparisons, all within-subject (paired)
+    expect_equal(nrow(result), 3)
+  })
+
+  it("differs from unpaired 1-way for all (paired) comparisons", {
+    df <- make_rm_oneway_data(n_subjects = 12)
+    unpaired <- parametric_posthoc$perform_combined_parametric_posthoc(
+      df = df,
+      x_axis = "TIME",
+      measure_col = "measure",
+      p_adjust_method = "none",
+      filter_valid = FALSE,
+      is_rm = FALSE
+    )
+    rm_result <- parametric_posthoc$perform_rm_parametric_posthoc(
+      df = df,
+      x_axis = "TIME",
+      measure_col = "measure",
+      id_col = "ID",
+      within_col = "TIME",
+      p_adjust_method = "none"
+    )
+    expect_equal(nrow(rm_result), nrow(unpaired))
+    # at least one paired comparison should diverge from unpaired
+    merged <- merge(
+      unpaired[, c("Interaction", "Tukey.p.value")],
+      rm_result[, c("Interaction", "Tukey.p.value")],
+      by = "Interaction", suffixes = c(".u", ".rm")
+    )
+    expect_true(any(
+      abs(merged$Tukey.p.value.u - merged$Tukey.p.value.rm) > 1e-6
+    ))
+  })
+})
+
+# =============================================================================
+# perform_rm_parametric_posthoc — 3-way RM (mixed paired + unpaired)
+# =============================================================================
+
+describe("perform_rm_parametric_posthoc 3-way RM", {
+  it("keeps identical column structure and matches unpaired row count", {
+    df <- make_rm_threeway_data(n_subjects = 12)
+    unpaired <- parametric_posthoc$perform_combined_parametric_posthoc(
+      df = df,
+      x_axis = c("COMPOSITE", "TREATMENT", "TIME"),
+      measure_col = "measure",
+      p_adjust_method = "none",
+      filter_valid = TRUE,
+      is_rm = FALSE
+    )
+    rm_result <- parametric_posthoc$perform_rm_parametric_posthoc(
+      df = df,
+      x_axis = c("COMPOSITE", "TREATMENT", "TIME"),
+      measure_col = "measure",
+      id_col = "ID",
+      within_col = "TIME",
+      p_adjust_method = "none"
+    )
+    expect_true(is.data.frame(rm_result))
+    expect_equal(names(rm_result), rm_posthoc_cols)
+    expect_equal(nrow(rm_result), nrow(unpaired))
+  })
+
+  it("changes only within-subject (paired) rows, leaves between-subject equal", {
+    df <- make_rm_threeway_data(n_subjects = 12)
+    unpaired <- parametric_posthoc$perform_combined_parametric_posthoc(
+      df = df,
+      x_axis = c("COMPOSITE", "TREATMENT", "TIME"),
+      measure_col = "measure",
+      p_adjust_method = "none",
+      filter_valid = TRUE,
+      is_rm = FALSE
+    )
+    rm_result <- parametric_posthoc$perform_rm_parametric_posthoc(
+      df = df,
+      x_axis = c("COMPOSITE", "TREATMENT", "TIME"),
+      measure_col = "measure",
+      id_col = "ID",
+      within_col = "TIME",
+      p_adjust_method = "none"
+    )
+
+    merged <- merge(
+      unpaired[, c("Interaction", "Tukey.p.value")],
+      rm_result[, c("Interaction", "Tukey.p.value")],
+      by = "Interaction", suffixes = c(".u", ".rm")
+    )
+
+    # A paired (within) comparison differs only in TIME (e.g. A.C.T1 vs A.C.T2)
+    is_paired <- vapply(merged$Interaction, function(int) {
+      parts <- trimws(strsplit(int, " vs\\. ")[[1]])
+      a <- strsplit(parts[1], ".", fixed = TRUE)[[1]]
+      b <- strsplit(parts[2], ".", fixed = TRUE)[[1]]
+      # TIME is the 3rd factor in x_axis order
+      identical(a[1:2], b[1:2]) && a[3] != b[3]
+    }, logical(1))
+
+    paired_rows <- merged[is_paired, , drop = FALSE]
+    between_rows <- merged[!is_paired, , drop = FALSE]
+
+    if (nrow(paired_rows) > 0) {
+      expect_true(any(
+        abs(paired_rows$Tukey.p.value.u - paired_rows$Tukey.p.value.rm) > 1e-6
+      ))
+    }
+    if (nrow(between_rows) > 0) {
+      expect_equal(
+        between_rows$Tukey.p.value.u,
+        between_rows$Tukey.p.value.rm,
+        tolerance = 1e-6
+      )
+    }
+  })
+})
